@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getAvatarColor } from '@/lib/avatar-utils';
+import { getUserInfo } from '@/lib/auth';
 
 interface ProfileSectionProps {
   profilePictureUrl: string;
@@ -25,6 +26,18 @@ const ProfileSection = ({
   handleTestNotification,
 }: ProfileSectionProps) => {
   const { toast } = useToast();
+  const u = getUserInfo();
+  const displayName =
+    (u.full_name && String(u.full_name).trim()) ||
+    `${u.first_name || ''} ${u.last_name || ''}`.trim() ||
+    (u.email ? String(u.email).split('@')[0] : 'User');
+  const displayEmail = u.email || '—';
+  const initials = displayName
+    .split(' ')
+    .map((p: string) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
   return (
     <>
       <CardHeader>
@@ -40,12 +53,12 @@ const ProfileSection = ({
               {profilePictureUrl && profilePictureUrl !== "" ? (
                 <img src={profilePictureUrl} alt="Profile" className="rounded-full object-cover" />
               ) : (
-                <AvatarFallback className={`${getAvatarColor("Demo User")} text-xl`}>DU</AvatarFallback>
+                <AvatarFallback className={`${getAvatarColor(displayName)} text-xl`}>{initials}</AvatarFallback>
               )}
             </Avatar>
             <div>
-              <p className="text-lg font-semibold">Demo User</p>
-              <p className="text-sm text-muted-foreground">email@example.com</p>
+              <p className="text-lg font-semibold">{displayName}</p>
+              <p className="text-sm text-muted-foreground">{displayEmail}</p>
             </div>
           </div>
           <input

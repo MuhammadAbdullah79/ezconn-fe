@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Bot, Plus, Trash2, Edit2, MoreVertical, ArrowLeft, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,18 +37,49 @@ interface Message {
   content: string;
 }
 
-const initialCollections: Collection[] = [
-  { id: "1", name: "CaioTest", visibility: "public", messages: [{ id: "m1", title: "Caio", type: "text", content: "" }] },
-  { id: "2", name: "Collection 2 by usman", visibility: "public", messages: [] },
-  { id: "3", name: "Another collection for public.", visibility: "public", messages: [] },
-  { id: "4", name: "public collection by john doe", visibility: "public", messages: [] },
-  { id: "5", name: "Teste Tiago", visibility: "public", messages: [] },
-  { id: "6", name: "Makar", visibility: "public", messages: [] },
-];
+// Map backend GET /quick-response ({ responses, folders }) → Collection[]
+function mapCollections(data: any): Collection[] {
+  const folders = data?.folders || [];
+  const responses = data?.responses || [];
+  return folders.map((f: any) => ({
+    id: String(f.id),
+    name: f.title || "",
+    visibility: (f.share || "private") as Collection["visibility"],
+    messages: responses
+      .filter((r: any) => r.parent_id != null && String(r.parent_id) === String(f.id))
+      .map((r: any) => ({
+        id: String(r.id),
+        title: r.title || "",
+        type: (r.type === "media" ? "media" : "text") as Message["type"],
+        content: r.text || "",
+      })),
+  }));
+}
 
 export default function QuickRepliesSection() {
   const { toast } = useToast();
-  const [collections, setCollections] = useState<Collection[]>(initialCollections);
+  const [collections, setCollections] = useState<Collection[]>([]);
+
+  const { data: qrData } = useQuery<any>({
+    queryKey: ["/api/quick-response"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/quick-response");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (!qrData) return;
+    const mapped = mapCollections(qrData);
+    setCollections(mapped);
+    // keep the open collection-detail view in sync after mutations
+    setCurrentCollection((prev) =>
+      prev ? mapped.find((c) => c.id === prev.id) ?? null : prev,
+    );
+  }, [qrData]);
+
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/quick-response"] });
   const [view, setView] = useState<"list" | "create_collection" | "collection_detail" | "create_message">("list");
   
   // Create Form State
@@ -78,51 +111,53 @@ export default function QuickRepliesSection() {
     setShowError(false);
   };
 
-  const handleCreateCollection = () => {
+  const handleCreateCollection = async () => {
     if (!collectionName.trim()) {
       setShowError(true);
       return;
     }
-
-    const newCollection: Collection = {
-      id: Date.now().toString(),
-      name: collectionName,
-      visibility,
-      messages: [],
-    };
-    setCollections([...collections, newCollection]);
-    setView("list");
-    toast({
-      title: "Success",
-      description: "Collection created successfully",
-    });
-  };
-
-  // Edit Logic
-  const handleUpdateCollection = () => {
-    if (currentCollection && collectionName.trim()) {
-      setCollections(collections.map(c => 
-        c.id === currentCollection.id ? { ...c, name: collectionName } : c
-      ));
-      setCollectionName("");
-      setCurrentCollection(null);
-      setIsEditModalOpen(false);
-      toast({
-        title: "Success",
-        description: "Collection updated successfully",
+    try {
+      await apiRequest("POST", "/api/quick-response/group", {
+        title: collectionName,
+        share: visibility,
       });
+      await refresh();
+      setView("list");
+      toast({ title: "Success", description: "Collection created successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
-  const handleDeleteCollection = () => {
-    if (currentCollection) {
-      setCollections(collections.filter(c => c.id !== currentCollection.id));
+  // Edit Logic
+  const handleUpdateCollection = async () => {
+    if (!currentCollection || !collectionName.trim()) return;
+    try {
+      await apiRequest("POST", "/api/quick-response/group", {
+        id: currentCollection.id,
+        title: collectionName,
+        share: currentCollection.visibility,
+      });
+      await refresh();
+      setCollectionName("");
+      setCurrentCollection(null);
+      setIsEditModalOpen(false);
+      toast({ title: "Success", description: "Collection updated successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteCollection = async () => {
+    if (!currentCollection) return;
+    try {
+      await apiRequest("DELETE", `/api/quick-response/${currentCollection.id}`);
+      await refresh();
       setCurrentCollection(null);
       setIsDeleteModalOpen(false);
-      toast({
-        title: "Success",
-        description: "Collection deleted successfully",
-      });
+      toast({ title: "Success", description: "Collection deleted successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
@@ -156,32 +191,20 @@ export default function QuickRepliesSection() {
     setMessageContent("");
   };
 
-  const handleCreateMessage = () => {
-    if (currentCollection && messageTitle.trim() && messageContent.trim()) {
-       const newMessage: Message = {
-        id: Date.now().toString(),
+  const handleCreateMessage = async () => {
+    if (!currentCollection || !messageTitle.trim() || !messageContent.trim()) return;
+    try {
+      await apiRequest("POST", "/api/quick-response/message", {
         title: messageTitle,
+        group_id: currentCollection.id,
         type: messageType,
-        content: messageContent,
-      };
-
-      const updatedCollections = collections.map(c => {
-        if (c.id === currentCollection.id) {
-          return { ...c, messages: [...c.messages, newMessage] };
-        }
-        return c;
+        text: messageContent,
       });
-
-      setCollections(updatedCollections);
-      // Update current collection reference as well to reflect changes immediately
-      const updatedCurrent = updatedCollections.find(c => c.id === currentCollection.id) || null;
-      setCurrentCollection(updatedCurrent);
-
+      await refresh();
       setView("collection_detail");
-       toast({
-        title: "Success",
-        description: "Message created successfully",
-      });
+      toast({ title: "Success", description: "Message created successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 

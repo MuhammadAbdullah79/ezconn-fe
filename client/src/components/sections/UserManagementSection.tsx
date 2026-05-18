@@ -61,180 +61,6 @@ interface User {
   phoneNumber: string;
 }
 
-const initialUsers: User[] = [
-  {
-    id: "U001",
-    firstName: "Alice",
-    lastName: "Johnson",
-    email: "alice.j@example.com",
-    role: "Administrator",
-    status: "Active",
-    phoneNumber: "+1-555-0101",
-  },
-  {
-    id: "U002",
-    firstName: "Bob",
-    lastName: "Smith",
-    email: "bob.s@example.com",
-    role: "Agent",
-    status: "Invited",
-    phoneNumber: "+1-555-0102",
-  },
-  {
-    id: "U003",
-    firstName: "Carol",
-    lastName: "White",
-    email: "carol.w@example.com",
-    role: "Marketer",
-    status: "Inactive",
-    phoneNumber: "+1-555-0103",
-  },
-  {
-    id: "U004",
-    firstName: "David",
-    lastName: "Brown",
-    email: "david.b@example.com",
-    role: "Team Supervisor",
-    status: "Active",
-    phoneNumber: "+1-555-0104",
-  },
-  {
-    id: "U005",
-    firstName: "Eve",
-    lastName: "Davis",
-    email: "eve.d@example.com",
-    role: "Agent",
-    status: "Active",
-    phoneNumber: "+1-555-0105",
-  },
-  {
-    id: "U006",
-    firstName: "Frank",
-    lastName: "Miller",
-    email: "frank.m@example.com",
-    role: "Viewer",
-    status: "Invited",
-    phoneNumber: "+1-555-0106",
-  },
-  {
-    id: "U007",
-    firstName: "Grace",
-    lastName: "Wilson",
-    email: "grace.w@example.com",
-    role: "Administrator",
-    status: "Active",
-    phoneNumber: "+1-555-0107",
-  },
-  {
-    id: "U008",
-    firstName: "Henry",
-    lastName: "Moore",
-    email: "henry.m@example.com",
-    role: "Chatbot User",
-    status: "Inactive",
-    phoneNumber: "+1-555-0108",
-  },
-  {
-    id: "U009",
-    firstName: "Ivy",
-    lastName: "Taylor",
-    email: "ivy.t@example.com",
-    role: "Marketer",
-    status: "Active",
-    phoneNumber: "+1-555-0109",
-  },
-  {
-    id: "U010",
-    firstName: "Jack",
-    lastName: "Anderson",
-    email: "jack.a@example.com",
-    role: "Team Supervisor",
-    status: "Invited",
-    phoneNumber: "+1-555-0110",
-  },
-  {
-    id: "U011",
-    firstName: "Karen",
-    lastName: "Thomas",
-    email: "karen.t@example.com",
-    role: "Agent",
-    status: "Active",
-    phoneNumber: "+1-555-0111",
-  },
-  {
-    id: "U012",
-    firstName: "Liam",
-    lastName: "Jackson",
-    email: "liam.j@example.com",
-    role: "Viewer",
-    status: "Inactive",
-    phoneNumber: "+1-555-0112",
-  },
-  {
-    id: "U013",
-    firstName: "Mia",
-    lastName: "White",
-    email: "mia.w@example.com",
-    role: "Administrator",
-    status: "Active",
-    phoneNumber: "+1-555-0113",
-  },
-  {
-    id: "U014",
-    firstName: "Noah",
-    lastName: "Harris",
-    email: "noah.h@example.com",
-    role: "Chatbot User",
-    status: "Invited",
-    phoneNumber: "+1-555-0114",
-  },
-  {
-    id: "U015",
-    firstName: "Olivia",
-    lastName: "Martin",
-    email: "olivia.m@example.com",
-    role: "Marketer",
-    status: "Active",
-    phoneNumber: "+1-555-0115",
-  },
-  {
-    id: "U016",
-    firstName: "Peter",
-    lastName: "Garcia",
-    email: "peter.g@example.com",
-    role: "Team Supervisor",
-    status: "Active",
-    phoneNumber: "+1-555-0116",
-  },
-  {
-    id: "U017",
-    firstName: "Quinn",
-    lastName: "Rodriguez",
-    email: "quinn.r@example.com",
-    role: "Agent",
-    status: "Invited",
-    phoneNumber: "+1-555-0117",
-  },
-  {
-    id: "U018",
-    firstName: "Rachel",
-    lastName: "Martinez",
-    email: "rachel.m@example.com",
-    role: "Viewer",
-    status: "Inactive",
-    phoneNumber: "+1-555-0118",
-  },
-  {
-    id: "U019",
-    firstName: "Sam",
-    lastName: "Hernandez",
-    email: "sam.h@example.com",
-    role: "Administrator",
-    status: "Active",
-    phoneNumber: "+1-555-0119",
-  },
-];
-
 export default function UserManagementSection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -298,16 +124,53 @@ export default function UserManagementSection() {
     }
   });
 
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: "suspend" | "activate" }) => {
+      const res = await apiRequest("POST", `/api/workspaces/members/${id}/${action}`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast({ title: data?.message || "Member updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/members"] });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Action failed", description: err.message, variant: "destructive" }),
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/workspaces/members/${id}/resend-invitation`);
+      return res.json();
+    },
+    onSuccess: (data: any) =>
+      toast({ title: data?.message || "Invitation sent" }),
+    onError: (err: Error) =>
+      toast({ title: "Resend failed", description: err.message, variant: "destructive" }),
+  });
+
+  // Backend (GET /workspaces/members) returns a flat shape:
+  // { id, first_name, last_name, full_name, email, status, role, role_id }
+  const mapStatus = (s?: string): UserStatus => {
+    switch ((s || "").toUpperCase()) {
+      case "PENDING": return "Invited";
+      case "SUSPENDED": return "Inactive";
+      default: return "Active";
+    }
+  };
+
   const users = useMemo(() => {
-    if (!membersData) return [];
-    return (membersData as any[]).map((m: any) => ({
+    const list = Array.isArray(membersData)
+      ? membersData
+      : (membersData as any)?.members ?? [];
+    return list.map((m: any) => ({
       id: m.id.toString(),
-      firstName: m.users?.first_name || "Unknown",
-      lastName: m.users?.last_name || "",
-      email: m.users?.email || "",
-      role: (m.roles?.name || "Agent") as UserRole,
-      status: (m.users?.status?.charAt(0) + m.users?.status?.slice(1).toLowerCase() || "Active") as UserStatus,
-      phoneNumber: m.users?.phoneNumber || "-",
+      firstName: m.first_name || (m.full_name || "").split(" ")[0] || "Unknown",
+      lastName: m.last_name || "",
+      email: m.email || "",
+      role: (m.role || "Agent") as UserRole,
+      roleId: m.role_id ?? null,
+      status: mapStatus(m.status),
+      phoneNumber: m.phoneNumber || "-",
     }));
   }, [membersData]);
 
@@ -694,6 +557,23 @@ export default function UserManagementSection() {
                                 <Copy size={14} className="mr-2" />
                                 Copy
                               </DropdownMenuItem>
+                              {user.status === "Invited" && (
+                                <DropdownMenuItem onClick={() => resendMutation.mutate(user.id)}>
+                                  <Copy size={14} className="mr-2" />
+                                  Resend invitation
+                                </DropdownMenuItem>
+                              )}
+                              {user.status === "Inactive" ? (
+                                <DropdownMenuItem onClick={() => statusMutation.mutate({ id: user.id, action: "activate" })}>
+                                  <Edit2 size={14} className="mr-2" />
+                                  Activate
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => statusMutation.mutate({ id: user.id, action: "suspend" })}>
+                                  <X size={14} className="mr-2" />
+                                  Suspend
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => handleDeleteUser(user)} className="text-destructive">
                                 <Trash2 size={14} className="mr-2" />
                                 Delete

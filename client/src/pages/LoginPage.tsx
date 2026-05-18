@@ -8,15 +8,36 @@ import { cn } from '../lib/utils';
 import { useSite } from '../contexts/SiteContext';
 import { apiRequest } from '../lib/queryClient';
 
+// apiRequest throws `Error("401: {\"message\":\"Invalid credentials\",...}")`.
+// Pull a clean, human-readable message out of it — no status code, no raw JSON.
+const extractErrorMessage = (error: any): string => {
+  const raw = String(error?.message ?? '');
+  const body = raw.replace(/^\d+:\s*/, '').trim();
+  let serverMsg = body;
+  try {
+    const parsed = JSON.parse(body);
+    serverMsg = parsed?.message || parsed?.error || body;
+  } catch {
+    // body wasn't JSON — use it as-is
+  }
+  if (/invalid credentials/i.test(serverMsg)) return 'Invalid email or password';
+  if (!serverMsg || /^\s*$/.test(serverMsg) || /failed to fetch/i.test(serverMsg)) {
+    return 'Could not connect to the server. Please try again.';
+  }
+  return serverMsg;
+};
+
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [, navigate] = useLocation();
   const { siteData } = useSite();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     try {
       const response = await apiRequest('POST', '/auth/login', { email, password });
       
@@ -34,9 +55,9 @@ const LoginPage: React.FC = () => {
         // Redirect workspace users to root for better layout stability
         navigate('/');
       }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      alert(error.message || 'Failed to connect to the server.');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(extractErrorMessage(err));
     }
   };
 
@@ -59,7 +80,7 @@ const LoginPage: React.FC = () => {
                 type="email"
                 placeholder="m@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); if (error) setError(null); }}
                 required
                 className="mt-1"
               />
@@ -72,7 +93,7 @@ const LoginPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); if (error) setError(null); }}
                   required
                   className="pr-10"
                 />
@@ -85,15 +106,25 @@ const LoginPage: React.FC = () => {
                 </button>
               </div>
             
-              <div className="text-right mt-1">
-                <a href="/forgot-password" className="text-sm text-primary hover:underline">
+              <div className="flex items-center gap-3 mt-1">
+                {error && (
+                  <span role="alert" className="text-sm text-destructive">
+                    {error}
+                  </span>
+                )}
+                <a
+                  href="/forgot-password"
+                  className="ml-auto text-sm text-primary hover:underline whitespace-nowrap"
+                >
                   Forgot Password?
                 </a>
               </div>
             </div>
 
-
-            <Button type="submit" className="w-full">
+            <Button
+              type="submit"
+              className="w-full h-10 rounded-lg text-sm font-semibold shadow-sm transition-colors mt-1"
+            >
               Login
             </Button>
           </form>

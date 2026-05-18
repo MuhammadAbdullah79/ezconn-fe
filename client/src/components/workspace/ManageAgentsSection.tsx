@@ -109,6 +109,25 @@ export default function ManageAgentSection() {
     },
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" })
   });
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string | number; action: "suspend" | "activate" }) => {
+      const res = await apiRequest("POST", `/api/workspaces/members/${id}/${action}`);
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/members"] });
+      toast({ title: data?.message || "Agent updated" });
+    },
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" })
+  });
+  const resendMutation = useMutation({
+    mutationFn: async (id: string | number) => {
+      const res = await apiRequest("POST", `/api/workspaces/members/${id}/resend-invitation`);
+      return res.json();
+    },
+    onSuccess: (data: any) => toast({ title: data?.message || "Invitation sent" }),
+    onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" })
+  });
   const [view, setView] = useState<"list" | "add" | "edit">("list");
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [activeTab, setActiveTab] = useState("agent");
@@ -979,14 +998,58 @@ export default function ManageAgentSection() {
                 </TableCell>
                 <TableCell className="py-3 px-4 text-center"></TableCell>
                 <TableCell className="py-3 px-4 text-center">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-black dark:text-white hover:text-[#10b981] dark:hover:text-[#10b981] transition-colors"
-                    onClick={() => handleEdit(agent)}
-                  >
-                    <UserCog className="w-5 h-5" />
-                  </Button>
+                  <div className="flex items-center justify-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Edit"
+                      className="h-8 w-8 text-black dark:text-white hover:text-[#10b981] dark:hover:text-[#10b981] transition-colors"
+                      onClick={() => handleEdit(agent)}
+                    >
+                      <UserCog className="w-5 h-5" />
+                    </Button>
+                    {String(agent.status).toUpperCase() === "PENDING" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Resend invitation"
+                        className="h-8 w-8 text-muted-foreground hover:text-blue-600 transition-colors"
+                        onClick={() => resendMutation.mutate(agent.id)}
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    )}
+                    {String(agent.status).toUpperCase() === "SUSPENDED" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Activate"
+                        className="h-8 w-8 text-muted-foreground hover:text-[#10b981] transition-colors"
+                        onClick={() => statusMutation.mutate({ id: agent.id, action: "activate" })}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Suspend"
+                        className="h-8 w-8 text-muted-foreground hover:text-amber-600 transition-colors"
+                        onClick={() => statusMutation.mutate({ id: agent.id, action: "suspend" })}
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Delete"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
+                      onClick={() => handleDelete(agent.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

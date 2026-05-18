@@ -56,39 +56,6 @@ interface CallLog {
     recording: boolean;
 }
 
-const initialCallLogs: CallLog[] = [
-    // Today's calls (November 4, 2025)
-    {
-        id: "CALL001",
-        contact: "Alice Johnson",
-        contactNumber: "+1234567890",
-        agent: "Sarah Johnson",
-        agentId: "agent-001",
-        direction: "Inbound",
-        startTime: "2025-11-04 10:30 AM",
-        duration: "5m 23s",
-        status: "Completed",
-        sentiment: "Positive",
-        sentimentSummary: "Customer satisfied with resolution",
-        recording: true,
-    },
-    {
-        id: "CALL002",
-        contact: "Bob Smith",
-        contactNumber: "+1234567891",
-        agent: "Mike Chen",
-        agentId: "agent-002",
-        direction: "Outbound",
-        startTime: "2025-11-04 11:15 AM",
-        duration: "3m 45s",
-        status: "Completed",
-        sentiment: "Neutral",
-        sentimentSummary: "Standard inquiry handled",
-        recording: true,
-    },
-    // ... more mock data can be added here
-];
-
 export default function CallLogsPage() {
     const [search, setSearch] = useState("");
     const [selectedStatus, setSelectedStatus] = useState<string[]>([]);

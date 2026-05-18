@@ -15,95 +15,21 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTheme } from "@/contexts/ThemeContext";
 
-const PERMISSION_CATEGORIES = [
-  { id: "ai-products", name: "AI Products", icon: Bot, subPermissions: [
-    { id: "view", title: "View AI products", description: "Allow agents to view AI Products." },
-    { id: "manage", title: "Manage AI Products", description: "Allow agents to create or edit AI products." },
-    { id: "delete", title: "Delete AI products", description: "Allow agents to delete AI products." },
-  ]},
-  { id: "bookings", name: "Bookings", icon: Calendar, subPermissions: [
-    { id: "view", title: "View bookings", description: "Allow agents to view all bookings" },
-    { id: "manage", title: "Manage bookings", description: "Enable agents to create, update, or cancel bookings." },
-  ]},
-  { id: "ai-intelligence", name: "AI – Artificial Intelligence", icon: Bot, subPermissions: [
-    { id: "manage_themes", title: "Manage AI themes", description: "Allow agents to create or edit AI themes." },
-    { id: "manage_reports", title: "Manage AI reports", description: "Allow user to manage AI Reports." },
-    { id: "delete_themes", title: "Delete AI themes", description: "Allow agents to delete AI themes." },
-    { id: "create_kb", title: "Create Knowledgebase", description: "Allow agents to create knowledgebase for AI Voice Assistants." },
-    { id: "delete_kb", title: "Delete knowledgebase", description: "Allow agents to delete knowledgebases." },
-    { id: "view_voice", title: "View AI voice assistants", description: "Allow agents to view AI voice assistants." },
-    { id: "manage_voice", title: "Manage AI voice assistants", description: "Allow agents to manage voice assistants." },
-    { id: "delete_voice", title: "Delete AI voice assistants", description: "Allow agents to delete voice assistants." },
-    { id: "create_chat", title: "Create an AI Chat Assistant", description: "Authorize agents to create an AI Chat Assistant." },
-    { id: "edit_chat", title: "Edit an AI Chat Assistant", description: "Allow to update a Knowledge base." },
-    { id: "delete_chat", title: "Delete AI Chat Assistants", description: "Allow to delete an AI Chat Assistant." },
-  ]},
-  { id: "workspace-settings", name: "Workspace & Settings", icon: Settings, subPermissions: [
-    { id: "supervisor", title: "Supervisor Dashboard", description: "Grants access to Supervisor Dashboard." },
-    { id: "management", title: "Workspace Management", description: "Activate agent access and grant ability to modify workspace settings." },
-    { id: "media", title: "Media Gallery", description: "Authorize the agent to delete files from the media gallery." },
-    { id: "pipelines", title: "Pipelines", description: "Grant agents access for managing pipelines within this workspace." },
-    { id: "flows", title: "Smart Flows", description: "Grant agents access to view and manage smart flows." },
-    { id: "channels", title: "Communication Channels", description: "Grant agents access to manage all communication channels." },
-  ]},
-  { id: "collaborations", name: "Collaborations", icon: Share2, subPermissions: [
-    { id: "agents", title: "Agents", description: "Enable the Agent to manage other agents within the workspace." },
-    { id: "roles", title: "Roles & Permissions", description: "Empower agents with this role to modify and control all workspace permissions." },
-    { id: "teams", title: "Team Management", description: "Empower agents to manage teams within this workspace." },
-  ]},
-  { id: "customizations", name: "Customizations", icon: PenTool, subPermissions: [
-    { id: "custom_fields", title: "Custom fields", description: "Enable the Agent to create and delete custom fields." },
-    { id: "tags", title: "Tags", description: "Empower agents role to create and delete tags." },
-    { id: "iframe", title: "Iframe", description: "Grant agents access to manage iframes." },
-  ]},
-  { id: "live-chat", name: "Live Chat", icon: Inbox, subPermissions: [
-    { id: "access_live", title: "Live Chat access", description: "Can view and access the Live Chat." },
-    { id: "manage_live", title: "Manage Live Chat", description: "Can view and manage the live chat settings." },
-    { id: "assign_conv", title: "Assign conversations", description: "Unassigned conversations can be assigned to oneself or to other agents." },
-    { id: "send_unassigned", title: "Send to unassigned conversations", description: "The Agent will be able to send a message to an unassigned conversation." },
-    { id: "block_done", title: "Block \"Done\" folder", description: "The Agent will not have access to the \"Done\" folder." },
-    { id: "block_queue", title: "Block \"Queue\" folder", description: "Block Agent to view the conversation in the \"Queue\" folder." },
-  ]},
-  { id: "company-contacts", name: "Company & Contacts", icon: Building2, subPermissions: [
-    { id: "view", title: "View Contact & Companies", description: "View list of all contacts & company and allow agents to view profile." },
-    { id: "manage", title: "Manage Companies & Contacts", description: "Allow agents to Create or Update Companies & contacts." },
-    { id: "delete", title: "Delete Companies & Contacts", description: "Allow agents to delete Companies & Contacts." },
-    { id: "import", title: "Import contacts", description: "Allow agents to import contacts through files." },
-    { id: "export", title: "Export contacts", description: "Allow agents to export contacts." },
-  ]},
-  { id: "broadcast", name: "Broadcast", icon: Radio, subPermissions: [
-    { id: "view", title: "View broadcasts", description: "View all workspace broadcast." },
-    { id: "create_edit", title: "Create/Edit broadcasts", description: "Allow Agent to Create/Edit broadcasts." },
-    { id: "delete", title: "Delete broadcasts", description: "Allow agents to delete broadcasts." },
-  ]},
-  { id: "legal", name: "Legal", icon: Scale, subPermissions: [
-    { id: "view", title: "View Document", description: "View legal document." },
-    { id: "create", title: "Create Legal Document", description: "Allow Agent to create new legal documents." },
-    { id: "edit", title: "Edit Legal Document", description: "Allow Agent to edit legal document." },
-  ]},
-  { id: "connect", name: "Connect", icon: Layers, subPermissions: [
-    { id: "meta", title: "Meta Conversions API", description: "Authorize agents to access this integration." },
-    { id: "public_api", title: "Public API Access", description: "Authorize Agent to access and manage public API." },
-    { id: "openai", title: "OpenAI Integration", description: "Authorize Agent to access this integration." },
-    { id: "cal", title: "Cal.com", description: "Integrate your Cal.com account." },
-    { id: "dify", title: "Dify.ai", description: "Connect and manage dify.ai chatbots." },
-    { id: "make", title: "Make.com Integration", description: "Authorize Agent to access this integration." },
-  ]},
+// Permission groups + leaves are now fetched from the backend
+// (GET /api/workspaces/permissions → DB-driven workspace.* tree).
+// Colors are assigned deterministically by group index.
+const CAT_PALETTE: { icon: string; chip: string; darkChip: string }[] = [
+  { icon: "text-violet-500",  chip: "bg-violet-50 border-violet-100 text-violet-700",   darkChip: "bg-violet-500/10 border-violet-500/20 text-violet-400" },
+  { icon: "text-blue-500",    chip: "bg-blue-50 border-blue-100 text-blue-700",         darkChip: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
+  { icon: "text-emerald-500", chip: "bg-emerald-50 border-emerald-100 text-emerald-700",darkChip: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
+  { icon: "text-amber-500",   chip: "bg-amber-50 border-amber-100 text-amber-700",      darkChip: "bg-amber-500/10 border-amber-500/20 text-amber-400" },
+  { icon: "text-rose-500",    chip: "bg-rose-50 border-rose-100 text-rose-700",         darkChip: "bg-rose-500/10 border-rose-500/20 text-rose-400" },
+  { icon: "text-cyan-500",    chip: "bg-cyan-50 border-cyan-100 text-cyan-700",         darkChip: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" },
+  { icon: "text-indigo-500",  chip: "bg-indigo-50 border-indigo-100 text-indigo-700",   darkChip: "bg-indigo-500/10 border-indigo-500/20 text-indigo-400" },
+  { icon: "text-teal-500",    chip: "bg-teal-50 border-teal-100 text-teal-700",         darkChip: "bg-teal-500/10 border-teal-500/20 text-teal-400" },
+  { icon: "text-orange-500",  chip: "bg-orange-50 border-orange-100 text-orange-700",   darkChip: "bg-orange-500/10 border-orange-500/20 text-orange-400" },
 ];
-
-const CAT_COLORS: Record<string, { icon: string; chip: string; darkChip: string }> = {
-  "ai-products":        { icon: "text-violet-500", chip: "bg-violet-50 border-violet-100 text-violet-700",  darkChip: "bg-violet-500/10 border-violet-500/20 text-violet-400" },
-  "bookings":           { icon: "text-blue-500",   chip: "bg-blue-50 border-blue-100 text-blue-700",       darkChip: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
-  "ai-intelligence":    { icon: "text-purple-500", chip: "bg-purple-50 border-purple-100 text-purple-700", darkChip: "bg-purple-500/10 border-purple-500/20 text-purple-400" },
-  "workspace-settings": { icon: "text-primary",    chip: "bg-primary/5 border-primary/20 text-primary",    darkChip: "bg-primary/10 border-primary/20 text-primary" },
-  "collaborations":     { icon: "text-emerald-500",chip: "bg-emerald-50 border-emerald-100 text-emerald-700",darkChip:"bg-emerald-500/10 border-emerald-500/20 text-emerald-400" },
-  "customizations":     { icon: "text-amber-500",  chip: "bg-amber-50 border-amber-100 text-amber-700",    darkChip: "bg-amber-500/10 border-amber-500/20 text-amber-400" },
-  "live-chat":          { icon: "text-rose-500",   chip: "bg-rose-50 border-rose-100 text-rose-700",       darkChip: "bg-rose-500/10 border-rose-500/20 text-rose-400" },
-  "company-contacts":   { icon: "text-cyan-500",   chip: "bg-cyan-50 border-cyan-100 text-cyan-700",       darkChip: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400" },
-  "broadcast":          { icon: "text-orange-500", chip: "bg-orange-50 border-orange-100 text-orange-700", darkChip: "bg-orange-500/10 border-orange-500/20 text-orange-400" },
-  "legal":              { icon: "text-teal-500",   chip: "bg-teal-50 border-teal-100 text-teal-700",       darkChip: "bg-teal-500/10 border-teal-500/20 text-teal-400" },
-  "connect":            { icon: "text-indigo-500", chip: "bg-indigo-50 border-indigo-100 text-indigo-700", darkChip: "bg-indigo-500/10 border-indigo-500/20 text-indigo-400" },
-};
+const catColor = (i: number) => CAT_PALETTE[i % CAT_PALETTE.length];
 
 const ROW_ACCENTS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -129,11 +55,12 @@ export default function RolesSection() {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [enableAll, setEnableAll] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState(ICONS[0]);
-  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>({});
+  // Flat slug → enabled map (matches backend: permissions is a slug array)
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [roleName, setRoleName] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
   const [editingRole, setEditingRole] = useState<any>(null);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(PERMISSION_CATEGORIES[0]?.id || null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<{ role: any; type: 'archive' | 'activate' } | null>(null);
 
   const { toast } = useToast();
@@ -142,13 +69,28 @@ export default function RolesSection() {
     queryKey: ["/api/workspaces/all-roles"],
   });
 
+  // DB-driven permission tree: [{ slug, name, description, children:[{id,slug,name,description}] }]
+  const { data: permTree } = useQuery<any>({
+    queryKey: ["/api/workspaces/permissions"],
+  });
+
+  const categories = (permTree || []).map((g: any) => ({
+    id: g.slug,
+    name: g.name,
+    subPermissions: (g.children || []).map((c: any) => ({
+      id: c.slug,
+      title: c.name,
+      description: c.description || "",
+    })),
+  }));
+
   const roles = (rolesData || []).map((r: any) => ({
     id: r.id.toString(),
     name: r.name,
     description: r.description,
     iconName: r.icon,
     isArchived: r.isArchived,
-    permissions: r.permissions || {},
+    permissions: Array.isArray(r.permissions) ? r.permissions : [],
   }));
 
   const activeRoles   = roles.filter((r: any) => !r.isArchived);
@@ -181,19 +123,15 @@ export default function RolesSection() {
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  const togglePermission = (categoryId: string, permissionId: string) => {
-    setPermissions(prev => ({
-      ...prev,
-      [categoryId]: { ...(prev[categoryId] || {}), [permissionId]: !(prev[categoryId]?.[permissionId]) },
-    }));
+  const togglePermission = (slug: string) => {
+    setPermissions(prev => ({ ...prev, [slug]: !prev[slug] }));
   };
 
   const handleEnableAll = (checked: boolean) => {
     setEnableAll(checked);
-    const all: Record<string, Record<string, boolean>> = {};
-    PERMISSION_CATEGORIES.forEach(cat => {
-      all[cat.id] = {};
-      cat.subPermissions?.forEach(sub => { all[cat.id][sub.id] = checked; });
+    const all: Record<string, boolean> = {};
+    categories.forEach((cat: any) => {
+      cat.subPermissions?.forEach((sub: any) => { all[sub.id] = checked; });
     });
     setPermissions(all);
   };
@@ -202,30 +140,39 @@ export default function RolesSection() {
     setEditingRole(role);
     setRoleName(role.name);
     setRoleDescription(role.description || "");
-    setPermissions(role.permissions || {});
+    const map: Record<string, boolean> = {};
+    (role.permissions || []).forEach((slug: string) => { map[slug] = true; });
+    setPermissions(map);
     const icon = ICONS.find(i => i.name === role.iconName) || ICONS[0];
     setSelectedIcon(icon);
+    setExpandedCategory(categories[0]?.id || null);
     setView("edit");
   };
 
   const resetForm = () => {
     setRoleName(""); setRoleDescription(""); setEditingRole(null);
     setSelectedIcon(ICONS[0]); setPermissions({}); setEnableAll(false);
-    setExpandedCategory(PERMISSION_CATEGORIES[0]?.id || null);
+    setExpandedCategory(categories[0]?.id || null);
   };
 
   const handleSave = () => {
     if (!roleName.trim()) { toast({ title: "Role name is required", variant: "destructive" }); return; }
+    const permissionSlugs = Object.keys(permissions).filter(s => permissions[s]);
+    const payload = {
+      name: roleName,
+      description: roleDescription,
+      icon: selectedIcon.name,
+      permissions: permissionSlugs,
+    };
     if (editingRole) {
-      updateMutation.mutate({ id: editingRole.id, data: { name: roleName, description: roleDescription, icon: selectedIcon.name, permissions } });
+      updateMutation.mutate({ id: editingRole.id, data: payload });
     } else {
-      createMutation.mutate({ name: roleName, description: roleDescription, icon: selectedIcon.name, permissions });
+      createMutation.mutate(payload);
     }
   };
 
-  const enabledCount = Object.values(permissions).reduce((sum, cat) =>
-    sum + (typeof cat === 'object' ? Object.values(cat).filter(Boolean).length : 0), 0);
-  const totalPerms = PERMISSION_CATEGORIES.reduce((s, g) => s + (g.subPermissions?.length || 0), 0);
+  const enabledCount = Object.values(permissions).filter(Boolean).length;
+  const totalPerms = categories.reduce((s: number, g: any) => s + (g.subPermissions?.length || 0), 0);
   const pct = totalPerms > 0 ? Math.round((enabledCount / totalPerms) * 100) : 0;
 
   const border = dark ? 'border-slate-800' : 'border-slate-200';
@@ -335,9 +282,9 @@ export default function RolesSection() {
           <div className="flex-1 overflow-y-auto">
             {/* Category chips */}
             <div className={cn('px-5 py-3 border-b flex flex-wrap gap-1.5', border)}>
-              {PERMISSION_CATEGORIES.map(cat => {
-                const col = CAT_COLORS[cat.id];
-                const count = cat.subPermissions?.filter(s => permissions[cat.id]?.[s.id]).length || 0;
+              {categories.map((cat: any, ci: number) => {
+                const col = catColor(ci);
+                const count = cat.subPermissions?.filter((s: any) => permissions[s.id]).length || 0;
                 const isActive = expandedCategory === cat.id;
                 return (
                   <button key={cat.id} onClick={() => setExpandedCategory(isActive ? null : cat.id)}
@@ -345,7 +292,7 @@ export default function RolesSection() {
                       isActive
                         ? dark ? col?.darkChip : col?.chip
                         : dark ? 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200')}>
-                    <cat.icon size={10} />
+                    <Shield size={10} />
                     {cat.name}
                     {count > 0 && (
                       <span className="ml-0.5 bg-primary/20 text-primary px-1 rounded-full">{count}</span>
@@ -356,35 +303,35 @@ export default function RolesSection() {
             </div>
 
             {/* Active category permissions */}
-            {PERMISSION_CATEGORIES.filter(c => c.id === expandedCategory).map(cat => {
-              const col = CAT_COLORS[cat.id];
+            {categories.map((cat: any, ci: number) => ({ cat, ci })).filter((x: any) => x.cat.id === expandedCategory).map(({ cat, ci }: any) => {
+              const col = catColor(ci);
               return (
                 <div key={cat.id}>
                   <div className={cn('px-5 py-2.5 border-b flex items-center gap-2', border,
                     dark ? 'bg-slate-900/30' : 'bg-slate-50/60')}>
-                    <cat.icon size={13} className={col?.icon} />
+                    <Shield size={13} className={col?.icon} />
                     <span className={cn('text-[11px] font-bold', text)}>{cat.name}</span>
                     <span className={cn('text-[10px] ml-auto', sub)}>
-                      {cat.subPermissions?.filter(s => permissions[cat.id]?.[s.id]).length || 0} / {cat.subPermissions?.length} enabled
+                      {cat.subPermissions?.filter((s: any) => permissions[s.id]).length || 0} / {cat.subPermissions?.length} enabled
                     </span>
                   </div>
-                  {cat.subPermissions?.map(sub_ => (
+                  {cat.subPermissions?.map((sub_: any) => (
                     <div key={sub_.id}
                       className={cn('flex items-center justify-between px-5 py-3.5 border-b transition-colors cursor-pointer',
                         border,
-                        permissions[cat.id]?.[sub_.id]
+                        permissions[sub_.id]
                           ? dark ? 'bg-primary/5' : 'bg-primary/3'
                           : dark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50/70'
                       )}
-                      onClick={() => togglePermission(cat.id, sub_.id)}
+                      onClick={() => togglePermission(sub_.id)}
                     >
                       <div className="min-w-0 pr-4">
                         <p className={cn('text-[12px] font-semibold', text)}>{sub_.title}</p>
                         <p className={cn('text-[11px] mt-0.5', sub)}>{sub_.description}</p>
                       </div>
                       <Switch
-                        checked={permissions[cat.id]?.[sub_.id] || false}
-                        onCheckedChange={() => togglePermission(cat.id, sub_.id)}
+                        checked={permissions[sub_.id] || false}
+                        onCheckedChange={() => togglePermission(sub_.id)}
                         onClick={e => e.stopPropagation()}
                         className="data-[state=checked]:bg-primary shrink-0"
                       />

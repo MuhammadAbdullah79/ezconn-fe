@@ -211,7 +211,7 @@ const AddAgentForm: React.FC<AddAgentFormProps> = ({ onCancel, initialData }) =>
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/members`] });
-      toast({ title: 'User added successfully' });
+      toast({ title: 'User Created' });
       onCancel();
     },
     onError: () => {
@@ -226,7 +226,7 @@ const AddAgentForm: React.FC<AddAgentFormProps> = ({ onCancel, initialData }) =>
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/members`] });
-      toast({ title: 'User updated' });
+      toast({ title: 'Update Successfully' });
       onCancel();
     },
     onError: () => {

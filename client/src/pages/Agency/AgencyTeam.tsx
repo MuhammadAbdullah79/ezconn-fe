@@ -51,9 +51,14 @@ const AgencyTeam = () => {
       const res = await apiRequest("DELETE", `/api/agencies/${agencyId}/members/${memberId}`);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/members`] });
-      toast({ title: t('common.success') });
+    onSuccess: (_, memberId) => {
+      // Drop the user from the cached list instantly so the row disappears
+      // without a manual refresh (queries use staleTime:Infinity).
+      queryClient.setQueryData([`/api/agencies/${agencyId}/members`], (old: any) => {
+        if (!old?.members) return old;
+        return { ...old, members: old.members.filter((m: any) => String(m.id) !== String(memberId)) };
+      });
+      toast({ title: 'Deleted Successfully' });
       setDeleteTarget(null);
     },
     onError: () => {

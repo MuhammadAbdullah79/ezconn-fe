@@ -227,10 +227,13 @@ function AppContent() {
                 <main className={`flex-1 overflow-auto bg-accent/30 ${isLoggedIn && !isBuilderRoute ? "mt-16" : ""}`}>
                   <Router siteType={siteType} isAgencyRoute={isAgencyRoute} />
                 </main>
-
-                <Toaster />
               </div>
             )}
+
+            {/* Global toast outlet — mounted once for ALL layouts (auth, agency,
+                workspace) so toasts show everywhere. Previously it lived only in
+                the workspace branch, so agency routes never rendered any toast. */}
+            <Toaster />
           </TooltipProvider>
         </ThemeProvider>
       </I18nextProvider>

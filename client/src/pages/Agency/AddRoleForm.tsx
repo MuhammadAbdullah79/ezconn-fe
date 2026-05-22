@@ -87,7 +87,8 @@ const AddRoleForm: React.FC<Props> = ({ onCancel, initialData }) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/roles`] });
-      toast({ title: initialData ? t('common.updated') : t('common.saved') });
+      // Explicit confirmation copy, then return to the roles list (onCancel = back to LIST).
+      toast({ title: initialData ? 'Update Successfully' : 'Role Created' });
       onCancel();
     },
     onError: (err: any) => {

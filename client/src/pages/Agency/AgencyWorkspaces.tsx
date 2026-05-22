@@ -7,8 +7,6 @@ import {
   Search,
   ExternalLink,
   MoreHorizontal,
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   Monitor,
   BarChart3,
@@ -53,6 +51,9 @@ const getAvatarColor = (id: string | number) => {
   return AVATAR_COLORS[index];
 };
 
+// How many workspace cards to reveal initially, and per "Show more" click.
+const PAGE_SIZE = 8;
+
 const AgencyWorkspaces = () => {
   const { mode } = useTheme();
   const { toast } = useToast();
@@ -70,6 +71,14 @@ const AgencyWorkspaces = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showInactive, setShowInactive] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Reset the "Show more" reveal whenever the filtered set changes, so the list
+  // doesn't stay expanded after a new search/filter narrows the results.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, showInactive, sortOrder]);
 
   const userInfo = React.useMemo(() => {
     try { return getUserInfo(); } catch { return {}; }
@@ -117,6 +126,10 @@ const AgencyWorkspaces = () => {
       sortOrder === 'newest' ? b._ts - a._ts : a._ts - b._ts
     );
 
+  // Only render up to visibleCount; "Show more" reveals the next PAGE_SIZE.
+  const visibleWorkspaces = filteredWorkspaces.slice(0, visibleCount);
+  const hasMore = filteredWorkspaces.length > visibleCount;
+
   const toggleStatusMutation = useMutation({
     mutationFn: async (workspace: any) => {
       const isActive = workspace.status === 'Active';
@@ -138,7 +151,7 @@ const AgencyWorkspaces = () => {
     },
     onSuccess: (_, workspace) => {
       setLocalWorkspaces(prev => prev.filter(ws => ws.id !== workspace.id));
-      toast({ title: "Workspace deleted", variant: "destructive" });
+      toast({ title: "Deleted Successfully" });
       queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/workspaces`] });
     },
   });
@@ -238,7 +251,7 @@ const AgencyWorkspaces = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredWorkspaces.map((ws: any) => (
+              {visibleWorkspaces.map((ws: any) => (
                 <div
                   key={ws.id}
                   className={cn(
@@ -247,6 +260,32 @@ const AgencyWorkspaces = () => {
                     dark ? "hover:border-primary/30" : "hover:border-primary/20"
                   )}
                 >
+                  {/* Inline delete confirmation — overlays this card only */}
+                  {confirmDeleteId === ws.id && (
+                    <div className={cn(
+                      "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl p-5 backdrop-blur-sm",
+                      dark ? "bg-[#0f1829]/95" : "bg-white/95"
+                    )}>
+                      <p className={cn("text-[12.5px] font-bold text-center leading-snug", text)}>
+                        Delete "{ws.name}"?
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { deleteMutation.mutate(ws); setConfirmDeleteId(null); }}
+                          className="px-5 py-1.5 rounded-lg text-[12px] font-bold bg-primary text-primary-foreground hover:opacity-90 transition-all"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-5 py-1.5 rounded-lg text-[12px] font-bold border border-primary/40 text-primary hover:bg-primary/10 transition-all"
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Status Badge — top right */}
                   <div className="absolute top-4 right-4">
                     <span className={cn(
@@ -318,7 +357,7 @@ const AgencyWorkspaces = () => {
                           <Ban size={14} /> {ws.status === 'Active' ? 'Suspend Access' : 'Activate Access'}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => { if (confirm(`Delete "${ws.name}"?`)) deleteMutation.mutate(ws); }}
+                          onClick={() => setConfirmDeleteId(ws.id)}
                           className="rounded-lg py-2.5 font-bold text-[11px] cursor-pointer gap-2.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
                         >
                           <Trash2 size={14} /> Delete
@@ -331,38 +370,15 @@ const AgencyWorkspaces = () => {
             </div>
           )}
 
-          {/* Pagination Footer */}
-          {filteredWorkspaces.length > 4 && (
-            <div className={cn(
-              "mt-12 px-6 py-3.5 rounded-2xl border flex items-center justify-between shadow-sm transition-all",
-              dark ? "bg-slate-900/40 border-slate-800" : "bg-slate-50/80 border-slate-100 shadow-slate-200/50"
-            )}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                <span className={cn("text-[11px] font-bold uppercase tracking-widest", sub)}>
-                  Showing <span className={text}>{filteredWorkspaces.length}</span> Total Workspaces
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button className={cn(
-                  "p-2 rounded-xl border transition-all hover:scale-105 active:scale-95",
-                  dark ? "border-slate-800 text-slate-500 hover:text-white hover:bg-slate-800" : "border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-white shadow-sm"
-                )}>
-                  <ChevronLeft size={14} />
-                </button>
-                
-                <div className="px-3 h-8 rounded-xl bg-primary flex items-center justify-center text-white text-[11px] font-black shadow-lg shadow-primary/25 border border-primary/20">
-                  1
-                </div>
-                
-                <button className={cn(
-                  "p-2 rounded-xl border transition-all hover:scale-105 active:scale-95",
-                  dark ? "border-slate-800 text-slate-500 hover:text-white hover:bg-slate-800" : "border-slate-200 text-slate-400 hover:text-slate-900 hover:bg-white shadow-sm"
-                )}>
-                  <ChevronRight size={14} />
-                </button>
-              </div>
+          {/* Show More — reveals the next PAGE_SIZE workspaces below */}
+          {hasMore && (
+            <div className="mt-10 flex justify-center">
+              <button
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-bold bg-primary text-primary-foreground hover:opacity-90 transition-all hover:scale-105 active:scale-95 shadow-sm"
+              >
+                <ChevronDown size={14} /> Show more
+              </button>
             </div>
           )}
         </div>

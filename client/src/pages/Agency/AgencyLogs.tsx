@@ -1,20 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { getUserInfo } from "@/lib/auth";
-import { 
-  Calendar, 
-  Users, 
-  ChevronLeft, 
+import {
+  Calendar,
+  Users,
+  User,
+  ChevronLeft,
   ChevronRight,
   Layers,
-  ChevronDown
+  ChevronDown,
+  LogIn,
+  UserPlus,
+  UserCog,
+  UserMinus,
+  Ban,
+  CheckCircle2,
+  Trash2,
+  Network,
+  Pencil,
+  ShieldCheck,
+  Archive,
+  RotateCcw,
+  Palette,
+  Wallet,
+  Globe,
+  Activity,
 } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { getAvatarColor } from "@/lib/avatar-utils";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
@@ -22,6 +40,39 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useTranslation } from 'react-i18next';
+
+// Maps each log event to a crisp, color-coded icon for the row badge.
+const ACTION_ICONS: Record<string, { Icon: any; cls: string }> = {
+  user_logged_in:          { Icon: LogIn,        cls: 'text-sky-500 bg-sky-500/10' },
+  user_created:            { Icon: UserPlus,     cls: 'text-emerald-500 bg-emerald-500/10' },
+  user_updated:            { Icon: UserCog,      cls: 'text-blue-500 bg-blue-500/10' },
+  user_deleted:            { Icon: UserMinus,    cls: 'text-rose-500 bg-rose-500/10' },
+  user_suspended:          { Icon: Ban,          cls: 'text-amber-500 bg-amber-500/10' },
+  user_activated:          { Icon: CheckCircle2, cls: 'text-emerald-500 bg-emerald-500/10' },
+  workspace_created:       { Icon: Network,      cls: 'text-violet-500 bg-violet-500/10' },
+  workspace_updated:       { Icon: Pencil,       cls: 'text-blue-500 bg-blue-500/10' },
+  workspace_suspended:     { Icon: Ban,          cls: 'text-amber-500 bg-amber-500/10' },
+  workspace_activated:     { Icon: CheckCircle2, cls: 'text-emerald-500 bg-emerald-500/10' },
+  workspace_deleted:       { Icon: Trash2,       cls: 'text-rose-500 bg-rose-500/10' },
+  role_created:            { Icon: ShieldCheck,  cls: 'text-violet-500 bg-violet-500/10' },
+  role_updated:            { Icon: ShieldCheck,  cls: 'text-blue-500 bg-blue-500/10' },
+  role_archived:           { Icon: Archive,      cls: 'text-amber-500 bg-amber-500/10' },
+  role_restored:           { Icon: RotateCcw,    cls: 'text-emerald-500 bg-emerald-500/10' },
+  role_deleted:            { Icon: Trash2,       cls: 'text-rose-500 bg-rose-500/10' },
+  branding_updated:        { Icon: Palette,      cls: 'text-fuchsia-500 bg-fuchsia-500/10' },
+  billing_address_updated: { Icon: Wallet,       cls: 'text-teal-500 bg-teal-500/10' },
+  agency_updated:          { Icon: Pencil,       cls: 'text-blue-500 bg-blue-500/10' },
+  domain_added:            { Icon: Globe,        cls: 'text-indigo-500 bg-indigo-500/10' },
+};
+
+const LogIcon = ({ event }: { event?: string }) => {
+  const { Icon, cls } = ACTION_ICONS[event ?? ''] ?? { Icon: Activity, cls: 'text-slate-400 bg-slate-400/10' };
+  return (
+    <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', cls)}>
+      <Icon size={14} />
+    </div>
+  );
+};
 
 const AgencyLogs = () => {
   const { t } = useTranslation();
@@ -56,13 +107,6 @@ const AgencyLogs = () => {
       targets.forEach(({ el, orig }) => { el.style.overflowY = orig; });
     };
   }, []);
-
-  const logCategories = [
-    t("agency.logs.categories.workspace_created"), t("agency.logs.categories.workspace_deleted"), t("agency.logs.categories.contacts_limit_changed"),
-    t("agency.logs.categories.contacts_limit_enabled"), t("agency.logs.categories.contacts_limit_disabled"), t("agency.logs.categories.subscription_upgraded"),
-    t("agency.logs.categories.subscription_cancelled"), t("agency.logs.categories.whitelabel_purchased"), t("agency.logs.categories.whitelabel_cancelled"),
-    t("agency.logs.categories.ai_assistants")
-  ];
 
   const dateRanges = [
     t("agency.logs.filters.today"), 
@@ -123,7 +167,11 @@ const AgencyLogs = () => {
       params.set('page', String(page));
       const res = await apiRequest("GET", `/api/agencies/${agencyId}/agency-logs?${params.toString()}`);
       return res.json();
-    }
+    },
+    // Audit logs must reflect the latest activity every time the page is opened.
+    // The global default is staleTime:Infinity, so force a refetch on mount.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const agents = [t("agency.logs.filters.all_agents"), ...(membersResponse?.members || []).map((m: any) => m.email)];
@@ -161,26 +209,7 @@ const AgencyLogs = () => {
         {/* Unified Main Card - Restricted height to match viewport and made compact */}
         <div className={cn("flex rounded-2xl border overflow-hidden shadow-sm h-full max-h-[calc(100vh-220px)]", card, border)}>
           
-          {/* Left Sidebar: Filter Categories */}
-          <div className={cn("w-72 border-r flex flex-col shrink-0 h-full", border)}>
-            <div className={cn("p-4 border-b bg-slate-50/50 dark:bg-slate-900/30", border)}>
-              <h2 className={cn("text-[11px] font-bold uppercase tracking-widest", sub)}>Categories</h2>
-            </div>
-            <div className="flex flex-col flex-1 overflow-y-auto custom-scrollbar">
-              {logCategories.map((category, i) => (
-                <div key={i} className={cn("flex items-center gap-3 p-3.5 border-b last:border-0 transition-colors cursor-pointer group", 
-                  dark ? "hover:bg-slate-800/25 border-slate-800/50" : "hover:bg-slate-50 border-slate-100")}>
-                  <Checkbox id={`cat-${i}`} className="border-slate-300 data-[state=checked]:bg-primary shrink-0" />
-                  <label htmlFor={`cat-${i}`} className={cn("text-[12px] font-medium group-hover:text-primary cursor-pointer select-none transition-colors", 
-                    dark ? "text-slate-400" : "text-slate-600")}>
-                    {category}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right Section: Filters + Logs Table */}
+          {/* Right Section: Filters + Logs Table (full width — categories sidebar removed) */}
           <div className="flex-1 flex flex-col min-w-0">
             
             {/* Integrated Top Filters Bar */}
@@ -189,7 +218,7 @@ const AgencyLogs = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className={cn("flex items-center gap-2 cursor-pointer hover:text-primary transition-colors", text)}>
-                    <Calendar size={16} className="text-primary opacity-70" />
+                    <Calendar size={16} className="text-primary" />
                     <span className="text-[12px] font-bold">{selectedDate}</span>
                     <ChevronDown size={14} className="opacity-40" />
                   </div>
@@ -207,14 +236,17 @@ const AgencyLogs = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <div className={cn("flex items-center gap-2 cursor-pointer hover:text-primary transition-colors", text)}>
-                    <Users size={16} className="text-primary opacity-70" />
+                    <Users size={16} className="text-primary" />
                     <span className="text-[12px] font-bold">{selectedAgent}</span>
                     <ChevronDown size={14} className="opacity-40" />
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className={cn("w-48", dark ? "bg-[#1e293b] border-slate-700 text-white" : "")}>
-                  {agents.map((agent) => (
-                    <DropdownMenuItem key={agent} onClick={() => setSelectedAgent(agent)} className="cursor-pointer text-[12px]">
+                  {agents.map((agent, idx) => (
+                    <DropdownMenuItem key={agent} onClick={() => setSelectedAgent(agent)} className="cursor-pointer text-[12px] gap-2">
+                      {idx === 0
+                        ? <Users size={13} className="text-primary shrink-0" />
+                        : <User size={13} className="text-slate-400 shrink-0" />}
                       {agent}
                     </DropdownMenuItem>
                   ))}
@@ -225,8 +257,8 @@ const AgencyLogs = () => {
             {/* Logs Table Area */}
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Table Headers */}
-              <div className={cn("grid grid-cols-12 px-6 py-2.5 border-b transition-colors", 
-                dark ? "bg-slate-900/30 border-slate-800 text-slate-600" : "bg-slate-50/60 border-slate-100 text-slate-400")}>
+              <div className={cn("grid grid-cols-12 px-6 py-2.5 border-b transition-colors",
+                dark ? "bg-slate-900/30 border-slate-800 text-slate-300" : "bg-slate-50/60 border-slate-100 text-slate-600")}>
                 <div className="col-span-3 text-[10px] font-bold uppercase tracking-widest">{t("agency.logs.table.action_date")}</div>
                 <div className="col-span-6 text-[10px] font-bold uppercase tracking-widest text-center">{t("agency.logs.table.action")}</div>
                 <div className="col-span-3 text-[10px] font-bold uppercase tracking-widest text-right">{t("agency.logs.table.performed_by")}</div>
@@ -236,13 +268,15 @@ const AgencyLogs = () => {
               <div className="flex-1 overflow-y-auto flex flex-col custom-scrollbar">
                 {!isLoading && logs.length > 0 && (
                   <div className={cn("divide-y transition-colors", dark ? "divide-slate-800/50" : "divide-slate-50")}>
-                    {logs.map((log: any, i: number) => (
-                      <div key={i} className={cn("group grid grid-cols-12 px-6 py-3.5 border-b last:border-0 transition-colors items-center", 
+                    {logs.map((log: any, i: number) => {
+                      const performer = log.user?.name || log.user?.email || "System";
+                      return (
+                      <div key={i} className={cn("group grid grid-cols-12 px-6 py-3.5 border-b last:border-0 transition-colors items-center",
                         dark ? "border-slate-800 hover:bg-slate-800/25" : "border-slate-100 hover:bg-slate-50/70")}>
-                        
+
                         <div className="col-span-3 flex items-center gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 opacity-60" />
-                          <div className={cn("text-[13px] font-medium truncate", sub)}>
+                          <LogIcon event={log.event} />
+                          <div className={cn("text-[13px] font-medium truncate", dark ? "text-slate-300" : "text-slate-600")}>
                             {log.created_at ? format(new Date(log.created_at), "yyyy-MM-dd hh:mm a") : "N/A"}
                           </div>
                         </div>
@@ -251,13 +285,19 @@ const AgencyLogs = () => {
                           {log.action || log.message}
                         </div>
 
-                        <div className="col-span-3 text-right flex items-center justify-end gap-2">
-                          <div className={cn("text-[13px] font-bold", dark ? "text-slate-400" : "text-slate-700")}>
-                            {log.user?.name || log.user?.email || "System"}
+                        <div className="col-span-3 text-right flex items-center justify-end gap-2 pr-1">
+                          <div className={cn("text-[13px] font-bold truncate max-w-[140px]", dark ? "text-slate-400" : "text-slate-700")}>
+                            {performer}
                           </div>
+                          <Avatar className="w-7 h-7 shrink-0 border border-slate-100 dark:border-slate-800">
+                            <AvatarFallback className={`${getAvatarColor(performer)} text-[10px] font-black`}>
+                              {performer.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 

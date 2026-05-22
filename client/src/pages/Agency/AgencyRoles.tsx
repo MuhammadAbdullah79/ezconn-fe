@@ -44,9 +44,23 @@ const AgencyRoles = () => {
       });
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/roles`] });
-      toast({ title: t('common.success') });
+    onSuccess: (_, role) => {
+      const newStatus = role.status === 'ACTIVE' ? 'ARCHIVE' : 'ACTIVE';
+      // Update the cached list directly so the role moves between the Active and
+      // Archived tabs instantly — no manual refresh. (queries use staleTime:Infinity,
+      // so invalidate alone wasn't reliably re-rendering the list.)
+      queryClient.setQueryData([`/api/agencies/${agencyId}/roles`], (old: any) => {
+        if (!old?.roles) return old;
+        return {
+          ...old,
+          roles: old.roles.map((r: any) =>
+            r.id === role.id ? { ...r, status: newStatus } : r,
+          ),
+        };
+      });
+      // role.status is the pre-toggle status: ACTIVE → we just archived it,
+      // ARCHIVE → we just restored it.
+      toast({ title: role.status === 'ACTIVE' ? 'Role Archived' : 'Role Restored' });
     },
   });
 

@@ -1,39 +1,27 @@
-import { useState } from "react";
-import {
-  Bot,
-  Plus,
-  Trash2,
-  Edit2,
-  MoreVertical,
-  ChevronLeft,
-  Smile,
-  MessageSquare,
-  AlertCircle,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Bot, Plus, Trash2, Edit2, MoreVertical, ArrowLeft, Smile } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-} from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { useTheme } from "@/contexts/ThemeContext";
-
-interface Message {
-  id: string;
-  title: string;
-  type: "text" | "media";
-  content: string;
-}
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Collection {
   id: string;
@@ -42,78 +30,72 @@ interface Collection {
   messages: Message[];
 }
 
-const initialCollections: Collection[] = [
-  { id: "1", name: "CaioTest", visibility: "public", messages: [{ id: "m1", title: "Caio", type: "text", content: "" }] },
-  { id: "2", name: "Collection 2 by usman", visibility: "public", messages: [] },
-  { id: "3", name: "Another collection for public.", visibility: "public", messages: [] },
-  { id: "4", name: "public collection by john doe", visibility: "public", messages: [] },
-  { id: "5", name: "Teste Tiago", visibility: "public", messages: [] },
-  { id: "6", name: "Makar", visibility: "public", messages: [] },
-];
+interface Message {
+  id: string;
+  title: string;
+  type: "text" | "media";
+  content: string;
+}
+
+// Map backend GET /quick-response ({ responses, folders }) → Collection[]
+function mapCollections(data: any): Collection[] {
+  const folders = data?.folders || [];
+  const responses = data?.responses || [];
+  return folders.map((f: any) => ({
+    id: String(f.id),
+    name: f.title || "",
+    visibility: (f.share || "private") as Collection["visibility"],
+    messages: responses
+      .filter((r: any) => r.parent_id != null && String(r.parent_id) === String(f.id))
+      .map((r: any) => ({
+        id: String(r.id),
+        title: r.title || "",
+        type: (r.type === "media" ? "media" : "text") as Message["type"],
+        content: r.text || "",
+      })),
+  }));
+}
 
 export default function QuickRepliesSection() {
-  const { mode } = useTheme();
-  const dark = mode === "dark";
   const { toast } = useToast();
+  const [collections, setCollections] = useState<Collection[]>([]);
 
-  const [collections, setCollections] = useState<Collection[]>(initialCollections);
+  const { data: qrData } = useQuery<any>({
+    queryKey: ["/api/quick-response"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/quick-response");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (!qrData) return;
+    const mapped = mapCollections(qrData);
+    setCollections(mapped);
+    // keep the open collection-detail view in sync after mutations
+    setCurrentCollection((prev) =>
+      prev ? mapped.find((c) => c.id === prev.id) ?? null : prev,
+    );
+  }, [qrData]);
+
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["/api/quick-response"] });
   const [view, setView] = useState<"list" | "create_collection" | "collection_detail" | "create_message">("list");
-
+  
+  // Create Form State
   const [collectionName, setCollectionName] = useState("");
   const [visibility, setVisibility] = useState<"private" | "public" | "specific">("private");
   const [showError, setShowError] = useState(false);
 
+  // Edit/Delete State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [currentCollection, setCurrentCollection] = useState<Collection | null>(null);
 
+  // Create Message State
   const [messageTitle, setMessageTitle] = useState("");
   const [messageType, setMessageType] = useState<"text" | "media">("text");
   const [messageContent, setMessageContent] = useState("");
-
-  // ── Design tokens ─────────────────────────────────────────
-  const card       = dark ? "bg-[#0f1829]"    : "bg-white";
-  const border     = dark ? "border-slate-800" : "border-slate-200";
-  const text       = dark ? "text-white"      : "text-slate-900";
-  const sub        = dark ? "text-slate-500"  : "text-slate-400";
-  const softBg     = dark ? "bg-slate-950/40" : "bg-slate-50/50";
-  const softBorder = dark ? "border-slate-800" : "border-slate-100";
-
-  const inputCls = cn(
-    "w-full h-11 rounded-xl text-[13px] font-bold transition-all px-4 border outline-none",
-    "focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-    dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
-  );
-
-  const selectCls = cn(
-    inputCls,
-    "appearance-none cursor-pointer pr-10 bg-no-repeat",
-    dark
-      ? "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2394a3b8%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>')]"
-      : "bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%2364748b%22 stroke-width=%222%22><polyline points=%226 9 12 15 18 9%22/></svg>')]",
-    "[background-position:right_1rem_center]"
-  );
-
-  const textareaCls = cn(
-    "w-full rounded-xl text-[13px] font-medium transition-all px-4 py-3 border outline-none resize-none",
-    "focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-    dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
-  );
-
-  const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-    dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
-  );
-
-  const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-    "border-primary text-primary hover:bg-primary hover:text-white"
-  );
-
-  const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
 
   const handleCreateCollectionClick = () => {
     setView("create_collection");
@@ -129,32 +111,53 @@ export default function QuickRepliesSection() {
     setShowError(false);
   };
 
-  const handleCreateCollection = () => {
+  const handleCreateCollection = async () => {
     if (!collectionName.trim()) {
       setShowError(true);
       return;
     }
-    setCollections([...collections, { id: Date.now().toString(), name: collectionName, visibility, messages: [] }]);
-    setView("list");
-    toast({ title: "Success", description: "Collection created successfully" });
+    try {
+      await apiRequest("POST", "/api/quick-response/group", {
+        title: collectionName,
+        share: visibility,
+      });
+      await refresh();
+      setView("list");
+      toast({ title: "Success", description: "Collection created successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
-  const handleUpdateCollection = () => {
-    if (currentCollection && collectionName.trim()) {
-      setCollections(collections.map((c) => (c.id === currentCollection.id ? { ...c, name: collectionName } : c)));
+  // Edit Logic
+  const handleUpdateCollection = async () => {
+    if (!currentCollection || !collectionName.trim()) return;
+    try {
+      await apiRequest("POST", "/api/quick-response/group", {
+        id: currentCollection.id,
+        title: collectionName,
+        share: currentCollection.visibility,
+      });
+      await refresh();
       setCollectionName("");
       setCurrentCollection(null);
       setIsEditModalOpen(false);
       toast({ title: "Success", description: "Collection updated successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
-  const handleDeleteCollection = () => {
-    if (currentCollection) {
-      setCollections(collections.filter((c) => c.id !== currentCollection.id));
+  const handleDeleteCollection = async () => {
+    if (!currentCollection) return;
+    try {
+      await apiRequest("DELETE", `/api/quick-response/${currentCollection.id}`);
+      await refresh();
       setCurrentCollection(null);
       setIsDeleteModalOpen(false);
       toast({ title: "Success", description: "Collection deleted successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
@@ -181,349 +184,363 @@ export default function QuickRepliesSection() {
     setMessageContent("");
   };
 
-  const handleCreateMessage = () => {
-    if (currentCollection && messageTitle.trim() && messageContent.trim()) {
-      const newMessage: Message = { id: Date.now().toString(), title: messageTitle, type: messageType, content: messageContent };
-      const updated = collections.map((c) =>
-        c.id === currentCollection.id ? { ...c, messages: [...c.messages, newMessage] } : c
-      );
-      setCollections(updated);
-      setCurrentCollection(updated.find((c) => c.id === currentCollection.id) || null);
+  const handleCancelCreateMessage = () => {
+    setView("collection_detail");
+    setMessageTitle("");
+    setMessageType("text");
+    setMessageContent("");
+  };
+
+  const handleCreateMessage = async () => {
+    if (!currentCollection || !messageTitle.trim() || !messageContent.trim()) return;
+    try {
+      await apiRequest("POST", "/api/quick-response/message", {
+        title: messageTitle,
+        group_id: currentCollection.id,
+        type: messageType,
+        text: messageContent,
+      });
+      await refresh();
       setView("collection_detail");
       toast({ title: "Success", description: "Message created successfully" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
-  // Header content per view
-  const headerTitle =
-    view === "create_collection"
-      ? "Create Collection"
-      : view === "collection_detail" || view === "create_message"
-        ? currentCollection?.name || "Collection"
-        : "Quick Replies";
-
-  const RadioRow = ({ value, current, onSelect, label }: { value: string; current: string; onSelect: () => void; label: string }) => (
-    <div
-      onClick={onSelect}
-      className={cn(
-        "flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all",
-        current === value ? "border-primary bg-primary/5" : cn(softBorder, dark ? "bg-slate-900/40 hover:border-primary/40" : "bg-white hover:border-primary/40")
-      )}
-    >
-      <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0", current === value ? "border-primary" : sub)}>
-        {current === value && <div className="w-2 h-2 rounded-full bg-primary" />}
-      </div>
-      <span className={cn("text-[12px] font-bold", text)}>{label}</span>
-    </div>
-  );
 
   return (
-    <>
-      <Card className={cn("rounded-[2rem] border overflow-hidden shadow-sm transition-all duration-300", card, border)}>
-        <CardContent className="p-0">
-          {/* Header — dynamic per view */}
-          <div className={cn("px-8 py-5 border-b flex items-center justify-between", border)}>
-            <div className="flex items-center gap-4">
-              <div className={cn("p-2.5 rounded-xl shadow-sm", "bg-primary/10")}>
-                <Bot className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>{headerTitle}</h1>
-                <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
-                  Create and organize quick replies for live chats with leads or contacts.
-                </p>
-              </div>
-            </div>
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between border-b pb-6">
+        <div className="flex gap-4">
+          <div className="mt-1">
+            <Bot className="h-8 w-8 text-foreground" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">Quick Replies</h2>
+            <p className="text-sm text-muted-foreground mt-1 text-slate-500">
+              Efficiently create and organize quick replies for live chats with leads or contacts.
+            </p>
+          </div>
+        </div>
+        
+        {view === "list" && (
+          <Button 
+            onClick={handleCreateCollectionClick}
+            variant="outline"
+            className="btn-outline-primary gap-2"
+          >
+            <Plus size={16} />
+            Add Collection
+          </Button>
+        )}
+         {(view === "collection_detail" || view === "create_message") && (
+           <Button 
+            onClick={handleCreateCollectionClick}
+            variant="outline"
+            className="btn-outline-primary gap-2"
+          >
+            <Plus size={16} />
+            Add Collection
+          </Button>
+        )}
+      </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {view === "list" && (
-                <button onClick={handleCreateCollectionClick} className={primaryOutlineBtn}>
-                  <Plus size={12} /> Add Collection
-                </button>
-              )}
-              {view === "create_collection" && (
-                <button onClick={handleCancelCreateCollection} className={outlineBtn}>
-                  <ChevronLeft size={12} /> Back
-                </button>
-              )}
-              {(view === "collection_detail" || view === "create_message") && (
-                <>
-                  {view === "collection_detail" && (
-                    <button onClick={handleCreateMessageClick} className={primaryOutlineBtn}>
-                      <Plus size={12} /> Add Message
-                    </button>
-                  )}
-                  <button onClick={() => setView("list")} className={outlineBtn}>
-                    <ChevronLeft size={12} /> Collections
-                  </button>
-                </>
+      {view === "list" && (
+        <div className="mt-6">
+          <div className="w-full">
+            <div className="grid grid-cols-[1fr,100px] border-b pb-3 mb-4">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider pl-4">Collection Name</div>
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider text-right pr-4">Action</div>
+            </div>
+            
+            <div className="space-y-1">
+              {collections.map((collection) => (
+                <div 
+                  key={collection.id} 
+                  className="grid grid-cols-[1fr,100px] items-center py-4 border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 px-4 -mx-4 transition-colors cursor-pointer group"
+                  onClick={() => openCollectionDetail(collection)}
+                >
+                  <div className="text-sm font-medium text-foreground group-hover:text-blue-600 transition-colors">
+                    {collection.name}
+                  </div>
+                  <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+                     <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                          <MoreVertical size={16} className="text-slate-400" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditModal(collection)}>
+                          <Edit2 className="mr-2 h-4 w-4" />
+                          Edit name
+                        </DropdownMenuItem>
+                         <DropdownMenuItem onClick={() => openCollectionDetail(collection)}>
+                          <Bot className="mr-2 h-4 w-4" />
+                          Open collection
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openDeleteModal(collection)} className="text-red-600">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
+              
+              {collections.length === 0 && (
+                <div className="text-center py-12 text-slate-500 text-sm">
+                  No collections found. Create a new one to get started.
+                </div>
               )}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* ── LIST VIEW ── */}
-          {view === "list" && (
-            <div className="p-8">
-              <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
-                <div className={cn("px-6 py-4 border-b flex items-center justify-between", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Collection Name</span>
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Action</span>
-                </div>
-                {collections.length === 0 ? (
-                  <div className="py-16 px-8 flex flex-col items-center justify-center text-center space-y-3">
-                    <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Bot className="w-7 h-7 text-primary" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className={cn("text-[13px] font-black", text)}>No collections found</h3>
-                      <p className={cn("text-[11px] font-medium opacity-60", sub)}>Create a new one to get started.</p>
-                    </div>
-                  </div>
-                ) : (
-                  collections.map((collection) => (
-                    <div
-                      key={collection.id}
-                      onClick={() => openCollectionDetail(collection)}
-                      className={cn("flex items-center justify-between px-6 py-4 border-b last:border-0 cursor-pointer transition-colors group", softBorder, dark ? "hover:bg-slate-900/40" : "hover:bg-white/80")}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Bot size={14} className="text-primary" />
-                        </div>
-                        <span className={cn("text-[13px] font-black group-hover:text-primary transition-colors", text)}>
-                          {collection.name}
-                        </span>
-                      </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className={cn("w-9 h-9 rounded-lg border flex items-center justify-center transition-all", dark ? "border-slate-800 hover:border-primary/40 hover:text-primary text-slate-400" : "border-slate-200 hover:border-primary/40 hover:text-primary text-slate-500")}>
-                              <MoreVertical size={14} />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className={cn("rounded-xl border p-1.5 w-44", card, border)}>
-                            <DropdownMenuItem onClick={() => openEditModal(collection)} className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer">
-                              <Edit2 size={13} /> Edit name
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openCollectionDetail(collection)} className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer">
-                              <Bot size={13} /> Open collection
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openDeleteModal(collection)} className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer text-rose-500 focus:text-rose-500 focus:bg-rose-500/10">
-                              <Trash2 size={13} /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── CREATE COLLECTION ── */}
-          {view === "create_collection" && (
-            <div className="p-8">
-              <div className={cn("rounded-[1.5rem] border p-8 space-y-6", softBg, softBorder)}>
-                <div className="max-w-xl space-y-6">
-                  <div className="space-y-2">
-                    <label className={labelCls}>Collection Name</label>
-                    <input
-                      value={collectionName}
-                      onChange={(e) => {
-                        setCollectionName(e.target.value);
-                        if (e.target.value.trim()) setShowError(false);
-                      }}
-                      placeholder="Enter collection name"
-                      className={cn(inputCls, showError && "!border-rose-500 focus:!ring-rose-500/30")}
-                    />
-                    {showError && <p className="text-[11px] font-bold text-rose-500">Enter collection name.</p>}
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className={labelCls}>Share this collection with</label>
-                    <div className="space-y-2">
-                      <RadioRow value="private" current={visibility} onSelect={() => setVisibility("private")} label="Private — Only you can see." />
-                      <RadioRow value="public" current={visibility} onSelect={() => setVisibility("public")} label="Public — All agents can see." />
-                      <RadioRow value="specific" current={visibility} onSelect={() => setVisibility("specific")} label="Specific — Share with specific agents." />
-                    </div>
-                  </div>
-                </div>
-
-                <div className={cn("flex justify-end gap-2 pt-6 border-t", softBorder)}>
-                  <button onClick={handleCancelCreateCollection} className={outlineBtn}>Cancel</button>
-                  <button onClick={handleCreateCollection} className={primaryBtn}>
-                    <Plus size={12} /> Add
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── COLLECTION DETAIL ── */}
-          {view === "collection_detail" && currentCollection && (
-            <div className="p-8">
-              <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
-                {currentCollection.messages.length === 0 ? (
-                  <div className="py-16 px-8 flex flex-col items-center justify-center text-center space-y-3">
-                    <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                      <MessageSquare className="w-7 h-7 text-primary" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className={cn("text-[13px] font-black", text)}>No messages yet</h3>
-                      <p className={cn("text-[11px] font-medium opacity-60", sub)}>
-                        Add a canned message to this collection.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  currentCollection.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={cn("flex items-center gap-3 px-6 py-4 border-b last:border-0 cursor-pointer transition-colors", softBorder, dark ? "hover:bg-slate-900/40" : "hover:bg-white/80")}
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                        <MessageSquare size={14} className="text-primary" />
-                      </div>
-                      <span className={cn("text-[13px] font-black", text)}>{message.title}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── CREATE MESSAGE ── */}
-          {view === "create_message" && currentCollection && (
-            <div className="p-8">
-              <div className={cn("rounded-[1.5rem] border p-8 space-y-6", softBg, softBorder)}>
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className={labelCls}>Message Title</label>
-                    <input
-                      placeholder="Enter message title"
-                      value={messageTitle}
-                      onChange={(e) => setMessageTitle(e.target.value)}
-                      className={inputCls}
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className={labelCls}>Message Type</label>
-                    <div className="grid grid-cols-2 gap-3 max-w-md">
-                      <RadioRow value="text" current={messageType} onSelect={() => setMessageType("text")} label="Text message" />
-                      <RadioRow value="media" current={messageType} onSelect={() => setMessageType("media")} label="Media message" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className={labelCls}>Response Text</label>
-                    <div className="relative">
-                      <textarea
-                        placeholder="Type message..."
-                        rows={6}
-                        value={messageContent}
-                        onChange={(e) => setMessageContent(e.target.value.slice(0, 2000))}
-                        className={cn(textareaCls, "pr-10")}
-                      />
-                      <button className={cn("absolute bottom-3 right-3 transition-colors", sub, "hover:text-primary")}>
-                        <Smile size={18} />
-                      </button>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <select className={cn(selectCls, "h-9 max-w-[200px] text-[11px]")}>
-                        <option value="">Select field</option>
-                        <option value="name">Name</option>
-                        <option value="email">Email</option>
-                      </select>
-                      <span className={cn("text-[10px] font-black uppercase tracking-widest text-primary")}>
-                        {2000 - messageContent.length} remaining
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={cn("flex justify-end gap-2 pt-6 border-t", softBorder)}>
-                  <button onClick={() => setView("collection_detail")} className={outlineBtn}>Close</button>
-                  <button
-                    onClick={handleCreateMessage}
-                    disabled={!messageTitle.trim() || !messageContent.trim()}
-                    className={primaryBtn}
-                  >
-                    <Plus size={12} /> Add
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Edit Collection Modal ── */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className={cn("border p-0 overflow-hidden rounded-[2rem] max-w-md", card, border)}>
-          <div className="p-6 space-y-5">
-            <DialogHeader>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                  <Edit2 size={18} />
-                </div>
-                <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Edit Collection</DialogTitle>
-                  <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
-                    Update the collection name.
-                  </DialogDescription>
-                </div>
-              </div>
-            </DialogHeader>
-
+      {view === "create_collection" && (
+        <div className="mt-6 space-y-6">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <label className={labelCls}>Collection Name</label>
-              <input
+              <Label htmlFor="collection-name" className="text-sm font-medium text-foreground">
+                Collection name
+              </Label>
+              <Input
+                id="collection-name"
+                value={collectionName}
+                onChange={(e) => {
+                  setCollectionName(e.target.value);
+                  if (e.target.value.trim()) setShowError(false);
+                }}
+                placeholder="Collection name"
+                className={`w-full ${showError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+              />
+              {showError && (
+                <p className="text-xs text-red-500">Enter collection name.</p>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <Label className="text-sm font-medium text-foreground">
+                Share this collection with.
+              </Label>
+              <RadioGroup value={visibility} onValueChange={(v: any) => setVisibility(v)} className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="private" id="private" className="text-blue-600 border-gray-400" />
+                  <Label htmlFor="private" className="font-normal cursor-pointer">Private - Only you can see.</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="public" id="public" className="text-blue-600 border-gray-400" />
+                  <Label htmlFor="public" className="font-normal cursor-pointer">Public - All agents can see.</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="specific" id="specific" className="text-blue-600 border-gray-400" />
+                  <Label htmlFor="specific" className="font-normal cursor-pointer">Specific - Share with specific agents.</Label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-6 border-t mt-8">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelCreateCollection}
+              className="text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateCollection}
+              className="btn-outline-primary min-w-[80px]"
+              variant="outline"
+            >
+              <span className="sr-only">Create</span>
+               Add
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Collection Detail View */}
+      {view === "collection_detail" && currentCollection && (
+        <div className="space-y-6">
+           <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">{currentCollection.name}</h3>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setView("list")}
+                className="gap-2 text-muted-foreground"
+              >
+                <ArrowLeft size={16} />
+                Collections
+              </Button>
+              <Button 
+                variant="outline"
+                className="btn-outline-primary gap-2"
+                onClick={handleCreateMessageClick}
+              >
+                <Plus size={16} />
+                Add Message
+              </Button>
+            </div>
+           </div>
+
+           <div className="space-y-2">
+             {currentCollection.messages.map(message => (
+               <div key={message.id} className="p-4 rounded-lg border border-transparent hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer">
+                 <div className="font-medium">{message.title}</div>
+               </div>
+             ))}
+             {currentCollection.messages.length === 0 && (
+               <div className="text-center py-8 text-muted-foreground text-sm">
+                 No canned messages in this collection yet.
+               </div>
+             )}
+           </div>
+        </div>
+      )}
+
+      {/* Create Message View */}
+      {view === "create_message" && currentCollection && (
+        <div className="space-y-6">
+           <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">{currentCollection.name}</h3>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setView("list")}
+                className="gap-2 text-muted-foreground"
+              >
+                <ArrowLeft size={16} />
+                Collections
+              </Button>
+              <Button 
+                variant="outline"
+                className="btn-outline-primary gap-2"
+              >
+                <Plus size={16} />
+                Add Message
+              </Button>
+            </div>
+           </div>
+
+           <div className="space-y-4">
+             <div className="space-y-2">
+               <Label className="text-sm font-medium">Message title</Label>
+               <Input 
+                 placeholder="Message title" 
+                 value={messageTitle}
+                 onChange={(e) => setMessageTitle(e.target.value)}
+                />
+             </div>
+
+             <div className="space-y-3">
+               <Label className="text-sm font-medium">Message type</Label>
+               <RadioGroup value={messageType} onValueChange={(v: any) => setMessageType(v)} className="flex items-center gap-6">
+                 <div className="flex items-center space-x-2">
+                   <RadioGroupItem value="text" id="text" className="text-blue-600 border-gray-400" />
+                   <Label htmlFor="text" className="font-normal cursor-pointer">Text message</Label>
+                 </div>
+                 <div className="flex items-center space-x-2">
+                   <RadioGroupItem value="media" id="media" className="text-blue-600 border-gray-400" />
+                   <Label htmlFor="media" className="font-normal cursor-pointer">Media message</Label>
+                 </div>
+               </RadioGroup>
+             </div>
+
+             <div className="space-y-2 relative">
+               <Label className="text-sm font-medium">Response text</Label>
+               <div className="relative">
+                 <Textarea 
+                   placeholder="Type message..." 
+                   className="min-h-[140px] resize-none pr-8"
+                   value={messageContent}
+                   onChange={(e) => setMessageContent(e.target.value)}
+                 />
+                 <button className="absolute bottom-3 right-3 text-muted-foreground hover:text-foreground">
+                   <Smile size={20} />
+                 </button>
+               </div>
+             </div>
+
+             <div className="flex justify-between items-center">
+               <div className="w-[200px]">
+                 <Select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select field" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                    </SelectContent>
+                 </Select>
+               </div>
+               <span className="text-xs text-blue-500">Characters remaining: {2000 - messageContent.length}</span>
+             </div>
+           </div>
+
+           <div className="flex justify-end gap-3 pt-6">
+              <Button variant="outline" onClick={handleCancelCreateMessage}>
+                Close
+              </Button>
+              <Button 
+                onClick={handleCreateMessage}
+                disabled={!messageTitle.trim() || !messageContent.trim()}
+                className="btn-outline-primary min-w-[80px]"
+                variant="outline"
+              >
+                 Add
+              </Button>
+           </div>
+        </div>
+      )}
+
+      {/* Edit Modal (Collection Name) */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Collection</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Collection Name</Label>
+              <Input
+                id="edit-name"
                 value={collectionName}
                 onChange={(e) => setCollectionName(e.target.value)}
                 placeholder="Enter collection name"
-                className={inputCls}
               />
             </div>
-
-            <div className={cn("flex justify-end gap-2 pt-4 border-t", softBorder)}>
-              <button onClick={() => setIsEditModalOpen(false)} className={outlineBtn}>Cancel</button>
-              <button onClick={handleUpdateCollection} disabled={!collectionName.trim()} className={primaryBtn}>
-                Save Changes
-              </button>
-            </div>
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleUpdateCollection} disabled={!collectionName.trim()} variant="outline" className="btn-outline-primary">Save Changes</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Dialog ── */}
-      <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <AlertDialogContent className={cn("rounded-[2rem] border p-0 max-w-md overflow-hidden", card, border)}>
-          <div className="p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500">
-                <AlertCircle size={18} />
-              </div>
-              <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Collection?</h2>
-                <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
-                  <span className="text-rose-500 font-black">{currentCollection?.name || "This collection"}</span> will be permanently removed. This action cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteCollection}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
-              >
-                <Trash2 size={12} /> Delete
-              </AlertDialogAction>
-            </div>
+      {/* Delete Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Collection</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+             <p className="text-sm text-slate-500">
+              Are you sure you want to delete <span className="font-semibold text-foreground">{currentCollection?.name}</span>? 
+              This action cannot be undone.
+            </p>
           </div>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteCollection}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

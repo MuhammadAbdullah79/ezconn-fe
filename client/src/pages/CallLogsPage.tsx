@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { Search, RefreshCw, MoreVertical, Download, FileText } from "react-feather";
-import { Calendar, ChevronsUpDown, ChevronDown, ChevronUp, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, MessageSquare, Mic, Play, Pause, SkipForward, SkipBack, X, Activity } from "lucide-react";
+import { Calendar, ChevronsUpDown, ChevronDown, ChevronUp, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, MessageSquare, Mic, Play, Pause, SkipForward, SkipBack, X } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,9 +55,6 @@ interface CallLog {
     sentimentSummary: string;
     recording: boolean;
 }
-
-// Dead-code mock array removed — component reads live data from /api/logs/calls.
-
 
 export default function CallLogsPage() {
     const [search, setSearch] = useState("");
@@ -541,439 +537,520 @@ export default function CallLogsPage() {
     return (
         <>
             <audio ref={audioRef} className="hidden" />
-        <div className="animate-in fade-in duration-700 p-6">
-            {/* Unified Master Card */}
-            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-300 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex flex-col">
-                
-                {/* 1. Branded Header Section */}
-                <div className="py-1.5 px-5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-transparent rounded-t-[20px]">
-                    <div className="flex items-center gap-6">
-                        <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/10 shadow-inner">
-                            <Mic size={20} strokeWidth={2.5} />
-                        </div>
-                        <div className="space-y-0.5">
-                            <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-                                Call Logs
-                            </h1>
-                            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                                Comprehensive history and metrics for all inbound and outbound voice calls
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm"
-                                    onClick={() => {
-                                        // Refresh logic
-                                    }}
-                                >
-                                    <RefreshCw size={14} className="text-slate-500" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-[10px]">Refresh Logs</TooltipContent>
-                        </Tooltip>
-                    </div>
+            <div className="p-6 space-y-6">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <h1 className="text-3xl font-bold">Call Logs</h1>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-10 w-10 p-0 border hover-elevate [border-color:hsl(var(--input))]"
+                                onClick={() => {
+                                    // Refresh logic here
+                                }}
+                            >
+                                <RefreshCw size={16} />
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Refresh</TooltipContent>
+                    </Tooltip>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 border-b border-slate-200 dark:border-slate-800/80 divide-x divide-slate-100 dark:divide-slate-800/50">
-                    <div className="p-3 bg-slate-50/30 dark:bg-transparent">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Total Calls</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-lg font-bold text-slate-900 dark:text-white">{callKpiData.totalCalls}</p>
-                            <span className="text-[10px] font-medium text-slate-400">total</span>
-                        </div>
-                    </div>
-                    <div className="p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Completed</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-lg font-bold text-emerald-600">{callKpiData.completed}</p>
-                            <span className="text-[10px] font-medium text-slate-400">successful</span>
-                        </div>
-                    </div>
-                    <div className="p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Inbound</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-lg font-bold text-blue-600">{callKpiData.inboundCalls}</p>
-                            <span className="text-[10px] font-medium text-slate-400">received</span>
-                        </div>
-                    </div>
-                    <div className="p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Outbound</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-lg font-bold text-amber-600">{callKpiData.outboundCalls}</p>
-                            <span className="text-[10px] font-medium text-slate-400">initiated</span>
-                        </div>
-                    </div>
-                    <div className="p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Avg. Duration</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-lg font-bold text-indigo-600">{callKpiData.avgDuration}</p>
-                            <span className="text-[10px] font-medium text-slate-400">per call</span>
-                        </div>
-                    </div>
-                </div>
+                <div className="space-y-6">
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
+                            <CardContent className="pt-6">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">Total Calls</p>
+                                    <p className="text-2xl font-bold">{callKpiData.totalCalls}</p>
+                                    <p className="text-xs text-muted-foreground">All calls</p>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                {/* 3. Unified Filter Row Section */}
-                <div className="px-3 py-1.5 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-transparent flex items-center gap-2 flex-wrap">
-                    <div className="relative group flex-1 min-w-[200px] max-w-[280px]">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Search className="h-3.5 w-3.5 text-slate-400 group-focus-within:text-primary transition-colors" />
-                        </div>
-                        <input
-                            type="text"
-                            placeholder="Search contact, agent or number..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="block w-full pl-9 pr-3 h-9 bg-slate-50/50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl text-[12px] font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/50 focus:bg-white dark:focus:bg-slate-900 transition-all duration-200 shadow-sm shadow-slate-100/50 dark:shadow-none"
-                        />
+                        <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
+                            <CardContent className="pt-6">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">Completed</p>
+                                    <p className="text-2xl font-bold">{callKpiData.completed}</p>
+                                    <p className="text-xs text-muted-foreground">Successful</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
+                            <CardContent className="pt-6">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">Inbound Calls</p>
+                                    <p className="text-2xl font-bold">{callKpiData.inboundCalls}</p>
+                                    <p className="text-xs text-muted-foreground">Received</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
+                            <CardContent className="pt-6">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">Outbound Calls</p>
+                                    <p className="text-2xl font-bold">{callKpiData.outboundCalls}</p>
+                                    <p className="text-xs text-muted-foreground">Initiated</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
+                            <CardContent className="pt-6">
+                                <div className="space-y-2">
+                                    <p className="text-sm text-muted-foreground">Avg. Duration</p>
+                                    <p className="text-2xl font-bold">{callKpiData.avgDuration}</p>
+                                    <p className="text-xs text-muted-foreground">Per call</p>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
 
-                    <div className="flex items-center gap-2 ml-auto">
-                        <Select value={dateRangePreset} onValueChange={setDateRangePreset}>
-                            <SelectTrigger style={{ borderRadius: '6px' }} className="h-9 w-[140px] !rounded-md border border-input bg-white dark:bg-slate-800/50 text-[12px] font-medium shadow-sm hover:bg-slate-50 transition-all">
-                                <Calendar className="h-3.5 w-3.5 mr-2 text-slate-400" />
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border border-input dark:border-slate-800 shadow-xl">
-                                <SelectItem value="last-7-days" className="text-xs">Last 7 Days</SelectItem>
-                                <SelectItem value="last-14-days" className="text-xs">Last 14 Days</SelectItem>
-                                <SelectItem value="last-30-days" className="text-xs">Last 30 Days</SelectItem>
-                                <SelectItem value="this-month" className="text-xs">This Month</SelectItem>
-                                <SelectItem value="this-quarter" className="text-xs">This Quarter</SelectItem>
-                                <SelectItem value="custom" className="text-xs text-primary font-bold">Custom Range</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        {dateRangePreset === "custom" && (
-                            <Popover open={isCustomDateOpen} onOpenChange={setIsCustomDateOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" style={{ borderRadius: '6px' }} className="h-9 px-3 !rounded-md border border-input bg-white dark:bg-slate-800/50 text-[11px] font-medium gap-2 shadow-sm">
-                                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                                        <span>
-                                            {customDateRange?.from ? format(customDateRange.from, 'dd/MM') : "Start"} - {customDateRange?.to ? format(customDateRange.to, 'dd/MM') : "End"}
-                                        </span>
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 rounded-2xl border border-input dark:border-slate-800 shadow-2xl overflow-hidden" align="end">
-                                    <CalendarComponent
-                                        mode="range"
-                                        selected={customDateRange}
-                                        onSelect={setCustomDateRange}
-                                        className="bg-white dark:bg-slate-900"
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                        )}
-
-                        <CustomDropdown
-                            options={directionOptions}
-                            selected={selectedDirection}
-                            onChange={setSelectedDirection}
-                            placeholder="Direction"
-                            width="140px"
-                            className="!w-[140px]"
-                            triggerContent={
-                                <>
-                                    <div className="flex items-center gap-2 truncate">
-                                        <ChevronsUpDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                        <span className={cn("truncate text-[12px]", selectedDirection.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                            {selectedDirection.length === 0 ? "Direction" : `Direction (${selectedDirection.length})`}
-                                        </span>
-                                    </div>
-                                    <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
-                                </>
-                            }
-                        />
-
-                        <CustomDropdown
-                            options={callStatusOptions}
-                            selected={selectedStatus}
-                            onChange={setSelectedStatus}
-                            placeholder="Status"
-                            width="140px"
-                            className="!w-[140px]"
-                            popoutAlign="right"
-                            triggerContent={
-                                <>
-                                    <div className="flex items-center gap-2 truncate">
-                                        <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                        <span className={cn("truncate text-[12px]", selectedStatus.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                            {selectedStatus.length === 0 ? "Status" : `Status (${selectedStatus.length})`}
-                                        </span>
-                                    </div>
-                                    <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
-                                </>
-                            }
-                        />
-                    </div>
-                </div>
-
-                {/* 4. Table Content Area */}
-                <div className="flex-1 overflow-auto min-h-[300px]">
-                    {selectedRows.size > 0 && (
-                        <div className="flex items-center gap-3 px-5 py-2 bg-primary/[0.06] dark:bg-primary/5 border-b border-primary/20 dark:border-primary/20 animate-in slide-in-from-top-2">
-                            <span className="text-[11px] font-bold text-primary uppercase tracking-widest">{selectedRows.size} Selected</span>
-                            <div className="flex gap-1 ml-auto">
-                                <Button 
-                                    onClick={handleExportSelectedCallLogsAsCSV}
-                                    variant="outline" 
-                                    className="h-7 px-3 rounded-md border-primary/30 text-primary gap-2 text-[10px] font-bold hover:bg-primary hover:text-primary-foreground transition-all"
-                                >
-                                    <Download size={12} />
-                                    Export Selected
-                                </Button>
+                    {/* Filters */}
+                    <div className="flex items-center justify-between gap-3">
+                        {/* Left side: Search, Date Range, Direction, Status */}
+                        <div className="flex items-center gap-3 flex-1">
+                            <div className="relative w-80" style={{ height: "38px" }}>
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                                <Input
+                                    placeholder="Search calls..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-10 text-sm w-full border border-input rounded-md bg-background focus:outline-none transition-color h-full"
+                                />
                             </div>
-                        </div>
-                    )}
+                            {/* Date Range Preset */}
+                            <Select value={dateRangePreset} onValueChange={setDateRangePreset}>
+                                <SelectTrigger className="w-[160px] hover-elevate" style={{ height: "38px" }}>
+                                    <Calendar className="h-4 w-4 mr-2" />
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)]">
+                                    <SelectItem value="last-7-days">Last 7 Days</SelectItem>
+                                    <SelectItem value="last-14-days">Last 14 Days</SelectItem>
+                                    <SelectItem value="last-30-days">Last 30 Days</SelectItem>
+                                    <SelectItem value="this-month">This Month</SelectItem>
+                                    <SelectItem value="this-quarter">This Quarter</SelectItem>
+                                    <SelectItem value="custom">Custom</SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                    <table className="w-full text-left border-separate border-spacing-0">
-                        <thead className="sticky top-0 z-10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md">
-                            <tr>
-                                <th className="px-5 py-2.5 border-b border-slate-200 dark:border-slate-800 w-10">
-                                    <Checkbox
-                                        checked={selectedRows.size > 0 && selectedRows.size === getFilteredAndSortedCallLogs().length}
-                                        onCheckedChange={toggleAllRows}
-                                        className="rounded-[4px] border-slate-300 dark:border-slate-700"
-                                    />
-                                </th>
-                                <th 
-                                    onClick={() => handleCallColumnSort("contact")}
-                                    className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Contact {renderCallSortIcon("contact")}
-                                    </div>
-                                </th>
-                                <th 
-                                    onClick={() => handleCallColumnSort("agent")}
-                                    className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Agent {renderCallSortIcon("agent")}
-                                    </div>
-                                </th>
-                                <th 
-                                    onClick={() => handleCallColumnSort("direction")}
-                                    className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Direction {renderCallSortIcon("direction")}
-                                    </div>
-                                </th>
-                                <th 
-                                    onClick={() => handleCallColumnSort("startTime")}
-                                    className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Start Time {renderCallSortIcon("startTime")}
-                                    </div>
-                                </th>
-                                <th 
-                                    onClick={() => handleCallColumnSort("duration")}
-                                    className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Duration {renderCallSortIcon("duration")}
-                                    </div>
-                                </th>
-                                <th 
-                                    onClick={() => handleCallColumnSort("status")}
-                                    className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-100/50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        Status {renderCallSortIcon("status")}
-                                    </div>
-                                </th>
-                                <th className="px-5 py-2.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 w-20">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                            {paginatedCallLogs.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="py-20 text-center">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="p-4 rounded-full bg-slate-50 dark:bg-slate-800">
-                                                <Mic className="w-8 h-8 text-slate-300" />
-                                            </div>
-                                            <p className="text-sm font-medium text-slate-400">No call logs found</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedCallLogs.map((call) => (
-                                    <tr 
-                                        key={call.id} 
-                                        className="group hover:bg-primary/[0.06] dark:hover:bg-primary/5 transition-all duration-200"
-                                    >
-                                        <td className="px-5 py-2">
-                                            <Checkbox
-                                                checked={selectedRows.has(call.id)}
-                                                onCheckedChange={() => toggleRowSelection(call.id)}
-                                                className="rounded-[4px] border-slate-300 dark:border-slate-700"
-                                            />
-                                        </td>
-                                        <td className="px-5 py-2">
-                                            <div className="flex flex-col">
-                                                <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 line-clamp-1">{call.contact}</span>
-                                                <span className="text-[10px] text-slate-400">{call.contactNumber}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500 uppercase">
-                                                    {call.agent.substring(0, 1)}
-                                                </div>
-                                                <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300">{call.agent}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-2 text-[12px] text-slate-500 dark:text-slate-400 font-medium">
-                                            {call.direction}
-                                        </td>
-                                        <td className="px-5 py-2 text-[12px] text-slate-500 dark:text-slate-400 font-medium">
-                                            {call.startTime}
-                                        </td>
-                                        <td className="px-5 py-2 text-[12px] text-slate-500 dark:text-slate-400 font-medium">
-                                            {call.duration}
-                                        </td>
-                                        <td className="px-5 py-2">
-                                            <span className={cn(
-                                                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase",
-                                                call.status === "Completed" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" :
-                                                call.status === "In Progress" ? "bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400" :
-                                                call.status === "Missed" || call.status === "Failed" ? "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400" :
-                                                "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                                            )}>
-                                                {call.status}
+                            {/* Custom Date Range */}
+                            {dateRangePreset === "custom" && (
+                                <Popover open={isCustomDateOpen} onOpenChange={setIsCustomDateOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="gap-2 font-normal h-10 hover-elevate [border-color:hsl(var(--input))]">
+                                            <Calendar className="h-4 w-4" />
+                                            <span>
+                                                {customDateRange
+                                                    ? customDateRange.to
+                                                        ? `${(customDateRange.from ? format(customDateRange.from, 'dd/MMM/yyyy') : "")} - ${(customDateRange.to ? format(customDateRange.to, 'dd/MMM/yyyy') : "")}`
+                                                        : (customDateRange.from ? format(customDateRange.from, 'dd/MMM/yyyy') : "")
+                                                    : "Select Date"}
                                             </span>
-                                        </td>
-                                        <td className="px-5 py-2">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 p-0 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                                                    >
-                                                        <MoreVertical size={14} className="text-slate-400" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-40 p-1 rounded-xl shadow-xl border-slate-200 dark:border-slate-800">
-                                                    <DropdownMenuItem 
-                                                        onClick={() => handleViewDetails(call)}
-                                                        className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors"
-                                                    >
-                                                        <FileText size={13} className="text-primary" />
-                                                        View Details
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem 
-                                                        onClick={() => handleExportSingleCallLogAsCSV(call)}
-                                                        className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors"
-                                                    >
-                                                        <Download size={13} className="text-emerald-500" />
-                                                        Export CSV
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </td>
-                                    </tr>
-                                ))
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="end">
+                                        <CalendarComponent
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={customDateRange?.from}
+                                            selected={customDateRange}
+                                            onSelect={setCustomDateRange}
+                                            numberOfMonths={1}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                             )}
-                        </tbody>
-                    </table>
-                </div>
 
-                {/* 5. Footer / Pagination Section */}
-                <div className="px-5 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-transparent flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-[11px] font-medium text-slate-500">
-                        <span>{logsResponse?.total || 0} results found</span>
-                        <div className="h-4 w-px bg-slate-300 dark:bg-slate-700" />
-                        <div className="flex items-center gap-2">
-                            <span>Show</span>
-                            <div className="relative" ref={dropdownRef}>
-                                <button
-                                    type="button"
-                                    className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md hover:bg-slate-50 transition-colors"
-                                    onClick={() => setRowsDropdownOpen(!rowsDropdownOpen)}
-                                >
-                                    <span className="font-bold text-slate-700 dark:text-slate-200">{rowsPerPage}</span>
-                                    <ChevronDown size={10} className="text-slate-400" />
-                                </button>
-                                {rowsDropdownOpen && (
-                                    <div className="absolute bottom-full left-0 mb-1 z-50 w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden animate-in slide-in-from-bottom-1">
-                                        {[10, 25, 50].map(option => (
-                                            <button
-                                                key={option}
-                                                className="w-full px-3 py-1.5 text-left hover:bg-primary/10 dark:hover:bg-primary/15 text-slate-600 dark:text-slate-300 transition-colors font-medium"
-                                                onClick={() => {
-                                                    setRowsPerPage(option);
-                                                    setPage(1);
-                                                    setRowsDropdownOpen(false);
-                                                }}
-                                            >
-                                                {option}
-                                            </button>
-                                        ))}
+                            {/* Direction Filter */}
+                            <CustomDropdown
+                                options={directionOptions}
+                                selected={selectedDirection}
+                                onChange={setSelectedDirection}
+                                placeholder="Direction"
+                                width="160px"
+                            />
+
+                            {/* Status Filter */}
+                            <CustomDropdown
+                                options={callStatusOptions}
+                                selected={selectedStatus}
+                                onChange={setSelectedStatus}
+                                placeholder="Status"
+                                width="160px"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Table */}
+                    <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
+                        <CardContent className="pt-2">
+                            {/* Bulk Actions Toolbar */}
+                            {selectedRows.size > 0 && (
+                                <div className="flex items-center gap-3 mt-3 p-3 bg-blue-50 rounded-md border border-blue-200">
+                                    <span className="text-sm text-foreground">{selectedRows.size} selected</span>
+                                    <div className="flex gap-2 ml-auto">
+                                        <button onClick={handleExportSelectedCallLogsAsCSV} className="p-1 hover:bg-blue-100 rounded" title="Export as CSV">
+                                            <Download size={14} className="text-blue-600" />
+                                        </button>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                                </div>
+                            )}
 
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500 mr-2">
-                            <span>Page</span>
-                            <span className="text-slate-900 dark:text-white">{page}</span>
-                            <span>of</span>
-                            <span>{totalPages || 1}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 rounded-md border-slate-200 dark:border-slate-800 shadow-sm"
-                                onClick={() => setPage(1)}
-                                disabled={page === 1}
-                            >
-                                <ChevronsLeft size={12} />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 rounded-md border-slate-200 dark:border-slate-800 shadow-sm"
-                                onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                                disabled={page === 1}
-                            >
-                                <ChevronLeft size={12} />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 rounded-md border-slate-200 dark:border-slate-800 shadow-sm"
-                                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                                disabled={page === totalPages}
-                            >
-                                <ChevronRight size={12} />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 rounded-md border-slate-200 dark:border-slate-800 shadow-sm"
-                                onClick={() => setPage(totalPages)}
-                                disabled={page === totalPages}
-                            >
-                                <ChevronsRight size={12} />
-                            </Button>
-                        </div>
-                    </div>
+                            <div className={`overflow-x-auto ${selectedRows.size > 0 ? 'mt-3' : 'mt-6'}`}>
+                                <table className="w-full text-xs">
+                                    <thead className="select-none">
+                                        <tr className="border-b">
+                                            <th className="text-left py-2 px-3 font-medium text-muted-foreground">
+                                                <Checkbox
+                                                    checked={selectedRows.size > 0 && selectedRows.size === getFilteredAndSortedCallLogs().length}
+                                                    onCheckedChange={toggleAllRows}
+                                                />
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("contact")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Contact
+                                                    {renderCallSortIcon("contact")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("agent")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Agent
+                                                    {renderCallSortIcon("agent")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("direction")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Direction
+                                                    {renderCallSortIcon("direction")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("startTime")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Start Time
+                                                    {renderCallSortIcon("startTime")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("duration")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Duration
+                                                    {renderCallSortIcon("duration")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("status")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Status
+                                                    {renderCallSortIcon("status")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("sentiment")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Sentiment
+                                                    {renderCallSortIcon("sentiment")}
+                                                </div>
+                                            </th>
+                                            <th
+                                                className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30"
+                                                onClick={() => handleCallColumnSort("recording")}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    Recording
+                                                    {renderCallSortIcon("recording")}
+                                                </div>
+                                            </th>
+                                            <th className="text-left py-2 px-3 font-medium text-muted-foreground">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {paginatedCallLogs.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                                                    No results
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            paginatedCallLogs.map((call) => (
+                                                <React.Fragment key={call.id}>
+                                                    <tr className={`${expandedCallId === call.id ? '' : 'border-b'} hover:bg-muted/50`}>
+                                                        <td className="py-2 px-3">
+                                                            <Checkbox
+                                                                checked={selectedRows.has(call.id)}
+                                                                onCheckedChange={() => toggleRowSelection(call.id)}
+                                                            />
+                                                        </td>
+                                                        <td className="py-2 px-3">{call.contact}</td>
+                                                        <td className="py-2 px-3">{call.agent}</td>
+                                                        <td className="py-2 px-3">
+                                                            <span className={`px-2 py-1 rounded text-xs font-medium ${call.direction === "Inbound" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                                                                }`}>
+                                                                {call.direction}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2 px-3">{call.startTime}</td>
+                                                        <td className="py-2 px-3">{call.duration}</td>
+                                                        <td className="py-2 px-3">
+                                                            <span className={`px-2 py-1 rounded text-xs font-medium ${call.status === "Completed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
+                                                                call.status === "In Progress" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
+                                                                    call.status === "Missed" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" :
+                                                                        call.status === "Declined" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" :
+                                                                            call.status === "Failed" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" :
+                                                                                "bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-300"
+                                                                }`}>
+                                                                {call.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2 px-3">
+                                                            <span className={`px-2 py-1 rounded text-xs font-medium ${call.sentiment === "Positive" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
+                                                                call.sentiment === "Negative" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" :
+                                                                    "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                                                }`}>
+                                                                {call.sentiment}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2 px-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${call.recording ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                                                                    }`}>
+                                                                    {call.recording ? "Yes" : "No"}
+                                                                </span>
+                                                                {call.recording && (
+                                                                    <button
+                                                                        className="p-1 hover:bg-muted rounded"
+                                                                        onClick={() => expandedCallId === call.id ? resetPlayerState() : handlePlayPauseClick(call)}
+                                                                        title={expandedCallId === call.id ? "Close Player" : "Play"}
+                                                                    >
+                                                                        {expandedCallId === call.id ? (
+                                                                            <X size={14} className="text-muted-foreground" />
+                                                                        ) : (
+                                                                            <Play size={14} className="text-muted-foreground" />
+                                                                        )}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-2 px-3 flex justify-start">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <button className="p-1 hover:bg-muted rounded">
+                                                                        <MoreVertical size={14} className="text-muted-foreground" />
+                                                                    </button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-popover">
+                                                                    <DropdownMenuItem onClick={() => handleViewDetails(call)}>
+                                                                        <FileText size={14} className="mr-2" />
+                                                                        View Details
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => handleExportSingleCallLogAsCSV(call)}>
+                                                                        <Download size={14} className="mr-2" />
+                                                                        Export Log
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem>
+                                                                        <Mic size={14} className="mr-2" />
+                                                                        Export Recording
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </td>
+                                                    </tr>
+                                                    {expandedCallId === call.id && (
+                                                        <tr className="border-b bg-card">
+                                                            <td colSpan={10} className="pb-2 px-3">
+                                                                <div className="flex items-center justify-between w-full">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <button
+                                                                            onClick={handlePrevious}
+                                                                            className="p-1 hover:bg-muted rounded-full disabled:opacity-50"
+                                                                            disabled={
+                                                                                (() => {
+                                                                                    const currentCallLogs = getFilteredAndSortedCallLogs();
+                                                                                    const currentIndex = currentCallLogs.findIndex(c => c.id === currentPlayingCallId);
+                                                                                    if (currentIndex <= 0) return true;
+                                                                                    for (let i = currentIndex - 1; i >= 0; i--) {
+                                                                                        if (currentCallLogs[i].recording) return false;
+                                                                                    }
+                                                                                    return true;
+                                                                                })()
+                                                                            }
+                                                                        >
+                                                                            <SkipBack size={20} />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handlePlayPauseClick(call)}
+                                                                            className="p-1 hover:bg-muted rounded-full"
+                                                                        >
+                                                                            {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={handleNext}
+                                                                            className="p-1 hover:bg-muted rounded-full disabled:opacity-50"
+                                                                            disabled={
+                                                                                (() => {
+                                                                                    const currentCallLogs = getFilteredAndSortedCallLogs();
+                                                                                    const currentIndex = currentCallLogs.findIndex(c => c.id === currentPlayingCallId);
+                                                                                    if (currentIndex === -1 || currentIndex >= currentCallLogs.length - 1) return true;
+                                                                                    for (let i = currentIndex + 1; i < currentCallLogs.length; i++) {
+                                                                                        if (currentCallLogs[i].recording) return false;
+                                                                                    }
+                                                                                    return true;
+                                                                                })()
+                                                                            }
+                                                                        >
+                                                                            <SkipForward size={20} />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-4 flex-1 mx-8">
+                                                                        <span className="text-sm text-muted-foreground">{formatTime(currentTime)}</span>
+                                                                        <input
+                                                                            type="range"
+                                                                            min="0"
+                                                                            max={duration}
+                                                                            value={currentTime}
+                                                                            onChange={handleSeek}
+                                                                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary slider-thumb-blue-round"
+                                                                        />
+                                                                        <span className="text-sm text-muted-foreground">{formatTime(duration)}</span>
+                                                                    </div>
+
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="relative w-[78px]" ref={speedDropdownRef}>
+                                                                            <button
+                                                                                type="button"
+                                                                                className="flex items-center justify-between px-3 py-2 text-left border border-input rounded-md shadow-sm hover:bg-accent focus:outline-none text-foreground transition-colors w-full"
+                                                                                onClick={() => setSpeedDropdownOpen(!speedDropdownOpen)}
+                                                                            >
+                                                                                <span className="truncate text-xs font-normal">{playbackSpeed}x</span>
+                                                                                <ChevronDown className="h-3 w-3 ml-2 text-muted-foreground" />
+                                                                            </button>
+                                                                            {speedDropdownOpen && (
+                                                                                <div className="absolute z-10 w-full mt-2 rounded-md shadow-md border border-border">
+                                                                                    <ul className="py-1">
+                                                                                        {[0.5, 0.75, 1, 1.25, 1.5, 2].map(option => (
+                                                                                            <li
+                                                                                                key={option}
+                                                                                                className="px-3 py-2 text-xs cursor-pointer hover:bg-muted"
+                                                                                                onClick={() => {
+                                                                                                    handleSpeedChange(option);
+                                                                                                    setSpeedDropdownOpen(false);
+                                                                                                }}
+                                                                                            >
+                                                                                                {option}x
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Pagination */}
+                            <div className="flex items-center justify-between mt-4 text-xs">
+                                <span className="text-muted-foreground">{getFilteredAndSortedCallLogs().length} results</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground">Rows per page:</span>
+                                    <div className="relative w-15" ref={dropdownRef}>
+                                        <button
+                                            type="button"
+                                            className="flex items-center justify-between px-3 py-2 text-left bg-background dark:bg-background border border-input dark:border-slate-700 rounded-md shadow-sm hover:bg-accent dark:hover:bg-slate-700 focus:outline-none text-foreground transition-colors"
+                                            onClick={() => setRowsDropdownOpen(!rowsDropdownOpen)}
+                                        >
+                                            <span className="truncate text-xs font-normal">{rowsPerPage}</span>
+                                            <ChevronDown className="h-3 w-3 ml-2 text-muted-foreground" />
+                                        </button>
+                                        {rowsDropdownOpen && (
+                                            <div className="absolute z-10 w-full mt-2 bg-background dark:bg-background rounded-md shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border border-border dark:border-slate-700 overflow-hidden">
+                                                <ul className="py-1">
+                                                    {[10, 25, 50].map(option => (
+                                                        <li
+                                                            key={option}
+                                                            className="px-3 py-2 text-xs cursor-pointer hover:bg-muted dark:hover:bg-slate-700"
+                                                            onClick={() => {
+                                                                setRowsPerPage(option);
+                                                                setRowsDropdownOpen(false);
+                                                                setPage(1);
+                                                            }}
+                                                        >
+                                                            {option}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className="text-muted-foreground">Page {page} of {totalPages || 1}</span>
+                                    <div className="flex gap-1">
+                                        <button
+                                            className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors"
+                                            disabled={page === 1}
+                                            onClick={() => setPage(1)}
+                                        >
+                                            <ChevronsLeft size={16} />
+                                        </button>
+                                        <button
+                                            className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors"
+                                            disabled={page === 1}
+                                            onClick={() => setPage(page - 1)}
+                                        >
+                                            <ChevronLeft size={16} />
+                                        </button>
+                                        <button
+                                            className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors"
+                                            disabled={page === totalPages}
+                                            onClick={() => setPage(page + 1)}
+                                        >
+                                            <ChevronRight size={16} />
+                                        </button>
+                                        <button
+                                            className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors"
+                                            disabled={page === totalPages}
+                                            onClick={() => setPage(totalPages)}
+                                        >
+                                            <ChevronsRight size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-            </div>
-        </div>
 
                 {/* View Details Dialog */}
                 <Dialog open={viewDetailsOpen} onOpenChange={setViewDetailsOpen}>
@@ -1072,6 +1149,7 @@ export default function CallLogsPage() {
                         </div>
                     </DialogContent>
                 </Dialog>
+            </div>
         </>
     );
 }

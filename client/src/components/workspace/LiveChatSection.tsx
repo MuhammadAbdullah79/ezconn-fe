@@ -31,6 +31,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+} from "@/components/ui/command";
+import { ChevronDown, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -67,6 +77,12 @@ export default function LiveChatSection() {
   const { data: settings, isLoading } = useQuery<any>({
     queryKey: ["/api/workspaces/live-chat-settings"],
   });
+
+  // Real custom fields list — used by the "Select custom field" pickers below.
+  const { data: cfData } = useQuery<{ fields: any[]; folders: any[] }>({
+    queryKey: ["/api/custom-fields"],
+  });
+  const customFieldsList = cfData?.fields || [];
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -129,6 +145,14 @@ export default function LiveChatSection() {
       setFolders([...folders, { id: Date.now(), name: folderName, assignedTo: folderAssignedTo }]);
     }
     setFolderFormOpen(false);
+  };
+
+  const deleteFolder = () => {
+    if (editingFolderId === null) return;
+    setFolders(folders.filter((f) => f.id !== editingFolderId));
+    setFolderFormOpen(false);
+    setEditingFolderId(null);
+    toast({ title: "Folder removed", description: "Conversation folder deleted." });
   };
 
   useEffect(() => {
@@ -259,6 +283,7 @@ export default function LiveChatSection() {
                       </SelectTrigger>
                       <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
                         <SelectItem value="full-name" className="text-[12px] font-bold">Full Name</SelectItem>
+                        <SelectItem value="json" className="text-[12px] font-bold">JSON</SelectItem>
                         <SelectItem value="email" className="text-[12px] font-bold">Email</SelectItem>
                         <SelectItem value="id" className="text-[12px] font-bold">User ID</SelectItem>
                       </SelectContent>
@@ -267,7 +292,16 @@ export default function LiveChatSection() {
                   <div className="space-y-2">
                     <FieldLabel dark={dark}>Custom Field</FieldLabel>
                     <div className="flex gap-2">
-                      <Input value={customField} onChange={(e) => setCustomField(e.target.value)} className={inputCls} placeholder="e.g. AuditLog" />
+                      <div className="flex-1">
+                        <CustomFieldPicker
+                          dark={dark}
+                          value={customField}
+                          onChange={setCustomField}
+                          fields={customFieldsList}
+                          placeholder="Select custom field"
+                          inputCls={inputCls}
+                        />
+                      </div>
                       <button className={outlineBtn}><Plus size={16} /></button>
                     </div>
                   </div>
@@ -310,16 +344,14 @@ export default function LiveChatSection() {
                   <div className="pt-5 mt-5 border-t flex items-end gap-3 animate-in slide-in-from-top-2 duration-300" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
                     <div className="flex-1 space-y-2">
                       <FieldLabel dark={dark}>Target Custom Field</FieldLabel>
-                      <Select value={jsonCustomField} onValueChange={setJsonCustomField}>
-                        <SelectTrigger className={inputCls}>
-                          <SelectValue placeholder="Select custom field" />
-                        </SelectTrigger>
-                        <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
-                          <SelectItem value="Json" className="text-[12px] font-bold">JSON History</SelectItem>
-                          <SelectItem value="Payload" className="text-[12px] font-bold">Raw Payload</SelectItem>
-                          <SelectItem value="User Data" className="text-[12px] font-bold">Extended Profile</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <CustomFieldPicker
+                        dark={dark}
+                        value={jsonCustomField}
+                        onChange={setJsonCustomField}
+                        fields={customFieldsList}
+                        placeholder="Select custom field"
+                        inputCls={inputCls}
+                      />
                     </div>
                     <button className={outlineBtn}><Plus size={16} /></button>
                   </div>
@@ -578,7 +610,15 @@ export default function LiveChatSection() {
                         </Select>
                       </div>
 
-                      <div className="flex justify-end gap-2 mt-auto pt-4">
+                      <div className="flex justify-end items-center gap-2 mt-auto pt-4">
+                        {editingFolderId !== null && (
+                          <button
+                            onClick={deleteFolder}
+                            className="h-10 px-5 rounded-xl border border-rose-500/30 text-rose-500 text-[10px] font-black uppercase tracking-widest transition-all hover:bg-rose-500/10 hover:border-rose-500/50 flex items-center gap-2 mr-auto"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        )}
                         <button
                           onClick={() => setFolderFormOpen(false)}
                           className={cn(
@@ -851,6 +891,80 @@ function SignaturePhonePreview({
         </div>
       </div>
     </div>
+  );
+}
+
+function CustomFieldPicker({
+  dark,
+  value,
+  onChange,
+  fields,
+  placeholder,
+  inputCls,
+}: {
+  dark: boolean;
+  value: string;
+  onChange: (slug: string) => void;
+  fields: any[];
+  placeholder: string;
+  inputCls: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = fields.find((f) => f.slug === value || f.label === value);
+  const displayLabel = selected?.label || (value ? value : placeholder);
+  const isPlaceholder = !selected && !value;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(inputCls, "w-full flex items-center justify-between text-left gap-2")}
+        >
+          <span className={cn("truncate", isPlaceholder && "opacity-60")}>
+            {displayLabel}
+          </span>
+          <ChevronDown size={14} className="opacity-60 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className={cn(
+          "w-[var(--radix-popover-trigger-width)] p-0 rounded-xl border shadow-2xl",
+          dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200"
+        )}
+      >
+        <Command className="bg-transparent">
+          <CommandInput placeholder="Search..." className="text-[12px] font-bold" />
+          <CommandList className="max-h-[260px]">
+            <CommandEmpty className="text-[11px] font-bold py-4 text-center opacity-60">
+              No custom fields found
+            </CommandEmpty>
+            {fields.length > 0 && (
+              <CommandGroup heading="Custom fields">
+                {fields.map((f) => {
+                  const isActive = value === f.slug || value === f.label;
+                  return (
+                    <CommandItem
+                      key={f.id ?? f.slug}
+                      value={f.label}
+                      onSelect={() => {
+                        onChange(f.slug || f.label);
+                        setOpen(false);
+                      }}
+                      className="text-[12px] font-bold cursor-pointer flex items-center justify-between"
+                    >
+                      <span className="truncate">{f.label}</span>
+                      {isActive && <Check size={14} className="text-primary shrink-0" />}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -62,6 +62,22 @@ function handleApiError(error: unknown) {
 // the backend — same-origin, so no CORS/preflight ("Failed to fetch") issues.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
+// The backend (NestJS) serves routes at root: /auth/login, /workspaces/branding…
+// Call sites are inconsistent — some pass "/api/..." and some bare "/auth/...".
+// Normalize both for whichever mode we're in:
+//  • Direct mode (absolute base): strip a leading /api, then prefix the base.
+//  • Proxy mode (empty base): force everything under /api so the Vite dev proxy
+//    matches it; the proxy's rewrite strips /api before hitting the backend.
+function buildApiUrl(rawPath: string): string {
+  let p = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+  const hasApiPrefix = p === "/api" || p.startsWith("/api/");
+  if (API_BASE_URL) {
+    if (hasApiPrefix) p = p.substring(4) || "/";
+    return `${API_BASE_URL}${p}`;
+  }
+  return hasApiPrefix ? p : `/api${p}`;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -78,13 +94,7 @@ export async function apiRequest(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // With an absolute backend base, strip the /api prefix (NestJS serves at root).
-  // With an empty base (dev proxy mode), keep /api so Vite's proxy matches it.
-  let processedUrl = url;
-  if (API_BASE_URL && processedUrl.startsWith("/api")) {
-    processedUrl = processedUrl.substring(4);
-  }
-  const fullUrl = `${API_BASE_URL}${processedUrl.startsWith("/") ? "" : "/"}${processedUrl}`;
+  const fullUrl = buildApiUrl(url);
 
   console.log("Requesting:", fullUrl);
 
@@ -116,12 +126,7 @@ export const getQueryFn: <T>(options: {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    let path = queryKey.join("/");
-    if (API_BASE_URL && path.startsWith("/api")) {
-      path = path.substring(4);
-    }
-
-    const fullUrl = `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+    const fullUrl = buildApiUrl(queryKey.join("/"));
 
     const res = await fetch(fullUrl, {
       credentials: "include",

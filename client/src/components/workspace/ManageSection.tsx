@@ -25,6 +25,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
+import { TIMEZONES } from "@/lib/timezones";
 
 export default function ManageSection() {
   const { mode } = useTheme();
@@ -62,7 +63,12 @@ export default function ManageSection() {
   });
 
   const workspaceId = workspaceData?.id?.toString() || "1";
-  const loginUrl = "";
+  // Login URL: prefer backend-provided value; fall back to current origin so the
+  // field always shows the real URL the user can hand out (Byte does the same).
+  const loginUrl =
+    workspaceData?.login_url ||
+    workspaceData?.loginUrl ||
+    (typeof window !== "undefined" ? `${window.location.origin}/login` : "");
 
   const [workspaceName, setWorkspaceName] = useState("");
   const [timezone, setTimezone] = useState("America/Fortaleza");
@@ -89,10 +95,33 @@ export default function ManageSection() {
     }
   };
 
-  const handleCopy = (val: string) => {
+  const handleCopy = async (val: string) => {
     if (!val) return;
-    navigator.clipboard.writeText(val);
-    toast({ title: "Copied!", description: "Copied to clipboard." });
+    try {
+      // navigator.clipboard is only defined in secure contexts (HTTPS or
+      // localhost). On plain-HTTP custom domains like *.laglobal.local it's
+      // undefined, so fall back to the legacy textarea + execCommand trick.
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(val);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = val;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast({ title: "Copied!", description: "Copied to clipboard." });
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Could not copy to clipboard.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSave = () => {
@@ -202,13 +231,12 @@ export default function ManageSection() {
               <SelectTrigger className={inputCls}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
-                <SelectItem value="America/Fortaleza" className="text-[12px] font-bold">Fortaleza (America/Fortaleza)</SelectItem>
-                <SelectItem value="Asia/Karachi" className="text-[12px] font-bold">Karachi (Asia/Karachi)</SelectItem>
-                <SelectItem value="UTC" className="text-[12px] font-bold">UTC (Universal Time)</SelectItem>
-                <SelectItem value="America/Los_Angeles" className="text-[12px] font-bold">Pacific (America/Los_Angeles)</SelectItem>
-                <SelectItem value="America/New_York" className="text-[12px] font-bold">Eastern (America/New_York)</SelectItem>
-                <SelectItem value="Europe/London" className="text-[12px] font-bold">London (Europe/London)</SelectItem>
+              <SelectContent className={cn("rounded-xl border shadow-2xl max-h-[320px]", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.id} value={tz.id} className="text-[12px] font-bold">
+                    {tz.name} ({tz.id})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -241,16 +269,23 @@ export default function ManageSection() {
               <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
                 <SelectItem value="sunday" className="text-[12px] font-bold">Sunday</SelectItem>
                 <SelectItem value="monday" className="text-[12px] font-bold">Monday</SelectItem>
+                <SelectItem value="tuesday" className="text-[12px] font-bold">Tuesday</SelectItem>
+                <SelectItem value="wednesday" className="text-[12px] font-bold">Wednesday</SelectItem>
+                <SelectItem value="thursday" className="text-[12px] font-bold">Thursday</SelectItem>
+                <SelectItem value="friday" className="text-[12px] font-bold">Friday</SelectItem>
+                <SelectItem value="saturday" className="text-[12px] font-bold">Saturday</SelectItem>
               </SelectContent>
             </Select>
 
             <div className={cn("mt-4 p-5 rounded-[1.25rem] border", softBg, softBorder)}>
               <p className={cn("text-[10px] font-black uppercase tracking-widest opacity-60 mb-3", sub)}>Calendar preview</p>
               <div className="flex gap-2">
-                {(firstDayOfWeek === "monday"
-                  ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-                  : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-                ).map((d, i) => {
+                {(() => {
+                  const week = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+                  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                  const startIdx = Math.max(0, week.indexOf(firstDayOfWeek));
+                  return [...labels.slice(startIdx), ...labels.slice(0, startIdx)];
+                })().map((d, i) => {
                   const active = i === 0;
                   return (
                     <div
@@ -282,11 +317,16 @@ export default function ManageSection() {
             last
           >
             <div className="flex gap-2">
-              <Input readOnly value="No login URL configured" className={cn(inputCls, "flex-1 cursor-default opacity-60")} />
+              <Input
+                readOnly
+                value={loginUrl || "No login URL configured"}
+                className={cn(inputCls, "flex-1 cursor-default", !loginUrl && "opacity-60")}
+              />
               <button
                 onClick={() => handleCopy(loginUrl)}
+                disabled={!loginUrl}
                 className={cn(
-                  "h-11 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0",
+                  "h-11 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed",
                   dark
                     ? "border-slate-800 text-slate-200 hover:border-primary/40 hover:text-primary"
                     : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
@@ -295,9 +335,15 @@ export default function ManageSection() {
                 <Copy size={12} /> Copy
               </button>
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 mt-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Not configured
-            </div>
+            {loginUrl ? (
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 mt-2">
+                <CheckCircle2 size={12} /> Active
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 mt-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Not configured
+              </div>
+            )}
           </FieldRow>
 
           {/* Save Footer */}

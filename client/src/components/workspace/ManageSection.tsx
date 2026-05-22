@@ -385,7 +385,7 @@ function FieldRow({ dark, label, description, icon, required, optional, last, ch
   const sub    = dark ? "text-slate-500"   : "text-slate-400";
 
   return (
-    <div className={cn("grid grid-cols-1 md:grid-cols-12 gap-6 px-8 py-7", !last && "border-b", border)}>
+    <div className={cn("grid grid-cols-1 md:grid-cols-12 gap-6 px-8 py-5", !last && "border-b", border)}>
       <div className="md:col-span-4 space-y-1.5">
         <div className="flex items-center gap-2">
           {icon && <div className="p-1.5 rounded-lg bg-primary/10 text-primary">{icon}</div>}
@@ -403,7 +403,7 @@ function FieldRow({ dark, label, description, icon, required, optional, last, ch
           </p>
         )}
       </div>
-      <div className="md:col-span-8">
+      <div className="md:col-span-7 max-w-xl">
         {children}
       </div>
     </div>

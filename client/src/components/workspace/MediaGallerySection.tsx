@@ -2,8 +2,8 @@ import React, { useMemo, useState } from "react";
 import {
   Film, Folder, Plus, Search, Grid, List, FileText,
   Image as ImageIcon, Mic, Video, UploadCloud, Check, X,
-  Pencil, Trash2, Upload, AlertCircle, Download, Share2,
-  MoreHorizontal, ArrowLeft, Filter, Loader2,
+  Pencil, Trash2, Upload, AlertCircle, Download, Eye,
+  MoreHorizontal, ArrowLeft, Filter, Loader2, Link as LinkIcon,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -121,6 +121,32 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
       toast({ title: "Uploaded", description: "Files uploaded successfully." });
     },
   });
+
+  const copyUrl = async (url: string) => {
+    if (!url || url === "#") return;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast({ title: "Copied", description: "Link copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy link.", variant: "destructive" });
+    }
+  };
+
+  const previewFile = (item: any) => {
+    if (item?.url && item.url !== "#") window.open(item.url, "_blank", "noopener,noreferrer");
+  };
 
   const mediaItems = useMemo(() => {
     if (!galleryData) return [];
@@ -354,34 +380,8 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                         {getIcon(item.type, "w-10 h-10")}
                       </div>
 
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-primary/90 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        {item.type !== "folder" && (
-                          <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const link = document.createElement("a");
-                                link.href = item.url;
-                                link.download = item.name;
-                                link.click();
-                              }}
-                              className="w-8 h-8 rounded-lg bg-white text-primary flex items-center justify-center hover:scale-110 transition-transform shadow-md"
-                            >
-                              <Download size={14} strokeWidth={2.5} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(item.url);
-                                toast({ title: "Copied", description: "Link copied to clipboard." });
-                              }}
-                              className="w-8 h-8 rounded-lg bg-white text-primary flex items-center justify-center hover:scale-110 transition-transform shadow-md"
-                            >
-                              <Share2 size={14} strokeWidth={2.5} />
-                            </button>
-                          </>
-                        )}
+                      {/* Hover overlay — single 3-dots menu (matches Byte) */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -391,7 +391,23 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                               <MoreHorizontal size={14} strokeWidth={2.5} />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent className={cn("rounded-xl p-1.5 min-w-[140px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
+                          <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[150px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
+                            {item.type !== "folder" && (
+                              <>
+                                <DropdownMenuItem
+                                  className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
+                                  onClick={(e) => { e.stopPropagation(); previewFile(item); }}
+                                >
+                                  <Eye size={12} /> Preview
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
+                                  onClick={(e) => { e.stopPropagation(); copyUrl(item.url); }}
+                                >
+                                  <LinkIcon size={12} /> Copy URL
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             <DropdownMenuItem
                               className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
                               onClick={(e) => {

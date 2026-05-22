@@ -16,6 +16,14 @@ import {
   MoreHorizontal,
   CheckCircle2,
   AlertCircle,
+  Eye,
+  Search,
+  FileText,
+  Webhook,
+  Megaphone,
+  TrendingUp,
+  PhoneCall,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -53,6 +61,11 @@ export default function VisualAPISection() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<any | null>(null);
   const [newTriggerName, setNewTriggerName] = useState("");
+  const [filterTab, setFilterTab] = useState<"all" | "webhook" | "broadcast">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewUrlTrigger, setViewUrlTrigger] = useState<any | null>(null);
+  const [renameTrigger, setRenameTrigger] = useState<any | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   // ── Design tokens ─────────────────────────────────────────
   const card       = dark ? "bg-[#0f1829]"    : "bg-white";
@@ -128,6 +141,21 @@ export default function VisualAPISection() {
     },
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async (payload: { id: number | string; name: string }) => {
+      await apiRequest("PATCH", `/api/integrations/api-triggers/${payload.id}`, { name: payload.name });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations/api-triggers"] });
+      toast({ title: "Renamed", description: "Visual API renamed." });
+      setRenameTrigger(null);
+      setRenameValue("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const { data: logs, refetch: refetchLogs, isLoading: logsLoading } = useQuery({
     queryKey: ["/api/integrations/api-triggers", activeTrigger?.id, "logs"],
     queryFn: async () => {
@@ -149,6 +177,38 @@ export default function VisualAPISection() {
   };
 
   const getWebhookUrl = (slug: string) => `${window.location.origin}/v1/api-trigger/${slug}`;
+
+  // ── Derived stats + filtering (matches Byte's Visual APIs dashboard) ──
+  const allTriggers: any[] = triggers || [];
+  const getType = (t: any) =>
+    t?.type === "group_broadcast" || t?.type === "broadcast" ? "broadcast" : "webhook";
+  const getCalls = (t: any) => t?.calls_30d ?? t?.calls ?? t?.calls_count ?? 0;
+
+  const webhookCount = allTriggers.filter((t) => getType(t) === "webhook").length;
+  const broadcastCount = allTriggers.filter((t) => getType(t) === "broadcast").length;
+  const activeCount = allTriggers.filter((t) => t.live).length;
+  const pausedCount = allTriggers.filter((t) => !t.live).length;
+  const errorCount = allTriggers.filter((t) => t.in_error || t.status === "error").length;
+  const totalCalls = allTriggers.reduce((s, t) => s + getCalls(t), 0);
+  const avgPerDay = allTriggers.length ? Math.round(totalCalls / 30) : 0;
+  const successRate =
+    allTriggers.length === 0 || totalCalls === 0
+      ? null
+      : Math.round(
+          (allTriggers.reduce((s, t) => s + (t.success_count ?? 0), 0) / totalCalls) * 100,
+        );
+
+  const displayedTriggers = allTriggers.filter((t) => {
+    if (filterTab !== "all" && getType(t) !== filterTab) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        (t.name || "").toLowerCase().includes(q) ||
+        getWebhookUrl(t.slug || "").toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
 
   // Header content per view
   const headerTitle =
@@ -178,9 +238,19 @@ export default function VisualAPISection() {
 
             <div className="flex items-center gap-2 shrink-0">
               {viewMode === "LIST" && (
-                <button onClick={() => setIsCreateModalOpen(true)} className={primaryOutlineBtn}>
-                  <Plus size={12} /> Add New
-                </button>
+                <>
+                  <a
+                    href="https://docs.ezconn.io/visual-api"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={outlineBtn}
+                  >
+                    <FileText size={12} /> Docs
+                  </a>
+                  <button onClick={() => setIsCreateModalOpen(true)} className={primaryOutlineBtn}>
+                    <Plus size={12} /> Add
+                  </button>
+                </>
               )}
               {viewMode === "MANAGE" && (
                 <>
@@ -224,99 +294,237 @@ export default function VisualAPISection() {
                   </button>
                 </div>
               ) : (
-                <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Endpoint URL</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Created</th>
-                          <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {triggers.map((trigger: any) => (
-                          <tr
-                            key={trigger.id}
-                            className={cn("border-b transition-colors group", softBorder, dark ? "hover:bg-slate-900/40" : "hover:bg-white/80")}
-                          >
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                  <Zap size={14} className="text-primary" />
-                                </div>
-                                <span className={cn("text-[13px] font-black", text)}>{trigger.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <code className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold border max-w-[200px] truncate", softBorder, dark ? "bg-slate-900/50" : "bg-slate-50")}>
-                                  {getWebhookUrl(trigger.slug)}
-                                </code>
-                                <button
-                                  onClick={() => copyToClipboard(getWebhookUrl(trigger.slug))}
-                                  className={cn("w-7 h-7 rounded-md flex items-center justify-center transition-all opacity-0 group-hover:opacity-100", dark ? "hover:bg-slate-800 text-primary" : "hover:bg-slate-100 text-primary")}
-                                  title="Copy"
-                                >
-                                  <Copy size={11} />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              {trigger.live ? (
-                                <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
-                                  Live
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="h-5 px-2 rounded-md border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest">
-                                  Test
-                                </Badge>
-                              )}
-                            </td>
-                            <td className={cn("px-6 py-4 text-[11px] font-bold", sub)}>
-                              {format(new Date(trigger.created_at), "PP p")}
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    className={cn("w-9 h-9 rounded-lg border flex items-center justify-center transition-all ml-auto", dark ? "border-slate-800 hover:border-primary/40 hover:text-primary text-slate-400" : "border-slate-200 hover:border-primary/40 hover:text-primary text-slate-500")}
-                                  >
-                                    <MoreHorizontal size={14} />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className={cn("rounded-xl border p-1.5 w-48", card, border)}>
-                                  <DropdownMenuItem
-                                    className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer"
-                                    onClick={() => { setActiveTrigger(trigger); setViewMode("MANAGE"); }}
-                                  >
-                                    <Settings size={13} /> Manage
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer"
-                                    onClick={() => { setActiveTrigger(trigger); setViewMode("LOGS"); }}
-                                  >
-                                    <Activity size={13} /> Activity Logs
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="my-1" />
-                                  <DropdownMenuItem
-                                    className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer text-rose-500 focus:text-rose-500 focus:bg-rose-500/10"
-                                    onClick={() => setDeleteConfirmation(trigger)}
-                                  >
-                                    <Trash2 size={13} /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="space-y-6">
+                  {/* ── Stat cards ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Total */}
+                    <div className={cn("rounded-[1.25rem] border p-5", softBorder, softBg)}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Network size={14} className="text-primary" />
+                        </div>
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Total Visual APIs</span>
+                      </div>
+                      <p className={cn("text-[26px] font-black leading-none", text)}>{allTriggers.length}</p>
+                      <p className={cn("text-[10px] font-bold mt-2 opacity-60", sub)}>
+                        {webhookCount} Webhook · {broadcastCount} Group broadcast
+                      </p>
+                    </div>
+
+                    {/* Active */}
+                    <div className={cn("rounded-[1.25rem] border p-5", softBorder, softBg)}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                          <CheckCircle2 size={14} className="text-emerald-500" />
+                        </div>
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Active</span>
+                      </div>
+                      <p className={cn("text-[26px] font-black leading-none", text)}>{activeCount}</p>
+                      <p className={cn("text-[10px] font-bold mt-2 opacity-60", sub)}>
+                        {pausedCount} paused · {errorCount} in error
+                      </p>
+                    </div>
+
+                    {/* Calls received */}
+                    <div className={cn("rounded-[1.25rem] border p-5", softBorder, softBg)}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <PhoneCall size={14} className="text-primary" />
+                        </div>
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Calls received · 30d</span>
+                      </div>
+                      <p className={cn("text-[26px] font-black leading-none", text)}>{totalCalls}</p>
+                      <p className={cn("text-[10px] font-bold mt-2 opacity-60", sub)}>Avg {avgPerDay} calls / day</p>
+                    </div>
+
+                    {/* Success rate */}
+                    <div className={cn("rounded-[1.25rem] border p-5", softBorder, softBg)}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                          <TrendingUp size={14} className="text-amber-500" />
+                        </div>
+                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Success rate</span>
+                      </div>
+                      <p className={cn("text-[26px] font-black leading-none", text)}>
+                        {successRate === null ? "—" : `${successRate}%`}
+                      </p>
+                      <p className={cn("text-[10px] font-bold mt-2 opacity-60", sub)}>Last 30 days</p>
+                    </div>
                   </div>
-                  <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                    Showing {triggers.length} of {triggers.length} triggers
+
+                  {/* ── Filter tabs + search ── */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      {[
+                        { id: "all", label: "All", count: allTriggers.length },
+                        { id: "webhook", label: "Webhook", count: webhookCount },
+                        { id: "broadcast", label: "Group broadcast", count: broadcastCount },
+                      ].map((tab) => {
+                        const active = filterTab === (tab.id as any);
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={() => setFilterTab(tab.id as any)}
+                            className={cn(
+                              "h-9 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border",
+                              active
+                                ? "border-primary/40 bg-primary/10 text-primary"
+                                : cn(softBorder, dark ? "text-slate-400 hover:text-primary hover:border-primary/30" : "text-slate-500 hover:text-primary hover:border-primary/30"),
+                            )}
+                          >
+                            {tab.label}
+                            <span className={cn("px-1.5 py-0.5 rounded text-[9px]", active ? "bg-primary/20" : dark ? "bg-slate-800" : "bg-slate-200/70")}>
+                              {tab.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="relative w-full sm:w-72">
+                      <Search size={13} className={cn("absolute left-3 top-1/2 -translate-y-1/2", sub)} />
+                      <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by name or URL..."
+                        className={cn(inputCls, "pl-9 h-9 text-[12px]")}
+                      />
+                    </div>
+                  </div>
+
+                  {/* ── Table ── */}
+                  <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
+                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Type</th>
+                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>URL</th>
+                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
+                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Calls · 30d</th>
+                            <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayedTriggers.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className={cn("px-6 py-12 text-center text-[12px] font-bold opacity-60", sub)}>
+                                No matching Visual APIs.
+                              </td>
+                            </tr>
+                          ) : (
+                            displayedTriggers.map((trigger: any) => {
+                              const type = getType(trigger);
+                              return (
+                                <tr
+                                  key={trigger.id}
+                                  className={cn("border-b transition-colors group", softBorder, dark ? "hover:bg-slate-900/40" : "hover:bg-white/80")}
+                                >
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-3">
+                                      <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", type === "broadcast" ? "bg-amber-500/10" : "bg-primary/10")}>
+                                        {type === "broadcast" ? <Megaphone size={14} className="text-amber-500" /> : <Zap size={14} className="text-primary" />}
+                                      </div>
+                                      <div>
+                                        <span className={cn("text-[13px] font-black block", text)}>{trigger.name}</span>
+                                        {trigger.subtitle && <span className={cn("text-[10px] font-bold opacity-50", sub)}>{trigger.subtitle}</span>}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    {type === "broadcast" ? (
+                                      <Badge variant="outline" className="h-5 px-2 rounded-md border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest gap-1">
+                                        <Megaphone size={10} /> Group broadcast
+                                      </Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/30 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest gap-1">
+                                        <Webhook size={10} /> Webhook
+                                      </Badge>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <code className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold border max-w-[180px] truncate", softBorder, dark ? "bg-slate-900/50" : "bg-slate-50")}>
+                                        {getWebhookUrl(trigger.slug)}
+                                      </code>
+                                      <button
+                                        onClick={() => setViewUrlTrigger(trigger)}
+                                        className={cn("w-7 h-7 rounded-md flex items-center justify-center transition-all opacity-0 group-hover:opacity-100", dark ? "hover:bg-slate-800 text-primary" : "hover:bg-slate-100 text-primary")}
+                                        title="View"
+                                      >
+                                        <Eye size={11} />
+                                      </button>
+                                      <button
+                                        onClick={() => copyToClipboard(getWebhookUrl(trigger.slug))}
+                                        className={cn("w-7 h-7 rounded-md flex items-center justify-center transition-all opacity-0 group-hover:opacity-100", dark ? "hover:bg-slate-800 text-primary" : "hover:bg-slate-100 text-primary")}
+                                        title="Copy"
+                                      >
+                                        <Copy size={11} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    {trigger.live ? (
+                                      <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-500">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Live
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-500">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Test
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className={cn("px-6 py-4 text-[13px] font-black", text)}>
+                                    {getCalls(trigger)}
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          className={cn("w-9 h-9 rounded-lg border flex items-center justify-center transition-all ml-auto", dark ? "border-slate-800 hover:border-primary/40 hover:text-primary text-slate-400" : "border-slate-200 hover:border-primary/40 hover:text-primary text-slate-500")}
+                                        >
+                                          <MoreHorizontal size={14} />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className={cn("rounded-xl border p-1.5 w-48", card, border)}>
+                                        <DropdownMenuItem
+                                          className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer"
+                                          onClick={() => { setActiveTrigger(trigger); setViewMode("MANAGE"); }}
+                                        >
+                                          <Settings size={13} /> Manage
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer"
+                                          onClick={() => { setRenameTrigger(trigger); setRenameValue(trigger.name || ""); }}
+                                        >
+                                          <Pencil size={13} /> Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer text-rose-500 focus:text-rose-500 focus:bg-rose-500/10"
+                                          onClick={() => setDeleteConfirmation(trigger)}
+                                        >
+                                          <Trash2 size={13} /> Delete
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className="my-1" />
+                                        <DropdownMenuItem
+                                          className="rounded-lg text-[12px] font-bold py-2 px-3 flex gap-2 cursor-pointer"
+                                          onClick={() => { setActiveTrigger(trigger); setViewMode("LOGS"); }}
+                                        >
+                                          <Activity size={13} /> Logs
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                      Showing {displayedTriggers.length} of {allTriggers.length} Visual APIs
+                    </div>
                   </div>
                 </div>
               )}
@@ -595,6 +803,102 @@ export default function VisualAPISection() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── View URL Modal ── */}
+      <Dialog open={!!viewUrlTrigger} onOpenChange={(open) => !open && setViewUrlTrigger(null)}>
+        <DialogContent className={cn("border p-0 overflow-hidden rounded-[2rem] max-w-lg", card, border)}>
+          <div className="p-6 space-y-5">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Network size={18} />
+                </div>
+                <div className="text-left">
+                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                    {viewUrlTrigger?.name || "Visual API"}
+                  </DialogTitle>
+                  <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
+                    Endpoint URL for this Visual API.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-2">
+              <label className={labelCls}>URL</label>
+              <div className="flex gap-2">
+                <input
+                  readOnly
+                  value={viewUrlTrigger ? getWebhookUrl(viewUrlTrigger.slug) : ""}
+                  className={cn(inputCls, "font-mono text-[11px] flex-1")}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  onClick={() => viewUrlTrigger && copyToClipboard(getWebhookUrl(viewUrlTrigger.slug))}
+                  className={outlineBtn}
+                  title="Copy"
+                >
+                  <Copy size={12} />
+                </button>
+              </div>
+            </div>
+
+            <div className={cn("flex justify-end pt-4 border-t", softBorder)}>
+              <button onClick={() => setViewUrlTrigger(null)} className={outlineBtn}>
+                Close
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Rename Modal ── */}
+      <Dialog open={!!renameTrigger} onOpenChange={(open) => { if (!open) { setRenameTrigger(null); setRenameValue(""); } }}>
+        <DialogContent className={cn("border p-0 overflow-hidden rounded-[2rem] max-w-md", card, border)}>
+          <div className="p-6 space-y-5">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <Pencil size={18} />
+                </div>
+                <div className="text-left">
+                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                    Rename Visual API
+                  </DialogTitle>
+                  <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
+                    Update the display name.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-2">
+              <label className={labelCls}>Name</label>
+              <input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && renameValue.trim() && renameMutation.mutate({ id: renameTrigger.id, name: renameValue.trim() })}
+                className={inputCls}
+                placeholder="Visual API name"
+                autoFocus
+              />
+            </div>
+
+            <div className={cn("flex justify-end gap-2 pt-4 border-t", softBorder)}>
+              <button onClick={() => { setRenameTrigger(null); setRenameValue(""); }} className={outlineBtn}>
+                Cancel
+              </button>
+              <button
+                onClick={() => renameMutation.mutate({ id: renameTrigger.id, name: renameValue.trim() })}
+                disabled={!renameValue.trim() || renameMutation.isPending}
+                className={primaryBtn}
+              >
+                {renameMutation.isPending ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

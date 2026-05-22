@@ -307,7 +307,7 @@ export default function WhiteLabelSection() {
             </TabsContent>
 
             {/* ── COLORS TAB ── */}
-            <TabsContent value="colors" className="p-8 outline-none space-y-8">
+            <TabsContent value="colors" className="px-8 py-5 outline-none space-y-4">
               <SectionHeading
                 dark={dark}
                 title="Theme Colors"
@@ -315,22 +315,22 @@ export default function WhiteLabelSection() {
               />
 
               <div>
-                <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 mb-2">
                   <div className="w-1 h-4 bg-primary rounded-full" />
                   <h4 className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Brand</h4>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <ColorPicker dark={dark} label="Main Theme" value={colors.mainTheme} onChange={(v) => handleColorChange("mainTheme", v)} />
                   <ColorPicker dark={dark} label="Links & Actions" value={colors.links} onChange={(v) => handleColorChange("links", v)} />
                 </div>
               </div>
 
               <div>
-                <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 mb-2">
                   <div className="w-1 h-4 bg-primary rounded-full" />
                   <h4 className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Chat Bubbles</h4>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <ColorPicker dark={dark} label="Incoming Bubble" value={colors.incomingBubble} onChange={(v) => handleColorChange("incomingBubble", v)} />
                   <ColorPicker dark={dark} label="Incoming Text" value={colors.incomingText} onChange={(v) => handleColorChange("incomingText", v)} />
                   <ColorPicker dark={dark} label="Outgoing Bubble" value={colors.outgoingBubble} onChange={(v) => handleColorChange("outgoingBubble", v)} />
@@ -339,8 +339,8 @@ export default function WhiteLabelSection() {
               </div>
 
               {/* Chat preview */}
-              <div className={cn("p-5 rounded-[1.5rem] border", softBg, softBorder)}>
-                <div className="flex items-center gap-2 mb-3">
+              <div className={cn("p-3.5 rounded-[1.5rem] border", softBg, softBorder)}>
+                <div className="flex items-center gap-2 mb-2">
                   <MessageSquare size={14} className="text-primary" />
                   <h5 className={cn("text-[10px] font-black uppercase tracking-widest", text)}>Live Preview</h5>
                 </div>
@@ -561,11 +561,11 @@ function ColorPicker({
 }) {
   const text = dark ? "text-white" : "text-slate-900";
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <FieldLabel dark={dark}>{label}</FieldLabel>
       <div className="relative">
         <div className={cn(
-          "flex items-center gap-3 px-4 h-11 border rounded-xl transition-all hover:border-primary/40",
+          "flex items-center gap-3 px-4 h-10 border rounded-xl transition-all hover:border-primary/40",
           dark ? "bg-slate-950/50 border-slate-800" : "bg-white border-slate-200"
         )}>
           <div

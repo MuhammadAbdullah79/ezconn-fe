@@ -47,15 +47,17 @@ import GlobalBrandingFetcher from "@/components/GlobalBrandingFetcher";
 import { I18nextProvider } from "react-i18next";
 import i18n from "./lib/i18n";
 
-function DashboardDispatcher({ siteType }: { siteType: string }) {
-  // Tenant type comes from the domain (via /ignite), not the URL path — gateway parity
-  if (siteType === "AGENCY") {
+function DashboardDispatcher({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?: boolean }) {
+  const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
+  const userRole = userInfo.role;
+  
+  if (userRole === "AGENCY" || userRole === "agency" || siteType === "AGENCY" || isAgencyRoute || window.location.host.startsWith("agency.")) {
     return <AgencyDashboard />;
   }
   return <InsightsDashboard />;
 }
 
-function Router({ siteType }: { siteType: string }) {
+function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?: boolean }) {
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
@@ -63,12 +65,12 @@ function Router({ siteType }: { siteType: string }) {
 
       <Route path="/">
         <ProtectedRoute>
-          <DashboardDispatcher siteType={siteType} />
+          <DashboardDispatcher siteType={siteType} isAgencyRoute={isAgencyRoute} />
         </ProtectedRoute>
       </Route>
 
       <Route path="/insights">
-        <ProtectedRoute><DashboardDispatcher siteType={siteType} /></ProtectedRoute>
+        <ProtectedRoute><DashboardDispatcher siteType={siteType} isAgencyRoute={isAgencyRoute} /></ProtectedRoute>
       </Route>
 
       <Route path="/workspace">
@@ -202,8 +204,8 @@ function AppContent() {
     return <div className="flex items-center justify-center h-screen">Loading application...</div>;
   }
 
-  // Layout is decided by the domain (siteType, from /ignite) only — not the URL
-  // path. A workspace domain never renders the agency layout. (gateway parity)
+  const isAgencyRoute = location.startsWith("/agency");
+
   return (
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
@@ -211,10 +213,10 @@ function AppContent() {
           <GlobalBrandingFetcher />
           <TooltipProvider>
             {isAuthRoute ? (
-              <Router siteType={siteType} />
-            ) : (siteType === "AGENCY") ? (
+              <Router siteType={siteType} isAgencyRoute={isAgencyRoute} />
+            ) : (siteType === "AGENCY" || isAgencyRoute || window.location.host.startsWith("agency.")) ? (
               <AgencyLayout>
-                <Router siteType={siteType} />
+                <Router siteType={siteType} isAgencyRoute={isAgencyRoute} />
               </AgencyLayout>
             ) : (
               <div className="flex h-screen overflow-hidden bg-background">
@@ -223,7 +225,7 @@ function AppContent() {
 
                 {/* Main content area - now full width, with top padding */}
                 <main className={`flex-1 overflow-auto bg-accent/30 ${isLoggedIn && !isBuilderRoute ? "mt-16" : ""}`}>
-                  <Router siteType={siteType} />
+                  <Router siteType={siteType} isAgencyRoute={isAgencyRoute} />
                 </main>
 
                 <Toaster />

@@ -134,7 +134,7 @@ const AgencyDashboard = () => {
   ];
 
   return (
-    <div className={cn("min-h-screen p-6 transition-colors", dark ? "bg-[#0f172a] text-white" : "bg-slate-50 text-slate-900")}>
+    <div className={cn("min-h-screen p-6 transition-colors animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out", dark ? "bg-[#0f172a] text-white" : "bg-slate-50 text-slate-900")}>
 
       {/* Header */}
       <div className="mb-8">

@@ -55,7 +55,7 @@ function InsightsDashboardContent() {
   ];
 
   return (
-    <div className="p-6 space-y-8" data-testid="insights-dashboard">
+    <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out" data-testid="insights-dashboard">
       {/* Header Row: Title on Left, Everything else on Right */}
       <div className="flex items-center justify-between pb-6 border-b border-slate-100 dark:border-slate-800/50">
         {/* Title Section: Elegant with Icon */}

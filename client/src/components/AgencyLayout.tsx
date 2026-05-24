@@ -39,7 +39,15 @@ const AgencyLayout = ({ children }: { children: React.ReactNode }) => {
   const [selectedSound, setSelectedSound] = React.useState("Beep");
   const [hasNotifications] = React.useState(false);
   const { mode, setMode } = useTheme();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const mainRef = React.useRef<HTMLElement>(null);
+
+  // Reset scroll to the top whenever the route changes — the layout doesn't
+  // remount between modules, so the <main> scroll position would otherwise carry
+  // over and a new page could open scrolled half-way down.
+  React.useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [location]);
 
   // Sync initial language state with i18n
   React.useEffect(() => {
@@ -363,7 +371,7 @@ const AgencyLayout = ({ children }: { children: React.ReactNode }) => {
         </header>
 
         {/* Scrollable Content Area */}
-        <main className={cn("flex-1 overflow-auto transition-colors duration-300", 
+        <main ref={mainRef} className={cn("flex-1 overflow-auto transition-colors duration-300",
           mode === "dark" ? "bg-[#0f172a]" : "bg-slate-50")}>
           {children}
         </main>

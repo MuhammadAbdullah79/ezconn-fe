@@ -14,6 +14,8 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isOpening, setIsOpening] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
   const { siteData } = useSite();
 
@@ -21,6 +23,7 @@ const LoginPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
+    setIsLoading(true);
     try {
       const response = await apiRequest('POST', '/auth/login', { email, password });
 
@@ -31,7 +34,10 @@ const LoginPage: React.FC = () => {
 
       setSuccessMessage('Login successful');
 
-      // Navigate based on backend response or role (short delay so success message is visible)
+      // Trigger the "curtain opening" animation: the two panels slide apart,
+      // then we navigate once the animation has played.
+      setIsOpening(true);
+
       setTimeout(() => {
         if (data.redirect_to) {
           navigate(data.redirect_to);
@@ -41,19 +47,25 @@ const LoginPage: React.FC = () => {
           // Redirect workspace users to root for better layout stability
           navigate('/');
         }
-      }, 800);
+      }, 550);
     } catch (error: any) {
       console.error('Login error:', error);
       const msg = String(error?.message ?? '');
       const isInvalidCreds = msg.includes('401') || /invalid credentials/i.test(msg) || /unauthorized/i.test(msg);
       setErrorMessage(isInvalidCreds ? 'Incorrect Password' : (msg || 'Failed to connect to the server.'));
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex h-screen">
-      {/* Left Section */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-background">
+    <div className="flex h-screen overflow-hidden">
+      {/* Left Section — slides left like a curtain on successful login */}
+      <div
+        className={cn(
+          "flex-1 flex items-center justify-center p-8 bg-background z-10 transition-transform duration-500 ease-in-out",
+          isOpening && "-translate-x-full"
+        )}
+      >
         <div className="w-full max-w-md space-y-6">
           <div className="text-center">
             <h1 className="text-4xl font-bold text-primary">Welcome to</h1>
@@ -109,8 +121,8 @@ const LoginPage: React.FC = () => {
             </div>
 
 
-            <Button type="submit" className="w-full">
-              Login
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Logging in…' : 'Login'}
             </Button>
           </form>
 
@@ -120,8 +132,13 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Right Section - Gradient with Text */}
-      <div className="hidden lg:flex flex-1 items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white text-2xl font-bold">
+      {/* Right Section — slides right like a curtain on successful login */}
+      <div
+        className={cn(
+          "hidden lg:flex flex-1 items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 text-white text-2xl font-bold z-10 transition-transform duration-500 ease-in-out",
+          isOpening && "translate-x-full"
+        )}
+      >
         <span>*Illustrations Here*</span>
       </div>
     </div>

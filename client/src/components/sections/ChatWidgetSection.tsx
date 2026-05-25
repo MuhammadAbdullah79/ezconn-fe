@@ -12,15 +12,19 @@ import {
   MessageCircle,
   Mail,
   Phone,
-  Send,
-  Facebook,
   Copy,
-  Eye,
+  Info,
   Plus,
   Loader2,
   ChevronLeft,
   AlertCircle,
 } from "lucide-react";
+import {
+  FaWhatsapp,
+  FaTelegramPlane,
+  FaFacebookMessenger,
+  FaInstagram,
+} from "react-icons/fa";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -32,10 +36,21 @@ export default function ChatWidgetSection() {
   const dark = mode === "dark";
   const { toast } = useToast();
 
+  type ChannelState = { enabled: boolean; value: string };
+  const emptyChannels: Record<string, ChannelState> = {
+    email: { enabled: false, value: "" },
+    phone: { enabled: false, value: "" },
+    custom_number: { enabled: false, value: "" },
+    whatsapp: { enabled: false, value: "" },
+    telegram: { enabled: false, value: "" },
+    messenger: { enabled: false, value: "" },
+    instagram: { enabled: false, value: "" },
+  };
+
   const emptyForm = {
     name: "",
     title: "",
-    channels: [] as string[],
+    channels: JSON.parse(JSON.stringify(emptyChannels)) as Record<string, ChannelState>,
     headerColor: "#1e40af",
     bodyColor: "#ffffff",
     position: "right",
@@ -120,23 +135,53 @@ export default function ChatWidgetSection() {
     },
   });
 
-  const channelOptions = ["Email", "Phone", "Custom number", "WhatsApp", "Telegram", "Facebook"];
+  // Connected channels (used to populate the "Select an action" dropdowns)
+  const { data: connectedChannels } = useQuery<any>({
+    queryKey: ["/api/integrations/channels"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/integrations/channels");
+      return res.json();
+    },
+  });
 
-  const getChannelIcon = (channel: string) => {
-    const p = { size: 13, className: "text-white" };
-    switch (channel) {
-      case "WhatsApp": return <Send {...p} />;
-      case "Email": return <Mail {...p} />;
-      case "Phone": return <Phone {...p} />;
-      case "Telegram": return <Send {...p} />;
-      case "Facebook": return <Facebook {...p} />;
-      case "Custom number": return <Phone {...p} />;
-      default: return <MessageCircle {...p} />;
-    }
+  // Channel catalogue — Byte parity. "input" = type a value, "action" = pick a
+  // connected account from the dropdown.
+  const CHANNELS: {
+    key: string;
+    label: string;
+    Icon: any;
+    color: string;
+    gradient?: string;
+    kind: "input" | "action";
+    inputType?: string;
+    placeholder?: string;
+    source?: string;
+    tip: string;
+  }[] = [
+    { key: "email", label: "Email", Icon: Mail, color: "#6366f1", gradient: "linear-gradient(135deg,#818cf8,#6366f1)", kind: "input", inputType: "email", placeholder: "Enter email address", tip: "Visitors can email you at this address." },
+    { key: "phone", label: "Phone", Icon: Phone, color: "#10b981", gradient: "linear-gradient(135deg,#34d399,#059669)", kind: "input", inputType: "tel", placeholder: "Enter phone number", tip: "Visitors can call this number directly." },
+    { key: "custom_number", label: "Custom Number", Icon: Phone, color: "#f43f5e", gradient: "linear-gradient(135deg,#fb7185,#e11d48)", kind: "input", inputType: "tel", placeholder: "Enter phone number", tip: "A custom WhatsApp/SMS number that isn't connected as a channel." },
+    { key: "whatsapp", label: "WhatsApp", Icon: FaWhatsapp, color: "#25D366", gradient: "linear-gradient(135deg,#25D366,#128C7E)", kind: "action", source: "whatsapp", tip: "Link the button to a connected WhatsApp channel." },
+    { key: "telegram", label: "Telegram", Icon: FaTelegramPlane, color: "#229ED9", gradient: "linear-gradient(135deg,#37BBFE,#007DBB)", kind: "action", source: "telegram", tip: "Link the button to a connected Telegram bot." },
+    { key: "messenger", label: "Messenger", Icon: FaFacebookMessenger, color: "#0084FF", gradient: "linear-gradient(135deg,#00C6FF,#0078FF 55%,#A033FF)", kind: "action", source: "messenger", tip: "Link the button to a connected Facebook Page." },
+    { key: "instagram", label: "Instagram", Icon: FaInstagram, color: "#E1306C", gradient: "linear-gradient(135deg,#feda75,#fa7e1e 35%,#d62976 65%,#962fbf 90%,#4f5bd5)", kind: "action", source: "instagram", tip: "Link the button to a connected Instagram account." },
+  ];
+
+  const channelBg = (ch: { color: string; gradient?: string }) =>
+    ch.gradient ? { backgroundImage: ch.gradient } : { backgroundColor: ch.color };
+
+  const getActionOptions = (source?: string) => {
+    if (!source || !connectedChannels) return [];
+    const arr = connectedChannels[source];
+    return Array.isArray(arr) ? arr : [];
   };
 
   const handleCreateWidget = () => {
     if (formData.name.trim() && formData.title.trim()) {
+      // actions = enabled channels with a value/action chosen (Byte-style).
+      const actions = Object.entries(formData.channels)
+        .filter(([, c]) => c.enabled && c.value)
+        .map(([key, c]) => ({ channel: key.toUpperCase(), value: c.value }));
       saveMutation.mutate({
         id: editingId,
         name: formData.name,
@@ -146,15 +191,24 @@ export default function ChatWidgetSection() {
         body_bg: formData.bodyColor,
         font_family: formData.fontFamily,
         position: formData.position,
+        actions, // backend may ignore until widget_actions support is added
       });
     }
   };
 
   const handleEditWidget = (widget: any) => {
+    const channels = JSON.parse(JSON.stringify(emptyChannels)) as Record<string, ChannelState>;
+    // Re-hydrate from saved actions if the backend returns them.
+    if (Array.isArray(widget.actions)) {
+      widget.actions.forEach((a: any) => {
+        const k = String(a.channel || "").toLowerCase();
+        if (channels[k]) channels[k] = { enabled: true, value: a.value || "" };
+      });
+    }
     setFormData({
       name: widget.name,
       title: widget.title,
-      channels: [],
+      channels,
       headerColor: widget.header_bg || "#1e40af",
       bodyColor: widget.body_bg || "#ffffff",
       position: widget.position || "right",
@@ -167,24 +221,31 @@ export default function ChatWidgetSection() {
 
   const openCreate = () => {
     setEditingId(null);
-    setFormData(emptyForm);
+    setFormData(JSON.parse(JSON.stringify(emptyForm)));
     setIsCreateModalOpen(true);
   };
 
   const closeForm = () => {
     setIsCreateModalOpen(false);
-    setFormData(emptyForm);
+    setFormData(JSON.parse(JSON.stringify(emptyForm)));
     setEditingId(null);
   };
 
-  const toggleChannel = (channel: string) => {
+  const toggleChannel = (key: string) => {
     setFormData((prev) => ({
       ...prev,
-      channels: prev.channels.includes(channel)
-        ? prev.channels.filter((c) => c !== channel)
-        : [...prev.channels, channel],
+      channels: { ...prev.channels, [key]: { ...prev.channels[key], enabled: !prev.channels[key].enabled } },
     }));
   };
+
+  const setChannelValue = (key: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      channels: { ...prev.channels, [key]: { ...prev.channels[key], value, enabled: value ? true : prev.channels[key].enabled } },
+    }));
+  };
+
+  const activeChannels = CHANNELS.filter((c) => formData.channels[c.key]?.enabled);
 
   const widgetCode = `<!-- EZCONN Chat Widget -->
 <script src="https://widget.ezconn.io/embed.js"></script>
@@ -298,7 +359,38 @@ export default function ChatWidgetSection() {
                               </div>
                             </td>
                             <td className={cn("px-6 py-4 text-[12px] font-bold", sub)}>{widget.title}</td>
-                            <td className={cn("px-6 py-4 text-[11px] font-bold italic", sub)}>Live settings</td>
+                            <td className="px-6 py-4">
+                              {(() => {
+                                const acts = Array.isArray(widget.actions)
+                                  ? widget.actions
+                                  : Array.isArray(widget.channels)
+                                    ? widget.channels
+                                    : [];
+                                if (acts.length === 0)
+                                  return <span className={cn("text-[11px] font-bold", sub)}>—</span>;
+                                return (
+                                  <div className="flex items-center gap-1.5">
+                                    {acts.map((a: any, i: number) => {
+                                      const ch = CHANNELS.find(
+                                        (c) => c.key === String(a.channel || a).toLowerCase(),
+                                      );
+                                      if (!ch) return null;
+                                      const Icon = ch.Icon;
+                                      return (
+                                        <span
+                                          key={i}
+                                          className="w-7 h-7 rounded-full flex items-center justify-center shadow-sm ring-1 ring-black/5"
+                                          style={channelBg(ch)}
+                                          title={ch.label}
+                                        >
+                                          <Icon size={14} color="#ffffff" />
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
+                            </td>
                             <td className="px-6 py-4">
                               <div className="flex items-center justify-end gap-2">
                                 <button
@@ -402,42 +494,63 @@ export default function ChatWidgetSection() {
 
                   {/* Channels */}
                   <div className={cn("rounded-[1.5rem] border p-6 space-y-4", softBg, softBorder)}>
-                    <label className={cn(labelCls, "text-primary")}>Channels to Add</label>
+                    <label className={cn(labelCls, "text-primary")}>Select the channels to add to the widget</label>
                     <div className="space-y-3">
-                      {channelOptions.map((channel) => (
-                        <div key={channel} className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            id={channel}
-                            checked={formData.channels.includes(channel)}
-                            onChange={() => toggleChannel(channel)}
-                            className="rounded accent-[hsl(var(--primary))]"
-                          />
-                          <span className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                            {getChannelIcon(channel)}
-                          </span>
-                          {channel === "Email" && (
-                            <input type="email" placeholder="Enter email address" className={cn(inputCls, "flex-1")} />
-                          )}
-                          {channel === "Phone" && (
-                            <input type="tel" placeholder="Enter phone number" className={cn(inputCls, "flex-1")} />
-                          )}
-                          {channel === "Custom number" && (
-                            <>
-                              <select className={cn(selectCls, "flex-1")}>
-                                <option>Custom number</option>
+                      {CHANNELS.map((ch) => {
+                        const state = formData.channels[ch.key];
+                        const options = getActionOptions(ch.source);
+                        const Icon = ch.Icon;
+                        return (
+                          <div key={ch.key} className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={state.enabled}
+                              onChange={() => toggleChannel(ch.key)}
+                              className="rounded accent-[hsl(var(--primary))] w-4 h-4"
+                            />
+                            <span
+                              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-md ring-1 ring-black/5"
+                              style={channelBg(ch)}
+                              title={ch.label}
+                            >
+                              <Icon size={17} color="#ffffff" />
+                            </span>
+
+                            {ch.kind === "input" ? (
+                              <input
+                                type={ch.inputType}
+                                value={state.value}
+                                onChange={(e) => setChannelValue(ch.key, e.target.value)}
+                                placeholder={ch.placeholder}
+                                className={cn(inputCls, "flex-1")}
+                              />
+                            ) : (
+                              <select
+                                value={state.value}
+                                onChange={(e) => setChannelValue(ch.key, e.target.value)}
+                                className={cn(selectCls, "flex-1")}
+                              >
+                                <option value="">
+                                  {options.length ? "Select an action" : `No ${ch.label} connected`}
+                                </option>
+                                {options.map((acc: any) => (
+                                  <option key={acc.id} value={String(acc.id)}>
+                                    {acc.name || acc.display_phone_number || acc.username || `#${acc.id}`}
+                                  </option>
+                                ))}
                               </select>
-                              <input type="tel" placeholder="Enter phone number" className={cn(inputCls, "flex-1")} />
-                            </>
-                          )}
-                          {(channel === "WhatsApp" || channel === "Telegram" || channel === "Facebook") && (
-                            <input type="text" placeholder={`Enter ${channel} ID`} className={cn(inputCls, "flex-1")} />
-                          )}
-                          <button className={cn("w-9 h-9 rounded-lg flex items-center justify-center transition-colors shrink-0", dark ? "hover:bg-slate-800 text-slate-400 hover:text-primary" : "hover:bg-slate-100 text-slate-500 hover:text-primary")}>
-                            <Eye size={15} />
-                          </button>
-                        </div>
-                      ))}
+                            )}
+
+                            <button
+                              type="button"
+                              title={ch.tip}
+                              className={cn("w-9 h-9 rounded-lg flex items-center justify-center transition-colors shrink-0", dark ? "hover:bg-slate-800 text-slate-400 hover:text-primary" : "hover:bg-slate-100 text-slate-500 hover:text-primary")}
+                            >
+                              <Info size={15} />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -469,7 +582,24 @@ export default function ChatWidgetSection() {
                           {formData.title || "Hi there, choose your preferred channel to contact us."}
                         </p>
                       </div>
-                      <div className="p-6 flex justify-center">
+                      <div className="p-6 flex flex-col items-center gap-4">
+                        {activeChannels.length > 0 && (
+                          <div className="flex flex-wrap items-center justify-center gap-2">
+                            {activeChannels.map((ch) => {
+                              const Icon = ch.Icon;
+                              return (
+                                <span
+                                  key={ch.key}
+                                  className="w-10 h-10 rounded-full flex items-center justify-center shadow-md ring-1 ring-black/5 transition-transform hover:scale-110"
+                                  style={channelBg(ch)}
+                                  title={ch.label}
+                                >
+                                  <Icon size={19} color="#ffffff" />
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center shadow-lg">
                           <MessageCircle size={28} className="text-white" />
                         </div>

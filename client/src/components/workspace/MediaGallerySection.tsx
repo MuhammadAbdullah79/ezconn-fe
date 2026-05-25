@@ -24,6 +24,8 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -75,6 +77,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [previewItem, setPreviewItem] = useState<any | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -122,8 +125,9 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
     },
   });
 
-  const copyUrl = async (url: string) => {
-    if (!url || url === "#") return;
+  const copyUrl = async (rawUrl: string) => {
+    if (!rawUrl || rawUrl === "#") return;
+    const url = resolveMediaUrl(rawUrl);
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(url);
@@ -144,8 +148,41 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
     }
   };
 
+  // Resolve a stored media path (e.g. "/uploads/xyz.jpg") to a loadable URL.
+  // Prod/direct mode: prepend the backend origin (frontend host has no /uploads).
+  // Local proxy mode (empty base): keep relative — Vite proxies /uploads -> backend.
+  const resolveMediaUrl = (url: string) => {
+    if (!url || url === "#") return "";
+    if (/^(https?:)?\/\//i.test(url) || url.startsWith("data:") || url.startsWith("blob:")) return url;
+    const raw = (import.meta.env.VITE_API_BASE_URL || "").trim();
+    if (raw) {
+      const origin = raw.replace(/\/api\/?$/i, "").replace(/\/$/, "");
+      return `${origin}${url.startsWith("/") ? "" : "/"}${url}`;
+    }
+    return url.startsWith("/") ? url : `/${url}`;
+  };
+
   const previewFile = (item: any) => {
-    if (item?.url && item.url !== "#") window.open(item.url, "_blank", "noopener,noreferrer");
+    if (item && item.type !== "folder") setPreviewItem(item);
+  };
+
+  const navigatePreview = (dir: 1 | -1) => {
+    const files = filteredMedia.filter((m: any) => m.type !== "folder");
+    if (!previewItem || files.length === 0) return;
+    const idx = files.findIndex((m: any) => m.id === previewItem.id);
+    if (idx === -1) return;
+    const next = (idx + dir + files.length) % files.length;
+    setPreviewItem(files[next]);
+  };
+
+  const formatAddedDate = (val: any) => {
+    if (!val) return "";
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return d.toLocaleString("en-US", {
+      year: "numeric", month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
   };
 
   const mediaItems = useMemo(() => {
@@ -165,6 +202,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
       media_type: f.media_type?.toUpperCase() || "FILE",
       size: `${(f.file_size / 1024).toFixed(1)} KB`,
       url: f.file_url,
+      added: f.created_at || f.added_on || f.createdAt || "",
     }));
     return [...folders, ...files];
   }, [galleryData]);
@@ -635,6 +673,81 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Preview Lightbox ── */}
+      <Dialog open={!!previewItem} onOpenChange={(open) => !open && setPreviewItem(null)}>
+        <DialogContent
+          className={cn(
+            "p-0 overflow-hidden rounded-[1.5rem] border max-w-2xl gap-0 [&>button]:hidden",
+            dark ? "bg-[#0f1829] border-slate-800" : "bg-white border-slate-200"
+          )}
+        >
+          {/* Header */}
+          <div className={cn("flex items-center justify-between px-5 py-3 border-b", softBorder)}>
+            <p className={cn("text-[13px] font-black truncate pr-4", text)}>{previewItem?.name}</p>
+            <button
+              onClick={() => setPreviewItem(null)}
+              className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors", dark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500")}
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Image / preview body */}
+          <div className={cn("relative flex items-center justify-center p-6 min-h-[340px]", dark ? "bg-slate-950/40" : "bg-slate-50/60")}>
+            {/* Prev */}
+            <button
+              onClick={() => navigatePreview(-1)}
+              className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-transform hover:scale-110", dark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-600")}
+              title="Previous"
+            >
+              <ChevronLeft size={18} />
+            </button>
+
+            {previewItem?.media_type === "IMAGE" ? (
+              <img
+                src={resolveMediaUrl(previewItem?.url)}
+                alt={previewItem?.name}
+                className="max-h-[60vh] max-w-full object-contain rounded-lg"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove("hidden"); }}
+              />
+            ) : previewItem?.media_type === "VIDEO" ? (
+              <video src={resolveMediaUrl(previewItem?.url)} controls className="max-h-[60vh] max-w-full rounded-lg" />
+            ) : previewItem?.media_type === "AUDIO" ? (
+              <audio src={resolveMediaUrl(previewItem?.url)} controls className="w-full" />
+            ) : (
+              <div className="flex flex-col items-center gap-4">
+                {getIcon(previewItem?.media_type || "FILE", "w-16 h-16")}
+                <a href={resolveMediaUrl(previewItem?.url)} target="_blank" rel="noopener noreferrer" className={primaryBtn}>
+                  Open file
+                </a>
+              </div>
+            )}
+            {previewItem?.media_type === "IMAGE" && (
+              <div className="hidden flex-col items-center gap-2 text-center">
+                {getIcon("IMAGE", "w-16 h-16")}
+                <p className={cn("text-[12px] font-bold", sub)}>Preview unavailable — file not found on this server.</p>
+              </div>
+            )}
+
+            {/* Next */}
+            <button
+              onClick={() => navigatePreview(1)}
+              className={cn("absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-transform hover:scale-110", dark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-600")}
+              title="Next"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* Footer */}
+          <div className={cn("flex items-center justify-between px-5 py-3 border-t text-[11px] font-bold", softBorder, sub)}>
+            <span>Size: {previewItem?.size}</span>
+            {previewItem?.added && <span>Added on: {formatAddedDate(previewItem.added)}</span>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

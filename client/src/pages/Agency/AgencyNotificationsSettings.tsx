@@ -154,7 +154,7 @@ const AgencyNotificationsSettings = () => {
               <div className="flex items-center gap-2 text-primary">
                 <Globe size={16} strokeWidth={2.5} />
                 <label className={cn("text-[12px] font-black uppercase tracking-widest", text)}>
-                  {t("agency.settings.notifications.language")}
+                  {t("common.languages_label", "Languages")}
                 </label>
               </div>
 

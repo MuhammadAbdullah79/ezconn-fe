@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Search, RefreshCw, MoreVertical, Download, FileText } from "react-feather";
+import { Search, RefreshCw, MoreVertical, Download, FileText, Trash2 } from "react-feather";
 import { Calendar, ChevronsUpDown, ChevronDown, ChevronUp, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, MessageSquare, Activity } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ import {
 import CustomDropdown from "@/components/CustomDropdown";
 import { format } from "date-fns";
 import React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
 
@@ -198,6 +198,20 @@ export default function ConversationLogsPage() {
         setSelectedConversation(conv);
         setViewDetailsOpen(true);
     };
+
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const res = await apiRequest("DELETE", `/api/logs/conversations/${id}`);
+            return res.json();
+        },
+        onSuccess: () => {
+            setDeleteConfirmId(null);
+            queryClient.invalidateQueries({ queryKey: ["/api/logs/conversations"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/logs/stats"] });
+        },
+    });
 
     // Fetch the conversation thread when the modal opens. Lazy — won't fire
     // until the user actually clicks a row.
@@ -512,7 +526,7 @@ export default function ConversationLogsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
-                        <Select value={dateRangePreset} onValueChange={setDateRangePreset}>
+                        <Select value={dateRangePreset} onValueChange={(v) => { setDateRangePreset(v); setPage(1); }}>
                             <SelectTrigger style={{ borderRadius: '6px' }} className="h-9 w-[140px] !rounded-md border border-input bg-white dark:bg-slate-800/50 text-[12px] font-medium shadow-sm hover:bg-slate-50 transition-all">
                                 <Calendar className="h-3.5 w-3.5 mr-2 text-slate-400" />
                                 <SelectValue />
@@ -551,9 +565,11 @@ export default function ConversationLogsPage() {
                         <CustomDropdown
                             options={statusOptions}
                             selected={selectedStatus}
-                            onChange={setSelectedStatus}
+                            onChange={(v) => { setSelectedStatus(v); setPage(1); }}
                             placeholder="Status"
                             width="140px"
+                            showSelectedOption={true}
+                            showSearch={false}
                             className="!w-[140px]"
                             popoutAlign="right"
                             triggerContent={
@@ -561,7 +577,9 @@ export default function ConversationLogsPage() {
                                     <div className="flex items-center gap-2 truncate">
                                         <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                         <span className={cn("truncate text-[12px]", selectedStatus.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                            {selectedStatus.length === 0 ? "Status" : `Status (${selectedStatus.length})`}
+                                            {selectedStatus.length === 0
+                                                ? "Status"
+                                                : selectedStatus.map(id => statusOptions.find(o => o.id === id)?.name ?? id).join(", ")}
                                         </span>
                                     </div>
                                     <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
@@ -755,19 +773,26 @@ export default function ConversationLogsPage() {
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-40 p-1 rounded-xl shadow-xl border-slate-200 dark:border-slate-800">
-                                                    <DropdownMenuItem 
+                                                    <DropdownMenuItem
                                                         onClick={() => handleViewDetails(conv)}
                                                         className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors"
                                                     >
                                                         <FileText size={13} className="text-primary" />
                                                         View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem 
+                                                    <DropdownMenuItem
                                                         onClick={() => handleExportSingleAsCSV(conv)}
                                                         className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors"
                                                     >
                                                         <Download size={13} className="text-emerald-500" />
                                                         Export CSV
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => setDeleteConfirmId(conv.id)}
+                                                        className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded-lg cursor-pointer transition-colors text-red-500 focus:text-red-500 focus:bg-red-50 dark:focus:bg-red-500/10"
+                                                    >
+                                                        <Trash2 size={13} className="text-red-500" />
+                                                        Delete
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -1002,6 +1027,35 @@ export default function ConversationLogsPage() {
                             className="border-input [border-color:hsl(var(--input))] font-normal"
                         >
                             Close
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Delete Conversation</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        Are you sure you want to delete this conversation? This action cannot be undone.
+                    </p>
+                    <div className="flex gap-2 justify-end mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirmId(null)}
+                            disabled={deleteMutation.isPending}
+                            className="border-input [border-color:hsl(var(--input))] font-normal"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+                            disabled={deleteMutation.isPending}
+                            className="bg-red-500 hover:bg-red-600 text-white font-semibold"
+                        >
+                            {deleteMutation.isPending ? "Deleting..." : "Delete"}
                         </Button>
                     </div>
                 </DialogContent>

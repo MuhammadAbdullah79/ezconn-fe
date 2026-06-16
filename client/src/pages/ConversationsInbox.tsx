@@ -533,6 +533,23 @@ export default function ConversationsInbox() {
     refetchInterval: 5000,
   });
 
+  // Flag to scroll only on conversation switch / initial load, not on every 5s refetch
+  useEffect(() => {
+    shouldScrollToBottomRef.current = true;
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    const convLoaded = conversations.some((c: any) => c.id === selectedConversation);
+    if (!shouldScrollToBottomRef.current || !messagesResponse || !convLoaded) return;
+    // Clear flag inside the timer — if timer is cancelled by cleanup, flag stays true so next run retries
+    const timer = setTimeout(() => {
+      shouldScrollToBottomRef.current = false;
+      const el = messagesEndRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [messagesResponse, conversations, selectedConversation]);
+
   const normalizeStatus = (s?: string): MessageStatus | undefined => {
     if (!s) return undefined;
     const k = s.toLowerCase();
@@ -1556,6 +1573,8 @@ export default function ConversationsInbox() {
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const shouldScrollToBottomRef = useRef(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -2571,7 +2590,7 @@ export default function ConversationsInbox() {
 
 
 
-              <ScrollArea className="flex-1 p-4">
+              <div ref={messagesEndRef} className="flex-1 min-h-0 p-4 overflow-y-auto">
                 <div className="space-y-4">
                   {(messages || []).map((msg: Message, index: number, allMessages: Message[]) => {
                     const showDateDivider = index === 0 || formatMessageDate(msg.time) !== formatMessageDate(allMessages[index - 1].time);
@@ -2828,10 +2847,8 @@ export default function ConversationsInbox() {
                       </React.Fragment>
                     );
                   })}
-                  {/* Invisible div to scroll to */}
-                  <div id="scroll-target" />
                 </div>
-              </ScrollArea>
+              </div>
               <Separator />
 
               {/* Message Input or Assignment Prompt */}

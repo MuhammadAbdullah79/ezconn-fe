@@ -43,6 +43,7 @@ import AgencyLegal from "@/pages/Agency/AgencyLegal";
 import AgencyHelp from "@/pages/Agency/AgencyHelp";
 import AgencyGeneralSettings from "@/pages/Agency/AgencyGeneralSettings";
 import AgencyNotificationsSettings from "@/pages/Agency/AgencyNotificationsSettings";
+import AgencyNotificationsPage from "@/pages/Agency/AgencyNotificationsPage";
 import AgencyWhiteLabelSettings from "@/pages/Agency/AgencyWhiteLabelSettings";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AgencyLayout from "@/components/AgencyLayout";
@@ -134,6 +135,10 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
       </Route>
       <Route path="/automations">
         <ProtectedRoute><SmartFlowsPage /></ProtectedRoute>
+      </Route>
+
+      <Route path="/agency/notifications">
+        <ProtectedRoute permissions={["agency.*"]}><AgencyNotificationsPage /></ProtectedRoute>
       </Route>
 
       <Route path="/agency/settings/white-label">

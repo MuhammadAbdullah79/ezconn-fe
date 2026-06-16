@@ -8,7 +8,11 @@ import {
   Moon,
   Sun,
   ChevronRight,
-  Circle
+  Circle,
+  Mail,
+  Send,
+  Check,
+  MessageSquare,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -19,12 +23,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { BellOff, Info, Settings, ArrowLeft, Play } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BellOff } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLocation } from "wouter";
 import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 const AgencyLayout = ({ children }: { children: React.ReactNode }) => {
   const { t, i18n } = useTranslation();
@@ -34,12 +38,52 @@ const AgencyLayout = ({ children }: { children: React.ReactNode }) => {
   const [openStatus, setOpenStatus] = React.useState(false);
   const [openTheme, setOpenTheme] = React.useState(false);
   const [openLang, setOpenLang] = React.useState(false);
-  const [isNotifSettings, setIsNotifSettings] = React.useState(false);
-  const [soundEnabled, setSoundEnabled] = React.useState(true);
-  const [selectedSound, setSelectedSound] = React.useState("Beep");
-  const [hasNotifications] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const queryClient = useQueryClient();
+  const { data: notifResp, refetch: refetchNotifs } = useQuery<any>({
+    queryKey: ["/api/notifications", { limit: 2 }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/notifications?limit=2");
+      return res.json();
+    },
+    refetchInterval: 15 * 1000,
+  });
+  const notifications: any[] = notifResp?.notifications || [];
+  const unreadCount: number = notifResp?.unread || 0;
+
+  const formatRelativeTime = (iso: string | Date | null | undefined): string => {
+    if (!iso) return "";
+    const date = typeof iso === "string" ? new Date(iso) : iso;
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return "just now";
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getNotifIcon = (slug?: string): { Icon: any; color: string } => {
+    const s = (slug || "").toLowerCase();
+    if (s.includes("message") || s.includes("mail")) return { Icon: Mail, color: "text-blue-500" };
+    if (s.includes("campaign") || s.includes("send")) return { Icon: Send, color: "text-green-500" };
+    if (s.includes("approved") || s.includes("complete")) return { Icon: Check, color: "text-emerald-500" };
+    if (s.includes("chat") || s.includes("conversation")) return { Icon: MessageSquare, color: "text-purple-500" };
+    return { Icon: Bell, color: "text-slate-500" };
+  };
+
   const { mode, setMode } = useTheme();
   const [location, setLocation] = useLocation();
+
+  const handleNotifClick = async (n: any) => {
+    if (!n.read) {
+      try {
+        await apiRequest("POST", `/api/notifications/${n.id}/read`, {});
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      } catch {}
+    }
+    setNotifOpen(false);
+    setLocation("/agency/notifications");
+  };
   const mainRef = React.useRef<HTMLElement>(null);
 
   // Reset scroll to the top whenever the route changes — the layout doesn't
@@ -83,108 +127,80 @@ const AgencyLayout = ({ children }: { children: React.ReactNode }) => {
           mode === "dark" ? "bg-[#0f172a] border-slate-800" : "bg-white border-slate-200")}>
           <div className="flex items-center gap-4">
             {/* Notifications */}
-            <Popover onOpenChange={(open) => { if (!open) setIsNotifSettings(false); }}>
-              <PopoverTrigger asChild>
-                <button className={cn("relative p-2.5 rounded-xl transition-all duration-300 flex items-center justify-center group", 
+            <DropdownMenu open={notifOpen} onOpenChange={(open) => { setNotifOpen(open); if (open) refetchNotifs(); }}>
+              <DropdownMenuTrigger asChild>
+                <button className={cn("relative p-2.5 rounded-xl transition-all duration-300 flex items-center justify-center group",
                   mode === "dark" ? "text-gray-400 hover:text-white hover:bg-slate-800" : "text-gray-500 hover:text-slate-900 hover:bg-slate-100")}>
                   <Bell size={20} className="group-hover:rotate-12 transition-transform" />
-                  {hasNotifications && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-[#0f172a]" />}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-[#0f172a] leading-none">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </button>
-              </PopoverTrigger>
-              <PopoverContent
-                align="end"
-                className="w-[360px] p-0 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl z-[100]"
-                sideOffset={12}
-              >
-                {!isNotifSettings ? (
-                  <>
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between bg-white dark:bg-[#1e293b]">
-                      <div className="flex items-center gap-2">
-                        <Info size={16} className="text-slate-600 dark:text-slate-400" />
-                        <h3 className="font-bold text-[14px] text-slate-900 dark:text-white">{t("Notifications")}</h3>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                        onClick={() => setIsNotifSettings(true)}
-                      >
-                        <Settings size={16} className="text-slate-600 dark:text-slate-400" />
-                      </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={12} className={cn(
+                "w-80 p-0 border rounded-2xl shadow-2xl overflow-hidden",
+                mode === "dark" ? "bg-[#1e293b] border-slate-700" : "bg-white border-slate-100"
+              )}>
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                  <h3 className="font-bold text-sm">{t("Notifications")}</h3>
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-bold">{unreadCount} unread</span>
+                  )}
+                </div>
+                <div className="max-h-96 overflow-y-auto p-1">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-10 text-center">
+                      <BellOff size={28} className="mx-auto mb-2 opacity-30" />
+                      <p className="text-[12px] text-gray-500 font-medium">You're all caught up</p>
+                      <p className="text-[10px] text-gray-400 mt-1">No new notifications</p>
                     </div>
-                    
-                    <div className="py-12 px-6 flex flex-col items-center justify-center text-center bg-white dark:bg-[#0f172a]">
-                      <div className="mb-4 relative">
-                        <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800/50 rounded-full flex items-center justify-center">
-                          <BellOff size={32} className="text-slate-300 dark:text-slate-600" />
-                        </div>
-                      </div>
-                      <p className="text-[14px] font-bold text-slate-900 dark:text-white mb-1">
-                        {t("No notifications")}
-                      </p>
-                      <p className="text-[12px] font-medium text-slate-400 dark:text-slate-500">
-                        You can view notifications from the last 7 days only.
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex items-center justify-between bg-white dark:bg-[#1e293b]">
-                      <h3 className="font-bold text-[14px] text-slate-900 dark:text-white">Notifications</h3>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                        onClick={() => setIsNotifSettings(false)}
-                      >
-                        <ArrowLeft size={16} className="text-slate-600 dark:text-slate-400" />
-                      </Button>
-                    </div>
-                    
-                    <div className="p-5 space-y-6 bg-white dark:bg-[#0f172a]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("w-10 h-6 rounded-full relative transition-colors cursor-pointer", soundEnabled ? "bg-green-500" : "bg-slate-200 dark:bg-slate-800")}
-                            onClick={() => setSoundEnabled(!soundEnabled)}>
-                            <div className={cn("absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm", soundEnabled ? "left-5" : "left-1")} />
-                          </div>
-                          <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300">{t("Sound notifications")}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 pl-1">
-                        {["Beep", "Fanfarre", "Double Alert"].map((sound) => (
-                          <div key={sound} className="flex items-center justify-between group">
-                            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedSound(sound)}>
-                              <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all", 
-                                selectedSound === sound ? "border-blue-500" : "border-slate-300 dark:border-slate-700")}>
-                                {selectedSound === sound && <div className="w-2 h-2 rounded-full bg-blue-500" />}
-                              </div>
-                              <span className={cn("text-[13px] font-medium transition-colors", 
-                                selectedSound === sound ? "text-slate-900 dark:text-white" : "text-slate-500 dark:text-slate-400")}>
-                                {sound}
-                              </span>
-                            </div>
-                            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
-                              <Play size={14} className="text-slate-400" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="pt-4 flex justify-end">
-                        <Button 
-                          className="bg-white dark:bg-transparent border border-green-500 text-green-500 hover:bg-green-50 dark:hover:bg-green-500/10 font-bold text-[12px] h-8 px-6 rounded-lg transition-all"
-                          onClick={() => setIsNotifSettings(false)}
+                  ) : (
+                    notifications.map((n: any) => {
+                      const { Icon, color } = getNotifIcon(n.slug);
+                      const notifTitle =
+                        n.data?.title ||
+                        (n.data?.contact_name ? `New message from ${n.data.contact_name}` : null) ||
+                        n.data?.message ||
+                        "New Notification";
+                      return (
+                        <DropdownMenuItem
+                          key={n.id}
+                          className={cn(
+                            "p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer mb-1 outline-none",
+                            !n.read && "bg-primary/5 dark:bg-primary/10"
+                          )}
+                          onClick={() => handleNotifClick(n)}
                         >
-                          {t("Save")}
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </PopoverContent>
-            </Popover>
+                          <div className="flex gap-3 w-full">
+                            <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-700 shrink-0", color)}>
+                              <Icon size={16} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold truncate">{notifTitle}</p>
+                              {n.data?.message && (
+                                <p className="text-[11px] text-gray-400 truncate mt-0.5">{n.data.message}</p>
+                              )}
+                              <p className="text-[11px] text-gray-500 mt-0.5">{formatRelativeTime(n.created_at)}</p>
+                            </div>
+                            {!n.read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="p-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    onClick={() => { setNotifOpen(false); setLocation("/agency/notifications"); }}
+                    className="w-full py-2 text-[12px] font-bold text-primary hover:bg-primary/10 dark:hover:bg-primary/10 rounded-xl transition-colors"
+                  >
+                    View all notifications
+                  </button>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Profile Dropdown */}
             <DropdownMenu onOpenChange={(open) => {

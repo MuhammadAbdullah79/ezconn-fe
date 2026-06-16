@@ -89,6 +89,8 @@ const AgencyNotificationsSettings = () => {
 
   const LANGUAGES = [
     { code: "en-US", label: t("common.languages.en"), flag: "us" },
+    { code: "es-ES", label: t("common.languages.es"), flag: "es" },
+    { code: "pt-BR", label: t("common.languages.pt"), flag: "br" },
   ];
 
   const selectedLang = LANGUAGES.find(l => l.code === notifLanguage) || LANGUAGES[0];

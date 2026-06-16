@@ -51,7 +51,9 @@ const resources = {
         "upgrade": "Upgrade",
         "error": "Error",
         "languages": {
-          "en": "English (U.S)"
+          "en": "English (U.S)",
+          "es": "Spanish (España)",
+          "pt": "Português (Brasil)"
         },
         "agree": "I agree",
         "copy": "Copy",

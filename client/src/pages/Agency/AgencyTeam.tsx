@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { getUserInfo } from "@/lib/auth";
-import { Users, Plus, Search, Pencil, Trash2, Crown } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Crown, UserX, UserCheck } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +60,44 @@ const AgencyTeam = () => {
       });
       toast({ title: 'Deleted Successfully' });
       setDeleteTarget(null);
+    },
+    onError: () => {
+      toast({ title: t('common.error'), variant: 'destructive' });
+    },
+  });
+
+  const suspendMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      const res = await apiRequest("POST", `/api/agencies/${agencyId}/members/${memberId}/suspend`);
+      return res.json();
+    },
+    onSuccess: (_, memberId) => {
+      queryClient.setQueryData([`/api/agencies/${agencyId}/members`], (old: any) => {
+        if (!old?.members) return old;
+        return { ...old, members: old.members.map((m: any) =>
+          String(m.id) === String(memberId) ? { ...m, status: 'SUSPENDED' } : m
+        )};
+      });
+      toast({ title: 'Member suspended' });
+    },
+    onError: () => {
+      toast({ title: t('common.error'), variant: 'destructive' });
+    },
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      const res = await apiRequest("POST", `/api/agencies/${agencyId}/members/${memberId}/activate`);
+      return res.json();
+    },
+    onSuccess: (_, memberId) => {
+      queryClient.setQueryData([`/api/agencies/${agencyId}/members`], (old: any) => {
+        if (!old?.members) return old;
+        return { ...old, members: old.members.map((m: any) =>
+          String(m.id) === String(memberId) ? { ...m, status: 'ACTIVE' } : m
+        )};
+      });
+      toast({ title: 'Member activated' });
     },
     onError: () => {
       toast({ title: t('common.error'), variant: 'destructive' });
@@ -255,10 +293,16 @@ const AgencyTeam = () => {
                       'inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-lg',
                       member.status === 'ACTIVE'
                         ? 'text-slate-700 bg-white dark:text-emerald-400 dark:bg-emerald-500/10'
-                        : dark ? 'text-slate-500 bg-slate-800' : 'text-slate-500 bg-slate-100'
+                        : member.status === 'SUSPENDED'
+                          ? dark ? 'text-amber-400 bg-amber-500/10' : 'text-amber-700 bg-amber-50'
+                          : dark ? 'text-slate-500 bg-slate-800' : 'text-slate-500 bg-slate-100'
                     )}>
-                      <span className={cn('w-1.5 h-1.5 rounded-full', member.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400')} />
-                      {member.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+                      <span className={cn('w-1.5 h-1.5 rounded-full',
+                        member.status === 'ACTIVE' ? 'bg-emerald-500'
+                        : member.status === 'SUSPENDED' ? 'bg-amber-500'
+                        : 'bg-slate-400'
+                      )} />
+                      {member.status === 'ACTIVE' ? 'Active' : member.status === 'SUSPENDED' ? 'Suspended' : 'Inactive'}
                     </span>
                   </div>
 
@@ -270,19 +314,48 @@ const AgencyTeam = () => {
                           onClick={() => { setEditingMember(member); setViewMode('EDIT'); }}
                           className={cn(
                             'p-1.5 rounded-lg border transition-all shadow-sm',
-                            dark 
-                              ? 'border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white' 
+                            dark
+                              ? 'border-slate-700 hover:bg-slate-800 text-slate-400 hover:text-white'
                               : 'border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-slate-900'
                           )}
                         >
                           <Pencil size={13} />
                         </button>
+                        {member.status === 'ACTIVE' ? (
+                          <button
+                            disabled={suspendMutation.isPending}
+                            onClick={() => suspendMutation.mutate(member.id)}
+                            title="Suspend member"
+                            className={cn(
+                              'p-1.5 rounded-lg border transition-all shadow-sm',
+                              dark
+                                ? 'border-slate-700 hover:bg-amber-500/10 text-slate-500 hover:text-amber-400'
+                                : 'border-slate-200 hover:bg-amber-50 text-slate-400 hover:text-amber-600'
+                            )}
+                          >
+                            <UserX size={13} />
+                          </button>
+                        ) : (
+                          <button
+                            disabled={activateMutation.isPending}
+                            onClick={() => activateMutation.mutate(member.id)}
+                            title="Activate member"
+                            className={cn(
+                              'p-1.5 rounded-lg border transition-all shadow-sm',
+                              dark
+                                ? 'border-slate-700 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400'
+                                : 'border-slate-200 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600'
+                            )}
+                          >
+                            <UserCheck size={13} />
+                          </button>
+                        )}
                         <button
                           onClick={() => setDeleteTarget(member)}
                           className={cn(
                             'p-1.5 rounded-lg border transition-all shadow-sm',
-                            dark 
-                              ? 'border-slate-700 hover:bg-red-500/10 text-slate-500 hover:text-red-400' 
+                            dark
+                              ? 'border-slate-700 hover:bg-red-500/10 text-slate-500 hover:text-red-400'
                               : 'border-slate-200 hover:bg-red-50 text-slate-400 hover:text-red-600'
                           )}
                         >

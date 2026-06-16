@@ -37,6 +37,16 @@ const AgencyRoles = () => {
     },
   });
 
+  const { data: permGroups = [] } = useQuery<any[]>({
+    queryKey: [`/api/agencies/${agencyId}/permissions`],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/agencies/${agencyId}/permissions`);
+      return res.json();
+    },
+    enabled: !!agencyId,
+  });
+  const totalAgencyPerms = permGroups.reduce((sum: number, g: any) => sum + (g.children?.length || 0), 0);
+
   const rolesKey = [`/api/agencies/${agencyId}/roles`];
 
   const toggleArchiveMutation = useMutation({
@@ -233,7 +243,7 @@ const AgencyRoles = () => {
             displayRoles.map((role: any, i: number) => {
               const accent = ROW_ACCENTS[i % ROW_ACCENTS.length];
               const permCount = role.permissions?.length || 0;
-              const maxPerms = 10;
+              const maxPerms = totalAgencyPerms || 12;
               const pct = Math.min((permCount / maxPerms) * 100, 100);
               return (
                 <div

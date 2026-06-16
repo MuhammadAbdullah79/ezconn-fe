@@ -26,6 +26,81 @@ import { useTranslation } from 'react-i18next';
 import { COUNTRIES } from "@/lib/countries";
 import { Country, State, City } from "country-state-city";
 
+const TIMEZONES = [
+  { value: 'UTC', label: 'UTC' },
+  { value: 'America/New_York', label: 'Eastern Time (America/New_York)' },
+  { value: 'America/Chicago', label: 'Central Time (America/Chicago)' },
+  { value: 'America/Denver', label: 'Mountain Time (America/Denver)' },
+  { value: 'America/Phoenix', label: 'Arizona (America/Phoenix)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (America/Los_Angeles)' },
+  { value: 'America/Anchorage', label: 'Alaska (America/Anchorage)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii (Pacific/Honolulu)' },
+  { value: 'America/Halifax', label: 'Atlantic Time (America/Halifax)' },
+  { value: 'America/Toronto', label: 'Eastern - Toronto (America/Toronto)' },
+  { value: 'America/Vancouver', label: 'Pacific - Vancouver (America/Vancouver)' },
+  { value: 'America/Regina', label: 'Saskatchewan (America/Regina)' },
+  { value: 'America/Mexico_City', label: 'Mexico City (America/Mexico_City)' },
+  { value: 'America/Chihuahua', label: 'Chihuahua (America/Chihuahua)' },
+  { value: 'America/Mazatlan', label: 'Mazatlan (America/Mazatlan)' },
+  { value: 'America/Guatemala', label: 'Central America (America/Guatemala)' },
+  { value: 'America/Bogota', label: 'Colombia (America/Bogota)' },
+  { value: 'America/Lima', label: 'Peru (America/Lima)' },
+  { value: 'America/Santiago', label: 'Chile (America/Santiago)' },
+  { value: 'America/Sao_Paulo', label: 'Brasilia (America/Sao_Paulo)' },
+  { value: 'America/Fortaleza', label: 'Fortaleza (America/Fortaleza)' },
+  { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (America/Argentina/Buenos_Aires)' },
+  { value: 'America/Santa_Isabel', label: 'Baja California (America/Santa_Isabel)' },
+  { value: 'America/Godthab', label: 'Greenland (America/Godthab)' },
+  { value: 'Etc/GMT+12', label: 'International Date Line West (Etc/GMT+12)' },
+  { value: 'Etc/GMT+11', label: 'Samoa (Etc/GMT+11)' },
+  { value: 'Atlantic/Reykjavik', label: 'Reykjavik (Atlantic/Reykjavik)' },
+  { value: 'Europe/London', label: 'London (Europe/London)' },
+  { value: 'Europe/Lisbon', label: 'Lisbon (Europe/Lisbon)' },
+  { value: 'Europe/Dublin', label: 'Dublin (Europe/Dublin)' },
+  { value: 'Europe/Paris', label: 'Paris (Europe/Paris)' },
+  { value: 'Europe/Madrid', label: 'Madrid (Europe/Madrid)' },
+  { value: 'Europe/Amsterdam', label: 'Amsterdam (Europe/Amsterdam)' },
+  { value: 'Europe/Brussels', label: 'Brussels (Europe/Brussels)' },
+  { value: 'Europe/Rome', label: 'Rome (Europe/Rome)' },
+  { value: 'Europe/Berlin', label: 'Berlin (Europe/Berlin)' },
+  { value: 'Europe/Vienna', label: 'Vienna (Europe/Vienna)' },
+  { value: 'Europe/Warsaw', label: 'Warsaw (Europe/Warsaw)' },
+  { value: 'Europe/Sofia', label: 'Sofia (Europe/Sofia)' },
+  { value: 'Europe/Athens', label: 'Athens (Europe/Athens)' },
+  { value: 'Europe/Helsinki', label: 'Helsinki (Europe/Helsinki)' },
+  { value: 'Europe/Istanbul', label: 'Istanbul (Europe/Istanbul)' },
+  { value: 'Europe/Moscow', label: 'Moscow (Europe/Moscow)' },
+  { value: 'Africa/Lagos', label: 'Lagos (Africa/Lagos)' },
+  { value: 'Africa/Cairo', label: 'Cairo (Africa/Cairo)' },
+  { value: 'Africa/Nairobi', label: 'Nairobi (Africa/Nairobi)' },
+  { value: 'Africa/Johannesburg', label: 'Johannesburg (Africa/Johannesburg)' },
+  { value: 'Asia/Baghdad', label: 'Baghdad (Asia/Baghdad)' },
+  { value: 'Asia/Kuwait', label: 'Kuwait (Asia/Kuwait)' },
+  { value: 'Asia/Riyadh', label: 'Riyadh (Asia/Riyadh)' },
+  { value: 'Asia/Dubai', label: 'Dubai (Asia/Dubai)' },
+  { value: 'Asia/Tehran', label: 'Tehran (Asia/Tehran)' },
+  { value: 'Asia/Kabul', label: 'Kabul (Asia/Kabul)' },
+  { value: 'Asia/Karachi', label: 'Pakistan (Asia/Karachi)' },
+  { value: 'Asia/Tashkent', label: 'Tashkent (Asia/Tashkent)' },
+  { value: 'Asia/Kolkata', label: 'India (Asia/Kolkata)' },
+  { value: 'Asia/Dhaka', label: 'Dhaka (Asia/Dhaka)' },
+  { value: 'Asia/Bangkok', label: 'Bangkok (Asia/Bangkok)' },
+  { value: 'Asia/Jakarta', label: 'Jakarta (Asia/Jakarta)' },
+  { value: 'Asia/Singapore', label: 'Singapore (Asia/Singapore)' },
+  { value: 'Asia/Kuala_Lumpur', label: 'Kuala Lumpur (Asia/Kuala_Lumpur)' },
+  { value: 'Asia/Manila', label: 'Manila (Asia/Manila)' },
+  { value: 'Asia/Shanghai', label: 'Beijing/Shanghai (Asia/Shanghai)' },
+  { value: 'Asia/Hong_Kong', label: 'Hong Kong (Asia/Hong_Kong)' },
+  { value: 'Asia/Seoul', label: 'Seoul (Asia/Seoul)' },
+  { value: 'Asia/Tokyo', label: 'Tokyo (Asia/Tokyo)' },
+  { value: 'Asia/Yekaterinburg', label: 'Ekaterinburg (Asia/Yekaterinburg)' },
+  { value: 'Australia/Perth', label: 'Perth (Australia/Perth)' },
+  { value: 'Australia/Melbourne', label: 'Melbourne (Australia/Melbourne)' },
+  { value: 'Australia/Sydney', label: 'Sydney (Australia/Sydney)' },
+  { value: 'Pacific/Auckland', label: 'Auckland (Pacific/Auckland)' },
+  { value: 'Pacific/Fiji', label: 'Fiji (Pacific/Fiji)' },
+];
+
 const TAX_IDS = [
   { key: "other", value: "Other" },
   { key: "au_abn", value: "Australian Business Number (AU ABN)" },
@@ -123,7 +198,8 @@ const AgencyGeneralSettings = () => {
   const [generalData, setGeneralData] = useState({
     name: "",
     timezone: "",
-    phone: ""
+    phone: "",
+    phone_country_iso2: "",
   });
 
   const [billingData, setBillingData] = useState({
@@ -177,7 +253,7 @@ const AgencyGeneralSettings = () => {
     updateBillingMutation.mutate(billingData);
   };
 
-  const [recipients, setRecipients] = useState(["test@test.com"]);
+  const [recipients, setRecipients] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newRecipient, setNewRecipient] = useState("");
 
@@ -212,22 +288,28 @@ const AgencyGeneralSettings = () => {
       return;
     }
     setPhoneError("");
-    setGeneralData({ ...generalData, phone: `${selectedCountry.dial} ${tempPhone}` });
+    setGeneralData({
+      ...generalData,
+      phone: `${selectedCountry.dial} ${tempPhone}`,
+      phone_country_iso2: selectedCountry.code,
+    });
     setIsPhoneModalOpen(false);
   };
 
   const handleSaveRecipient = () => {
-    if (newRecipient && !recipients.includes(newRecipient)) {
-      setRecipients([...recipients, newRecipient]);
-      setNewRecipient("");
-      setIsAdding(false);
-      toast({ title: t("agency.settings.recipients.added"), description: t("agency.settings.recipients.addedDesc") });
-    }
+    if (!newRecipient.trim() || recipients.includes(newRecipient.trim())) return;
+    const updated = [...recipients, newRecipient.trim()];
+    setRecipients(updated);
+    setNewRecipient("");
+    setIsAdding(false);
+    updateGeneralMutation.mutate({ notification_email: updated.join(',') });
+    toast({ title: t("agency.settings.recipients.added"), description: t("agency.settings.recipients.addedDesc") });
   };
 
   const handleDeleteRecipient = (index: number) => {
     const updated = recipients.filter((_, i) => i !== index);
     setRecipients(updated);
+    updateGeneralMutation.mutate({ notification_email: updated.join(',') });
     toast({ title: t("agency.settings.recipients.deleted"), description: t("agency.settings.recipients.deletedDesc") });
   };
 
@@ -237,8 +319,14 @@ const AgencyGeneralSettings = () => {
       setGeneralData({
         name: a.name || "",
         timezone: a.timezone || "",
-        phone: a.phone || ""
+        phone: a.phone || "",
+        phone_country_iso2: "",
       });
+      setRecipients(
+        a.notification_email
+          ? a.notification_email.split(',').map((e: string) => e.trim()).filter(Boolean)
+          : []
+      );
       setBillingData({
         billing_company: a.billing_company || "",
         billing_person: a.billing_person || "",
@@ -326,21 +414,10 @@ const AgencyGeneralSettings = () => {
                    <SelectTrigger className={cn("text-[13px] h-10 transition-colors shadow-none rounded-lg", inputCls)}>
                      <SelectValue placeholder={t("agency.settings.general.selectTimezone")} />
                    </SelectTrigger>
-                   <SelectContent className={cn("border shadow-2xl rounded-xl transition-colors", popSurface)}>
-                      <SelectItem value="america-fortaleza">{t("agency.settings.general.timezones.fortaleza")} (America/Fortaleza)</SelectItem>
-                      <SelectItem value="etc-gmt+12">{t("agency.settings.general.timezones.gmt_12")} (Etc/GMT+12)</SelectItem>
-                      <SelectItem value="etc-gmt+11">{t("agency.settings.general.timezones.gmt_11")} (Etc/GMT+11)</SelectItem>
-                      <SelectItem value="pacific-honolulu">{t("agency.settings.general.timezones.hawaii")} (Pacific/Honolulu)</SelectItem>
-                      <SelectItem value="america-anchorage">{t("agency.settings.general.timezones.alaska")} (America/Anchorage)</SelectItem>
-                      <SelectItem value="america-santa_isabel">{t("agency.settings.general.timezones.baja")} (America/Santa_Isabel)</SelectItem>
-                      <SelectItem value="america-los_angeles">{t("agency.settings.general.timezones.pacific")} (America/Los_Angeles)</SelectItem>
-                      <SelectItem value="america-chihuahua">{t("agency.settings.general.timezones.chihuahua")} (America/Chihuahua)</SelectItem>
-                      <SelectItem value="america-mazatlan">{t("agency.settings.general.timezones.mazatlan")} (America/Mazatlan)</SelectItem>
-                      <SelectItem value="america-phoenix">{t("agency.settings.general.timezones.arizona")} (America/Phoenix)</SelectItem>
-                      <SelectItem value="america-denver">{t("agency.settings.general.timezones.mountain")} (America/Denver)</SelectItem>
-                      <SelectItem value="america-guatemala">{t("agency.settings.general.timezones.central_am")} (America/Guatemala)</SelectItem>
-                      <SelectItem value="america-chicago">{t("agency.settings.general.timezones.central")} (America/Chicago)</SelectItem>
-                      <SelectItem value="america-regina">{t("agency.settings.general.timezones.saskatchewan")} (America/Regina)</SelectItem>
+                   <SelectContent className={cn("border shadow-2xl rounded-xl transition-colors max-h-[300px]", popSurface)}>
+                      {TIMEZONES.map(tz => (
+                        <SelectItem key={tz.value} value={tz.value} className="text-[13px]">{tz.label}</SelectItem>
+                      ))}
                    </SelectContent>
                  </Select>
                </div>

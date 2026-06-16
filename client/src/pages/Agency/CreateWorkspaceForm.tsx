@@ -13,7 +13,7 @@ import {
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiError } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface Props {
@@ -170,8 +170,12 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
       toast({ title: isEdit ? "Workspace updated" : "Workspace created successfully" });
       onCancel();
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to save workspace.", variant: "destructive" });
+    onError: (err: unknown) => {
+      // ApiErrors are already toasted by the global handler in apiRequest.
+      // Only show a fallback for unexpected non-API failures (network drops, etc.).
+      if (!(err instanceof ApiError)) {
+        toast({ title: "Error", description: "Failed to save workspace.", variant: "destructive" });
+      }
     },
   });
 

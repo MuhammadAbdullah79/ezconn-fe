@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Shield, ShieldCheck, Plus, ChevronLeft, Loader2, Archive, RotateCcw,
-  Pencil, Bot, Calendar, Settings, Share2, UserCog, Sparkles, Lock,
-  Search, CheckCircle2, Zap, Info, User, Users, Scale,
+  Pencil, Settings, Share2, UserCog, Sparkles, Lock,
+  Search, CheckCircle2, Zap, User, Users, Scale, Bot,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,44 +14,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useTheme } from "@/contexts/ThemeContext";
 
-const PERMISSION_CATEGORIES = [
-  { id: "ai-products", name: "AI Products", icon: Bot, subPermissions: [
-    { id: "view",   title: "View AI products",   description: "Allow agents to view AI Products." },
-    { id: "manage", title: "Manage AI Products", description: "Allow agents to create or edit AI products." },
-    { id: "delete", title: "Delete AI products", description: "Allow agents to delete AI products." },
-  ]},
-  { id: "bookings", name: "Bookings", icon: Calendar, subPermissions: [
-    { id: "view",   title: "View bookings",   description: "Allow agents to view all bookings." },
-    { id: "manage", title: "Manage bookings", description: "Enable agents to create, update, or cancel bookings." },
-  ]},
-  { id: "ai-intelligence", name: "AI Intelligence", icon: Sparkles, subPermissions: [
-    { id: "manage_themes",  title: "Manage AI themes",            description: "Allow agents to create or edit AI themes." },
-    { id: "manage_reports", title: "Manage AI reports",           description: "Allow user to manage AI Reports." },
-    { id: "delete_themes",  title: "Delete AI themes",            description: "Allow agents to delete AI themes." },
-    { id: "create_kb",      title: "Create Knowledgebase",        description: "Allow agents to create knowledgebase for AI Voice Assistants." },
-    { id: "delete_kb",      title: "Delete knowledgebase",        description: "Allow agents to delete knowledgebases." },
-    { id: "view_voice",     title: "View AI voice assistants",    description: "Allow agents to view AI voice assistants." },
-    { id: "manage_voice",   title: "Manage AI voice assistants",  description: "Allow agents to manage voice assistants." },
-    { id: "delete_voice",   title: "Delete AI voice assistants",  description: "Allow agents to delete voice assistants." },
-    { id: "create_chat",    title: "Create an AI Chat Assistant", description: "Authorize agents to create an AI Chat Assistant." },
-    { id: "edit_chat",      title: "Edit an AI Chat Assistant",   description: "Allow to update a Knowledge base." },
-    { id: "delete_chat",    title: "Delete AI Chat Assistants",   description: "Allow to delete an AI Chat Assistant." },
-  ]},
-  { id: "workspace-settings", name: "Workspace & Settings", icon: Settings, subPermissions: [
-    { id: "supervisor",  title: "Supervisor Dashboard",   description: "Grants access to Supervisor Dashboard." },
-    { id: "management",  title: "Workspace Management",   description: "Activate agent access and grant ability to modify workspace settings." },
-    { id: "media",       title: "Media Gallery",           description: "Authorize the agent to delete files from the media gallery." },
-    { id: "pipelines",   title: "Pipelines",               description: "Grant agents access for managing pipelines within this workspace." },
-    { id: "flows",       title: "Smart Flows",             description: "Grant agents access to view and manage smart flows." },
-    { id: "channels",    title: "Communication Channels",  description: "Grant agents access to manage all communication channels." },
-  ]},
-  { id: "collaborations", name: "Collaborations", icon: Share2, subPermissions: [
-    { id: "agents", title: "Agents",               description: "Enable the Agent to manage other agents within the workspace." },
-    { id: "roles",  title: "Roles & Permissions",  description: "Empower agents with this role to modify and control all workspace permissions." },
-    { id: "teams",  title: "Team Management",      description: "Empower agents to manage teams within this workspace." },
-  ]},
-];
-
+// Icon options for workspace role icon picker (Lucide-based)
 const ICONS = [
   { name: "agent",    icon: UserCog },
   { name: "user",     icon: User },
@@ -60,8 +23,20 @@ const ICONS = [
   { name: "scale",    icon: Scale },
   { name: "sparkles", icon: Sparkles },
   { name: "lock",     icon: Lock },
-  { name: "info",     icon: Info },
+  { name: "info",     icon: Bot },
 ];
+
+// Lucide icons for permission group category tabs — keyed by acl_permissions slug
+const WORKSPACE_GROUP_ICONS: Record<string, React.ElementType> = {
+  'workspace.settings.*':    Settings,
+  'workspace.collaborate.*': Share2,
+  'workspace.customize.*':   UserCog,
+  'workspace.pipeline.*':    Zap,
+  'workspace.inbox.*':       Bot,
+  'workspace.company.*':     Users,
+  'workspace.broadcast.*':   Sparkles,
+  'workspace.legal.*':       Scale,
+};
 
 export default function RolesSection() {
   const { mode } = useTheme();
@@ -72,11 +47,13 @@ export default function RolesSection() {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [enableAll, setEnableAll] = useState(false);
   const [selectedIcon, setSelectedIcon] = useState(ICONS[0]);
-  const [permissions, setPermissions] = useState<Record<string, Record<string, boolean>>>({});
+  // Flat map of real permission slug → boolean (replaces the old nested fake-category state)
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [roleName, setRoleName] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
   const [editingRole, setEditingRole] = useState<any>(null);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(PERMISSION_CATEGORIES[0]?.id || null);
+  // expandedCategory is now the group slug from acl_permissions (e.g. 'workspace.inbox.*')
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const card       = dark ? "bg-[#0f1829]"    : "bg-white";
@@ -104,31 +81,30 @@ export default function RolesSection() {
     queryKey: ["/api/workspaces/all-roles"],
   });
 
-  // Real permission catalog (workspace.* from acl_permissions). The deployed UI labels
-  // map to real permissions by NAME, so the meaningful permissions persist with real
-  // acl_role_permissions (replyagent logic) while the UI stays exactly as deployed.
-  const { data: permsTree } = useQuery<any>({
+  // Real workspace permission tree from acl_permissions
+  const { data: permsTree, isLoading: loadingPerms } = useQuery<any[]>({
     queryKey: ["/api/workspaces/permissions"],
+    select: (data) => data || [],
   });
-  const norm = (s: any) => String(s ?? "").toLowerCase().trim();
-  const realPerms: any[] = (permsTree || []).flatMap((g: any) => g.children || []);
-  const nameToSlug = new Map<string, string>(realPerms.map((p: any) => [norm(p.name), p.slug]));
-  const slugToName = new Map<string, string>(realPerms.map((p: any) => [p.slug, norm(p.name)]));
 
-  // Real-permission slugs (array) → nested {categoryId:{permId:true}} for the hardcoded UI
-  const buildNested = (slugs: string[]) => {
-    const titleSet = new Set((slugs || []).map((s) => slugToName.get(s)).filter(Boolean));
-    const nested: Record<string, Record<string, boolean>> = {};
-    PERMISSION_CATEGORIES.forEach((cat) => {
-      cat.subPermissions?.forEach((p) => {
-        if (titleSet.has(norm(p.title))) {
-          nested[cat.id] = nested[cat.id] || {};
-          nested[cat.id][p.id] = true;
-        }
-      });
-    });
-    return nested;
-  };
+  // Auto-select first permission group tab when tree loads
+  useEffect(() => {
+    if (permsTree?.length && !expandedCategory) {
+      setExpandedCategory(permsTree[0].slug);
+    }
+  }, [permsTree]);
+
+  // All leaf permissions from tree — used for enable-all and totalPerms
+  const allLeafPerms: any[] = (permsTree || []).flatMap((g: any) => g.children || []);
+  const totalPerms = allLeafPerms.length;
+
+  // Build flat slug→boolean map from a slug array (used when loading role for edit)
+  const buildSelected = (slugs: string[]): Record<string, boolean> =>
+    Object.fromEntries((slugs || []).map((s: string) => [s, true]));
+
+  // Collect all enabled slugs for save
+  const collectSelectedSlugs = (): string[] =>
+    Object.keys(permissions).filter((s) => permissions[s]);
 
   const roles = ((rolesData?.roles ?? rolesData) || []).map((r: any) => ({
     id: r.id.toString(),
@@ -136,12 +112,13 @@ export default function RolesSection() {
     description: r.description,
     iconName: r.icon,
     isArchived: r.isArchived,
-    permissions: Array.isArray(r.permissions) ? r.permissions : [], // real slugs
+    isSystem: r.isSystem || false,
+    permissions: Array.isArray(r.permissions) ? r.permissions : [],
   }));
 
-  const activeRoles = roles.filter((r: any) => !r.isArchived);
+  const activeRoles   = roles.filter((r: any) => !r.isArchived);
   const archivedRoles = roles.filter((r: any) => r.isArchived);
-  const displayRoles = activeTab === "active" ? activeRoles : archivedRoles;
+  const displayRoles  = activeTab === "active" ? activeRoles : archivedRoles;
   const filteredRoles = displayRoles.filter((r: any) =>
     r.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -172,51 +149,32 @@ export default function RolesSection() {
     onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
   });
 
-  const togglePermission = (categoryId: string, permissionId: string) => {
-    setPermissions((prev) => ({
-      ...prev,
-      [categoryId]: { ...(prev[categoryId] || {}), [permissionId]: !prev[categoryId]?.[permissionId] },
-    }));
+  const togglePermission = (slug: string) => {
+    setPermissions((prev) => ({ ...prev, [slug]: !prev[slug] }));
   };
 
   const handleEnableAll = (checked: boolean) => {
     setEnableAll(checked);
-    const all: Record<string, Record<string, boolean>> = {};
-    PERMISSION_CATEGORIES.forEach((cat) => {
-      all[cat.id] = {};
-      cat.subPermissions?.forEach((sub) => { all[cat.id][sub.id] = checked; });
-    });
+    const all: Record<string, boolean> = {};
+    allLeafPerms.forEach((p: any) => { all[p.slug] = checked; });
     setPermissions(all);
-  };
-
-  // Selected nested permissions → array of real permission slugs (mapped by title)
-  const collectSelectedSlugs = () => {
-    const slugs: string[] = [];
-    PERMISSION_CATEGORIES.forEach((cat) => {
-      cat.subPermissions?.forEach((p) => {
-        if (permissions[cat.id]?.[p.id]) {
-          const slug = nameToSlug.get(norm(p.title));
-          if (slug) slugs.push(slug);
-        }
-      });
-    });
-    return slugs;
   };
 
   const handleManage = (role: any) => {
     setEditingRole(role);
     setRoleName(role.name);
     setRoleDescription(role.description || "");
-    setPermissions(buildNested(role.permissions || []));
+    setPermissions(buildSelected(role.permissions || []));
     const icon = ICONS.find((i) => i.name === role.iconName) || ICONS[0];
     setSelectedIcon(icon);
+    setExpandedCategory(permsTree?.[0]?.slug || null);
     setView("edit");
   };
 
   const resetForm = () => {
     setRoleName(""); setRoleDescription(""); setEditingRole(null);
     setSelectedIcon(ICONS[0]); setPermissions({}); setEnableAll(false);
-    setExpandedCategory(PERMISSION_CATEGORIES[0]?.id || null);
+    setExpandedCategory(permsTree?.[0]?.slug || null);
   };
 
   const handleSave = () => {
@@ -232,11 +190,7 @@ export default function RolesSection() {
     }
   };
 
-  const enabledCount = Object.values(permissions).reduce(
-    (sum, cat) => sum + (typeof cat === "object" ? Object.values(cat).filter(Boolean).length : 0),
-    0
-  );
-  const totalPerms = PERMISSION_CATEGORIES.reduce((s, g) => s + (g.subPermissions?.length || 0), 0);
+  const enabledCount = Object.values(permissions).filter(Boolean).length;
   const pct = totalPerms > 0 ? Math.round((enabledCount / totalPerms) * 100) : 0;
 
   /* ── ADD / EDIT VIEW ─────────────────────────────────────────── */
@@ -361,15 +315,21 @@ export default function RolesSection() {
 
               {/* Right Panel: Permissions */}
               <div className="flex-1 flex flex-col min-w-0">
-                {/* Category Tabs */}
+                {/* Category Tabs — now driven by real acl_permissions groups */}
                 <div className={cn("px-6 py-3 border-b flex gap-2 overflow-x-auto", softBorder)}>
-                  {PERMISSION_CATEGORIES.map((cat) => {
-                    const count = cat.subPermissions?.filter((s) => permissions[cat.id]?.[s.id]).length || 0;
-                    const active = expandedCategory === cat.id;
+                  {loadingPerms ? (
+                    <div className="flex items-center gap-2 py-1">
+                      <Loader2 size={12} className="animate-spin text-primary" />
+                      <span className={cn("text-[10px]", sub)}>Loading...</span>
+                    </div>
+                  ) : (permsTree || []).map((group: any) => {
+                    const count = (group.children || []).filter((c: any) => permissions[c.slug]).length;
+                    const active = expandedCategory === group.slug;
+                    const Icon = WORKSPACE_GROUP_ICONS[group.slug] || Shield;
                     return (
                       <button
-                        key={cat.id}
-                        onClick={() => setExpandedCategory(cat.id)}
+                        key={group.slug}
+                        onClick={() => setExpandedCategory(group.slug)}
                         className={cn(
                           "inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 h-9 rounded-xl transition-all whitespace-nowrap",
                           active
@@ -379,8 +339,8 @@ export default function RolesSection() {
                               : "bg-white text-slate-500 hover:text-primary border border-slate-200"
                         )}
                       >
-                        <cat.icon size={12} />
-                        {cat.name}
+                        <Icon size={12} />
+                        {group.name}
                         {count > 0 && (
                           <span className={cn(
                             "px-1.5 py-0.5 rounded text-[9px] font-black",
@@ -394,62 +354,69 @@ export default function RolesSection() {
                   })}
                 </div>
 
-                {/* Permissions List */}
+                {/* Permissions List — driven by selected group's children */}
                 <div className="flex-1 p-6">
-                  {PERMISSION_CATEGORIES.filter((c) => c.id === expandedCategory).map((cat) => (
-                    <div key={cat.id} className="space-y-4">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                          <cat.icon size={14} />
-                        </div>
-                        <div>
-                          <h2 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{cat.name}</h2>
-                          <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
-                            Grant access to {cat.name.toLowerCase()} capabilities
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {cat.subPermissions?.map((perm) => {
-                          const checked = !!permissions[cat.id]?.[perm.id];
-                          return (
-                            <div
-                              key={perm.id}
-                              onClick={() => togglePermission(cat.id, perm.id)}
-                              className={cn(
-                                "flex items-center justify-between p-4 rounded-[1.25rem] border cursor-pointer transition-all",
-                                checked
-                                  ? "bg-primary/5 border-primary/30"
-                                  : dark
-                                    ? "bg-slate-950/40 border-slate-800 hover:border-primary/20"
-                                    : "bg-slate-50/50 border-slate-100 hover:border-primary/20"
-                              )}
-                            >
-                              <div className="flex items-start gap-3 pr-4">
-                                <div className={cn(
-                                  "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
-                                  checked ? "bg-primary text-white" : "bg-primary/10 text-primary"
-                                )}>
-                                  <CheckCircle2 size={14} />
-                                </div>
-                                <div>
-                                  <p className={cn("text-[12px] font-black tracking-tight", text)}>{perm.title}</p>
-                                  <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>{perm.description}</p>
-                                </div>
-                              </div>
-                              <Switch
-                                checked={checked}
-                                onCheckedChange={() => togglePermission(cat.id, perm.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="data-[state=checked]:bg-primary shrink-0"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
+                  {loadingPerms ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 size={20} className="animate-spin text-primary" />
                     </div>
-                  ))}
+                  ) : (permsTree || [])
+                    .filter((g: any) => g.slug === expandedCategory)
+                    .map((cat: any) => (
+                      <div key={cat.slug} className="space-y-4">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            {(() => { const Icon = WORKSPACE_GROUP_ICONS[cat.slug] || Shield; return <Icon size={14} />; })()}
+                          </div>
+                          <div>
+                            <h2 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{cat.name}</h2>
+                            <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
+                              Grant access to {cat.name.toLowerCase()} capabilities
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {(cat.children || []).map((perm: any) => {
+                            const checked = !!permissions[perm.slug];
+                            return (
+                              <div
+                                key={perm.slug}
+                                onClick={() => togglePermission(perm.slug)}
+                                className={cn(
+                                  "flex items-center justify-between p-4 rounded-[1.25rem] border cursor-pointer transition-all",
+                                  checked
+                                    ? "bg-primary/5 border-primary/30"
+                                    : dark
+                                      ? "bg-slate-950/40 border-slate-800 hover:border-primary/20"
+                                      : "bg-slate-50/50 border-slate-100 hover:border-primary/20"
+                                )}
+                              >
+                                <div className="flex items-start gap-3 pr-4">
+                                  <div className={cn(
+                                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
+                                    checked ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                                  )}>
+                                    <CheckCircle2 size={14} />
+                                  </div>
+                                  <div>
+                                    <p className={cn("text-[12px] font-black tracking-tight", text)}>{perm.name}</p>
+                                    <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>{perm.description}</p>
+                                  </div>
+                                </div>
+                                <Switch
+                                  checked={checked}
+                                  onCheckedChange={() => togglePermission(perm.slug)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="data-[state=checked]:bg-primary shrink-0"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  }
                 </div>
               </div>
 
@@ -561,7 +528,7 @@ export default function RolesSection() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredRoles.map((role: any) => {
                   const permCount = Array.isArray(role.permissions) ? role.permissions.length : 0;
-                  const maxPerms = 15;
+                  const maxPerms = totalPerms || 15;
                   const rowPct = Math.min((permCount / maxPerms) * 100, 100);
                   const RoleIcon = ICONS.find((ic) => ic.name === role.iconName)?.icon || Shield;
 
@@ -579,7 +546,8 @@ export default function RolesSection() {
                           <RoleIcon size={18} />
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {activeTab === "active" && (
+                          {/* System roles cannot be edited or archived */}
+                          {!role.isSystem && activeTab === "active" && (
                             <button
                               onClick={() => handleManage(role)}
                               title="Edit Role"
@@ -591,18 +559,20 @@ export default function RolesSection() {
                               <Pencil size={12} />
                             </button>
                           )}
-                          <button
-                            onClick={() => updateMutation.mutate({ id: role.id, data: { isArchived: !role.isArchived } })}
-                            title={activeTab === "active" ? "Archive" : "Restore"}
-                            className={cn(
-                              "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
-                              activeTab === "active"
-                                ? dark ? "bg-slate-900 text-slate-400 hover:bg-rose-500 hover:text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
-                                : "bg-emerald-500 text-white"
-                            )}
-                          >
-                            {activeTab === "active" ? <Archive size={12} /> : <RotateCcw size={12} />}
-                          </button>
+                          {!role.isSystem && (
+                            <button
+                              onClick={() => updateMutation.mutate({ id: role.id, data: { isArchived: !role.isArchived } })}
+                              title={activeTab === "active" ? "Archive" : "Restore"}
+                              className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
+                                activeTab === "active"
+                                  ? dark ? "bg-slate-900 text-slate-400 hover:bg-rose-500 hover:text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-rose-500 hover:text-white hover:border-rose-500"
+                                  : "bg-emerald-500 text-white"
+                              )}
+                            >
+                              {activeTab === "active" ? <Archive size={12} /> : <RotateCcw size={12} />}
+                            </button>
+                          )}
                         </div>
                       </div>
 

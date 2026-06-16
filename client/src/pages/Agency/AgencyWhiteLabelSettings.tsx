@@ -91,6 +91,7 @@ const AgencyWhiteLabelSettings = () => {
     domain: ""
   });
 
+  const colorDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [emailFormData, setEmailFormData] = useState({
@@ -130,7 +131,10 @@ const AgencyWhiteLabelSettings = () => {
   const handleColorChange = (color: string) => {
     setBrandingData({ ...brandingData, color });
     setAgencyPrimaryColor(hexToHsl(color));
-    updateMutation.mutate({ color });
+    if (colorDebounceRef.current) clearTimeout(colorDebounceRef.current);
+    colorDebounceRef.current = setTimeout(() => {
+      updateMutation.mutate({ color });
+    }, 500);
   };
 
   type BrandingAsset =

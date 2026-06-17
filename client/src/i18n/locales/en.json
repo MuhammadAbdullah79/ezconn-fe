@@ -269,68 +269,8 @@
     "feedback": "Feedback",
     "date": "Date"
   },
-  "business_hours": {
-    "title": "Business Hours",
-    "description": "Enable business hours to convey the working hours of your company.",
-    "enable_24_7": "Enable 24/7 availability for all days",
-    "options": {
-      "all_days": "All days",
-      "per_day": "Per day"
-    },
-    "time": {
-      "start": "Start time",
-      "end": "End time"
-    },
-    "days": {
-      "monday": "Monday",
-      "tuesday": "Tuesday",
-      "wednesday": "Wednesday",
-      "thursday": "Thursday",
-      "friday": "Friday",
-      "saturday": "Saturday",
-      "sunday": "Sunday"
-    },
-    "common": {
-      "success_save": "Business hours updated successfully",
-      "error_save": "Error",
-      "save_btn": "Save"
-    }
-  },
-  "ai_assistants": {
-    "title": "AI Assistants",
-    "description": "These settings will be applied to the entire account.",
-    "content_prompts": {
-      "title": "Content Prompts",
-      "desc": "Content prompts enables agents to use AI to rewrite and refine responses in real time during customer conversations.",
-      "switch_aria": "Enable Content Prompts"
-    },
-    "terms": {
-      "agree_prefix": "By using this tool, you agree to comply with Google's",
-      "gemini_terms": "Gemini API Additional Terms of Service",
-      "and": "and",
-      "generative_policy": "Generative AI Prohibited Use Policy",
-      "suffix": ". Please avoid sharing any sensitive information in your prompts."
-    },
-    "customer_analysis": {
-      "title": "Customer Analysis",
-      "desc": "Customer analysis enables agents to use AI to understand customer conversations to generate summaries, perform sentiment analysis and more.",
-      "request_btn": "Request access",
-      "request_sent": "Request Sent",
-      "request_sent_desc": "Your request for access has been sent."
-    },
-    "access_info": "Agents will have access to AI assistants in the following modules:",
-    "modules": {
-      "chat_manager": "Chat Manager",
-      "insights": "Insights"
-    },
-    "common": {
-      "success_save": "Settings Saved",
-      "success_save_desc": "AI Assistants settings have been updated.",
-      "error_save": "Error",
-      "save_btn": "Save"
-    }
-  },
-  "password_policy": "Password Policy",
+
+
   "developer_settings": "Developer Settings",
   "change_password": "Change Password",
   "my_profile": "My Profile",

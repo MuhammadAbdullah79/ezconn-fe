@@ -13,14 +13,14 @@ import {
   UserCog,
   MessageSquare,
   Tag,
-  ShieldCheck,
+
   Code,
   Lock,
   ChevronDown,
   Film,
   Sliders,
   Book,
-  Cpu, // Added Cpu icon for AI Products
+
   Plug, // Added Plug icon
   Code2,
   Network,
@@ -32,21 +32,18 @@ import ManageSection from "@/components/workspace/ManageSection";
 import LiveChatSection from "@/components/workspace/LiveChatSection";
 import ProfileSection from "@/components/sections/ProfileSection";
 import PreferencesSection from "@/components/sections/PreferencesSection";
-import BusinessHoursSection from "@/components/sections/BusinessHoursSection";
-import AIAssistantsSection from "@/components/sections/AIAssistantsSection";
+
 import AIChatAssistantsSection from "@/components/sections/ai/AIChatAssistantsSection";
 import AIVoiceAssistantsSection from "@/components/sections/ai/AIVoiceAssistantsSection";
 import AIKnowledgeBaseSection from "@/components/sections/ai/AIKnowledgeBaseSection";
 import AIReportBuilderSection from "@/components/sections/ai/AIReportBuilderSection";
-import AIThemesSection from "@/components/sections/ai/AIThemesSection";
-import AIItemsSection from "@/components/sections/ai/AIItemsSection";
-import AITopicsSection from "@/components/sections/ai/AITopicsSection";
-import AIProductsSection from "@/components/sections/ai/AIProductsSection";
+
+
 import IntegrationsSection from "@/components/sections/connect/IntegrationsSection";
 import APISection from "@/components/sections/connect/APISection";
 import VisualAPISection from "@/components/sections/connect/VisualAPISection";
 
-import PasswordPolicySection from "@/components/sections/PasswordPolicySection";
+
 import DeveloperSettingsSection from "@/components/sections/DeveloperSettingsSection";
 import ChangePasswordSection from "@/components/sections/ChangePasswordSection";
 
@@ -126,9 +123,7 @@ export default function SettingsPage() {
         { name: "AI Voice Assistants" },
         { name: "AI Knowledge base" },
         { name: "AI Report Builder" },
-        { name: "Ai Themes" },
-        { name: "Ai items" },
-        { name: "Ai Topics" },
+
       ],
     },
     {
@@ -140,7 +135,7 @@ export default function SettingsPage() {
         { name: "Visual API", icon: Network },
       ],
     },
-    { name: "Ai Products", icon: Cpu },
+
     {
       name: "Customization",
       icon: Sliders,
@@ -153,12 +148,10 @@ export default function SettingsPage() {
       ],
     },
 
-    { name: "Business Hours", icon: Clock },
-    { name: "AI Assistants", icon: Bot },
 
 
 
-    { name: "Password Policy", icon: ShieldCheck },
+
     { name: "Developer Settings", icon: Code },
     { name: "Change Password", icon: Lock },
   ];
@@ -565,12 +558,7 @@ export default function SettingsPage() {
                 />
               )}
 
-              {activeSection === "Business Hours" && (
-                <BusinessHoursSection />
-              )}
-              {activeSection === "AI Assistants" && (
-                <AIAssistantsSection />
-              )}
+
               {activeSection === "AI Chat Assistants" && (
                 <AIChatAssistantsSection />
               )}
@@ -583,18 +571,8 @@ export default function SettingsPage() {
               {activeSection === "AI Report Builder" && (
                 <AIReportBuilderSection />
               )}
-              {activeSection === "Ai Themes" && (
-                <AIThemesSection />
-              )}
-              {activeSection === "Ai items" && (
-                <AIItemsSection />
-              )}
-              {activeSection === "Ai Topics" && (
-                <AITopicsSection />
-              )}
-              {activeSection === "Ai Products" && (
-                <AIProductsSection />
-              )}
+
+
               {activeSection === "Integrations" && (
                 <IntegrationsSection />
               )}
@@ -612,9 +590,7 @@ export default function SettingsPage() {
               {activeSection === "Tags" && (
                 <TagsSection />
               )}
-              {activeSection === "Password Policy" && (
-                <PasswordPolicySection />
-              )}
+
               {activeSection === "Developer Settings" && (
                 <DeveloperSettingsSection />
               )}

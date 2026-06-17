@@ -2488,29 +2488,40 @@ export default function ConversationsInbox() {
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* Quick "Mark as Done" — replyagent has this as a primary
-                      header action, not buried in the kebab menu. */}
-                  {selectedConversation && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="hover-elevate gap-1.5 text-emerald-600 dark:text-emerald-400"
-                          disabled={conversations.find((c: Conversation) => c.id === selectedConversation)?.status === "completed"}
-                          onClick={() => {
-                            updateStatusMutation.mutate({ id: selectedConversation, status: "completed" });
-                            setAssignedAgent(null);
-                          }}
-                          data-testid="button-mark-done"
-                        >
-                          <CheckCircle size={16} />
-                          <span className="text-xs font-medium">Mark as done</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Close this conversation</TooltipContent>
-                    </Tooltip>
-                  )}
+                  {/* Mark as Done / Move to Inbox toggle — mirrors replyagent behaviour:
+                      active/unassigned → "Mark as done" (COMPLETED)
+                      completed         → "Move to Inbox" (ACTIVE)         */}
+                  {selectedConversation && (() => {
+                    const conv = conversations.find((c: Conversation) => c.id === selectedConversation);
+                    const isDone = conv?.status === "completed";
+                    return (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={isDone
+                              ? "hover-elevate gap-1.5 text-slate-500 dark:text-slate-400"
+                              : "hover-elevate gap-1.5 text-emerald-600 dark:text-emerald-400"}
+                            disabled={updateStatusMutation.isPending}
+                            onClick={() => {
+                              if (isDone) {
+                                updateStatusMutation.mutate({ id: selectedConversation, status: "active" });
+                              } else {
+                                updateStatusMutation.mutate({ id: selectedConversation, status: "completed" });
+                                setAssignedAgent(null);
+                              }
+                            }}
+                            data-testid="button-mark-done"
+                          >
+                            {isDone ? <CornerUpLeft size={16} /> : <CheckCircle size={16} />}
+                            <span className="text-xs font-medium">{isDone ? "Move to Inbox" : "Mark as done"}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{isDone ? "Reopen this conversation" : "Close this conversation"}</TooltipContent>
+                      </Tooltip>
+                    );
+                  })()}
 
                   {selectedConversation && (
                     <DropdownMenu>

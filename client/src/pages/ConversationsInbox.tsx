@@ -1178,15 +1178,9 @@ export default function ConversationsInbox() {
   const getFilteredConversations = (): Conversation[] => {
     let filtered: Conversation[] = conversations;
 
-    // Filter by tab
-    if (activeTab !== "all") {
-      if (activeTab === "active") {
-        // Only show active chats assigned to me
-        filtered = filtered.filter((conv: Conversation) => conv.status === "active" && conv.assignedAgent === "self");
-      } else {
-        filtered = filtered.filter((conv: Conversation) => conv.status === activeTab);
-      }
-    }
+    // Tab filtering is handled server-side — backend already returns the correct
+    // subset for each tab (read/unread/queue/upcoming/completed). Local filtering
+    // here was incorrectly matching conv.status === "read" etc. which never worked.
 
     // Filter by search query — name, phone, email, first/last name
     if (searchQuery.trim()) {

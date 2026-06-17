@@ -137,8 +137,8 @@ export default function CallLogsPage() {
 
     // Translate filter state into URL params backend understands.
     const dateQuery = rangeToQuery(dateRangePreset, customDateRange);
-    const directionParam = selectedDirection.filter(Boolean).join(",");
-    const statusParam = selectedStatus.filter(Boolean).join(",");
+    const directionParam = selectedDirection.filter(s => s && s !== "__all__").join(",");
+    const statusParam = selectedStatus.filter(s => s && s !== "__all__").join(",");
 
     const { data: logsResponse, isLoading } = useQuery<{ logs: CallLog[]; total: number }>({
         queryKey: [
@@ -233,6 +233,7 @@ export default function CallLogsPage() {
     ];
 
     const callStatusOptions = [
+        { id: "__all__", name: "All" },
         { id: "Completed", name: "Completed" },
         { id: "Missed", name: "Missed" },
         { id: "Declined", name: "Declined" },
@@ -674,7 +675,7 @@ export default function CallLogsPage() {
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
-                        <Select value={dateRangePreset} onValueChange={setDateRangePreset}>
+                        <Select value={dateRangePreset} onValueChange={(v) => { setDateRangePreset(v); setPage(1); }}>
                             <SelectTrigger style={{ borderRadius: '6px' }} className="h-9 w-[140px] !rounded-md border border-input bg-white dark:bg-slate-800/50 text-[12px] font-medium shadow-sm hover:bg-slate-50 transition-all">
                                 <Calendar className="h-3.5 w-3.5 mr-2 text-slate-400" />
                                 <SelectValue />
@@ -713,16 +714,18 @@ export default function CallLogsPage() {
                         <CustomDropdown
                             options={directionOptions}
                             selected={selectedDirection}
-                            onChange={setSelectedDirection}
+                            onChange={(v) => { setSelectedDirection(v); setPage(1); }}
                             placeholder="Direction"
                             width="140px"
                             className="!w-[140px]"
+                            showSelectedOption={true}
+                            showSearch={false}
                             triggerContent={
                                 <>
                                     <div className="flex items-center gap-2 truncate">
                                         <ChevronsUpDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                         <span className={cn("truncate text-[12px]", selectedDirection.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                            {selectedDirection.length === 0 ? "Direction" : `Direction (${selectedDirection.length})`}
+                                            {selectedDirection.length === 0 ? "Direction" : selectedDirection[0]}
                                         </span>
                                     </div>
                                     <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
@@ -733,17 +736,21 @@ export default function CallLogsPage() {
                         <CustomDropdown
                             options={callStatusOptions}
                             selected={selectedStatus}
-                            onChange={setSelectedStatus}
+                            onChange={(v) => { setSelectedStatus(v); setPage(1); }}
                             placeholder="Status"
                             width="140px"
                             className="!w-[140px]"
                             popoutAlign="right"
+                            showSelectedOption={true}
+                            showSearch={false}
                             triggerContent={
                                 <>
                                     <div className="flex items-center gap-2 truncate">
                                         <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                        <span className={cn("truncate text-[12px]", selectedStatus.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                            {selectedStatus.length === 0 ? "Status" : `Status (${selectedStatus.length})`}
+                                        <span className={cn("truncate text-[12px]", selectedStatus.length > 0 && !selectedStatus.includes("__all__") ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                                            {selectedStatus.length === 0 || selectedStatus.includes("__all__")
+                                                ? "Status"
+                                                : callStatusOptions.find(o => o.id === selectedStatus[0])?.name ?? selectedStatus[0]}
                                         </span>
                                     </div>
                                     <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />

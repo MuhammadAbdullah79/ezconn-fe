@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, ChevronDown, ChevronsUpDown, ChevronUp, ChevronDown as ChevronDownIcon, ArrowLeft, Info } from "lucide-react";
+import { MoreVertical, ChevronDown, ChevronsUpDown, ChevronUp, ChevronDown as ChevronDownIcon, ArrowLeft, Info, Activity, Megaphone, MessageSquare } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -1023,6 +1023,23 @@ export default function CampaignManager() {
                         onChange={setSelectedStatus}
                         placeholder="Status"
                         width="140px"
+                        showSelectedOption={true}
+                        showSearch={false}
+                        triggerContent={
+                            <>
+                                <div className="flex items-center gap-2 truncate">
+                                    <Activity className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className={cn("truncate text-[12px]", selectedStatus.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                                        {selectedStatus.length === 0
+                                            ? "Status"
+                                            : (["draft","scheduled","delivered","archived"].find(id => id === selectedStatus[0])
+                                                ? selectedStatus[0].charAt(0).toUpperCase() + selectedStatus[0].slice(1)
+                                                : selectedStatus[0])}
+                                    </span>
+                                </div>
+                                <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
+                            </>
+                        }
                     />
 
                     <CustomDropdown
@@ -1034,6 +1051,19 @@ export default function CampaignManager() {
                         onChange={setSelectedCampaignTypes}
                         placeholder="Campaign Type"
                         width="160px"
+                        showSelectedOption={true}
+                        showSearch={false}
+                        triggerContent={
+                            <>
+                                <div className="flex items-center gap-2 truncate">
+                                    <Megaphone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className={cn("truncate text-[12px]", selectedCampaignTypes.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                                        {selectedCampaignTypes.length === 0 ? "Campaign Type" : selectedCampaignTypes[0]}
+                                    </span>
+                                </div>
+                                <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
+                            </>
+                        }
                     />
 
                     <CustomDropdown
@@ -1046,6 +1076,19 @@ export default function CampaignManager() {
                         onChange={setSelectedMessageTypes}
                         placeholder="Message Type"
                         width="160px"
+                        showSelectedOption={true}
+                        showSearch={false}
+                        triggerContent={
+                            <>
+                                <div className="flex items-center gap-2 truncate">
+                                    <MessageSquare className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className={cn("truncate text-[12px]", selectedMessageTypes.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                                        {selectedMessageTypes.length === 0 ? "Message Type" : selectedMessageTypes[0]}
+                                    </span>
+                                </div>
+                                <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
+                            </>
+                        }
                     />
                 </div>
             </div>

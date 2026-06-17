@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSearch, useLocation } from "wouter";
 import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Edit2, Copy, Calendar, X, Download } from "react-feather";
-import { ChevronsUpDown, ChevronDown, ChevronUp, Plus, Filter, ArrowUpDown, GripVertical, MoreVertical, Users } from "lucide-react";
+import { ChevronsUpDown, ChevronDown, ChevronUp, Plus, Filter, ArrowUpDown, GripVertical, MoreVertical, Users, Tag } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,7 @@ export default function ContactsSection() {
   });
 
   const contactTagOptions = [
+    { id: "__all__", name: "All" },
     { id: "Marketing", name: "Marketing" },
     { id: "Test", name: "Test" },
     ...((tagsResponse?.tags || tagsResponse || []).map((t: any) => ({
@@ -337,7 +338,7 @@ export default function ContactsSection() {
     }
 
     // Apply tag filter
-    if (selectedTags.length > 0) {
+    if (selectedTags.length > 0 && !selectedTags.includes("__all__")) {
       data = data.filter(item => selectedTags.some(tag => item.tags.includes(tag)));
     }
 
@@ -772,6 +773,21 @@ export default function ContactsSection() {
                 placeholder="Tags"
                 width="120px"
                 className="!w-[120px]"
+                showSelectedOption={true}
+                showSearch={false}
+                triggerContent={
+                  <>
+                    <div className="flex items-center gap-2 truncate">
+                      <Tag className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className={cn("truncate text-[12px]", selectedTags.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                        {selectedTags.length === 0 || selectedTags.includes("__all__")
+                          ? "All"
+                          : contactTagOptions.find(o => o.id === selectedTags[0])?.name ?? selectedTags[0]}
+                      </span>
+                    </div>
+                    <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
+                  </>
+                }
               />
 
               {/* Created At Popover */}

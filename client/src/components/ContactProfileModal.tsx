@@ -83,6 +83,7 @@ import {
   Bell,
   History,
   ChevronDown,
+  Send,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -121,6 +122,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -144,7 +150,6 @@ import {
   LocalePicker,
   TimezonePicker,
   CustomFieldRenderer,
-  OptinChip,
   loadCountries,
   type Country,
   type CustomFieldDescriptor,
@@ -471,6 +476,9 @@ export default function ContactProfileModal({
   const [searchOpp, setSearchOpp] = useState("");
   // Which call's transcription is expanded (Calls sidebar section).
   const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null);
+  // Inline edit mode for an existing phone/whatsapp number (replyagent: click a
+  // number → c.is_editing). Holds { id, value, type } of the row being edited.
+  const [editMobile, setEditMobile] = useState<{ id: string; value: string; type: string } | null>(null);
 
   // Sub-dialog flags
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -601,6 +609,57 @@ export default function ContactProfileModal({
       invalidateProfile();
     },
   });
+
+  // Opt a contact's number in/out of a workspace WhatsApp number (replyagent:
+  // changeContactOptin → POST /contact/optin/:slug). channel = workspace number,
+  // phone_number = the contact's mobile field, action = 'optin' | 'optout'.
+  const optinMutation = useMutation({
+    mutationFn: (payload: {
+      channel: any;
+      phone_number: any;
+      channel_type: string;
+      action: "optin" | "optout";
+    }) => apiPost(`/api/contacts/${contactId}/optin`, payload),
+    onSuccess: (_, vars) => {
+      toast({ title: vars.action === "optin" ? "Opted in" : "Opted out" });
+      invalidateProfile();
+    },
+    onError: (err: any) =>
+      toast({ title: "Couldn't update opt-in", description: err?.message ?? "", variant: "destructive" }),
+  });
+
+  // Save an inline edit to an existing phone/whatsapp number's value/type
+  // (replyagent: number edit-mode → check button).
+  const updateMobileMutation = useMutation({
+    mutationFn: (payload: { id: string; value: string; type: string }) =>
+      apiPatch(`/api/contacts/${contactId}`, { update_mobile: payload }),
+    onSuccess: () => {
+      toast({ title: "Number updated" });
+      setEditMobile(null);
+      invalidateProfile();
+    },
+    onError: (err: any) =>
+      toast({ title: "Update failed", description: err?.message ?? "", variant: "destructive" }),
+  });
+
+  // Is this contact-mobile opted in for a given workspace WhatsApp number?
+  // Mirrors replyagent isOpted(number, c.optins): an optin row whose channel
+  // matches and modelable_id === the workspace number id.
+  const isWaOpted = (field: any, channel: any) =>
+    Array.isArray(field?.optins) &&
+    field.optins.some(
+      (o: any) => o.channel === "whatsapp" && String(o.modelable_id) === String(channel.id),
+    );
+
+  // Toggle opt-in for (contact mobile field, workspace number).
+  const toggleOptin = (field: any, channel: any, checked: boolean) => {
+    optinMutation.mutate({
+      channel: { id: String(channel.id) },
+      phone_number: { object_id: String(field.id) },
+      channel_type: "whatsapp",
+      action: checked ? "optin" : "optout",
+    });
+  };
 
   const changeCompanyMutation = useMutation({
     mutationFn: (company_id: string | null) =>
@@ -1637,11 +1696,6 @@ export default function ContactProfileModal({
                                   Primary
                                 </Badge>
                               )}
-                              {p.opted_in && (
-                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700">
-                                  Opted in
-                                </Badge>
-                              )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -1731,123 +1785,215 @@ export default function ContactProfileModal({
                         </span>
                       ) : (
                         <div className="space-y-1">
-                          {whatsapps.map((w) => (
-                            <div key={w.id} className="flex items-center gap-2">
-                              <span className="text-sm">
-                                {w.full_mobile_number}
-                              </span>
-                              {w.is_primary && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs bg-emerald-50 text-emerald-700"
+                          {whatsapps.map((w) =>
+                            editMobile?.id === String(w.id) ? (
+                              // ── Edit mode (replyagent: c.is_editing) ──
+                              <div key={w.id} className="flex items-center gap-1">
+                                <Input
+                                  value={editMobile.value}
+                                  onChange={(e) =>
+                                    setEditMobile({ ...editMobile, value: e.target.value })
+                                  }
+                                  className="h-8 text-sm flex-1"
+                                />
+                                <Select
+                                  value={editMobile.type}
+                                  onValueChange={(v) =>
+                                    setEditMobile({ ...editMobile, type: v })
+                                  }
                                 >
-                                  Primary
-                                </Badge>
-                              )}
-                              {w.opted_in && (
-                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700">
-                                  Opted in
-                                </Badge>
-                              )}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
+                                  <SelectTrigger className="h-8 w-[7em] text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="work">Work</SelectItem>
+                                    <SelectItem value="personal">Personal</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                    {!w.is_primary ? (
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          setPrimaryMutation.mutate({
+                                            field_id: String(w.id),
+                                            field_type: "mobile",
+                                            mark_primary: true,
+                                          })
+                                        }
+                                      >
+                                        <Check className="h-4 w-4 mr-2" />
+                                        Mark primary
+                                      </DropdownMenuItem>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          setPrimaryMutation.mutate({
+                                            field_id: String(w.id),
+                                            field_type: "mobile",
+                                            mark_primary: false,
+                                          })
+                                        }
+                                      >
+                                        <X className="h-4 w-4 mr-2" />
+                                        Unmark primary
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                <button
+                                  type="button"
+                                  className="px-1.5 text-muted-foreground hover:text-destructive"
+                                  title="Remove"
+                                  onClick={() => {
+                                    removeFieldMutation.mutate({
+                                      field: { slug: "whatsapp", object_id: w.id },
+                                      type: "contact",
+                                    });
+                                    setEditMobile(null);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="px-1.5 text-muted-foreground hover:text-foreground"
+                                  title="Cancel"
+                                  onClick={() => setEditMobile(null)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="px-1.5 text-emerald-600 hover:text-emerald-700"
+                                  title="Save"
+                                  onClick={() =>
+                                    updateMobileMutation.mutate({
+                                      id: String(w.id),
+                                      value: editMobile.value,
+                                      type: editMobile.type,
+                                    })
+                                  }
+                                >
+                                  {updateMobileMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              // ── Display mode: number + Primary + workspace-numbers popup ──
+                              <div key={w.id} className="flex items-center gap-2">
+                                <span
+                                  className="text-sm cursor-pointer hover:underline"
+                                  title="Click to edit"
+                                  onClick={() =>
+                                    setEditMobile({
+                                      id: String(w.id),
+                                      // Prefill with the full international form so re-normalising
+                                      // on save can detect the country from the prefix.
+                                      value: w.full_mobile_number ?? w.mobile_number ?? "",
+                                      type: String(w.type ?? "whatsapp"),
+                                    })
+                                  }
+                                >
+                                  {w.full_mobile_number}
+                                </span>
+                                {w.is_primary && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs bg-emerald-50 text-emerald-700"
                                   >
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  {!w.is_primary && (
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        setPrimaryMutation.mutate({
-                                          field_id: String(w.id),
-                                          field_type: "mobile",
-                                          mark_primary: true,
-                                        })
-                                      }
-                                    >
-                                      <Check className="h-4 w-4 mr-2" />
-                                      Mark primary
-                                    </DropdownMenuItem>
-                                  )}
-                                  {w.is_primary && (
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        setPrimaryMutation.mutate({
-                                          field_id: String(w.id),
-                                          field_type: "mobile",
-                                          mark_primary: false,
-                                        })
-                                      }
-                                    >
-                                      <X className="h-4 w-4 mr-2" />
-                                      Unmark primary
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      removeFieldMutation.mutate({
-                                        field: { slug: "whatsapp", object_id: w.id },
-                                        type: "contact",
-                                      })
-                                    }
-                                    className="text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Remove
-                                  </DropdownMenuItem>
-                                  {w.opted_in && w.optin_id && (
-                                    <DropdownMenuItem
-                                      onClick={() => unsubscribeMutation.mutate(String(w.optin_id))}
-                                    >
-                                      <X className="h-4 w-4 mr-2" />
-                                      Unsubscribe
-                                    </DropdownMenuItem>
-                                  )}
-                                  {waChannels.length > 0 && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      {waChannels.map((ch: any) => (
-                                        <DropdownMenuItem
-                                          key={ch.id}
-                                          onClick={() => startWhatsappChat(String(ch.id))}
-                                        >
-                                          <MessageSquare className="h-4 w-4 mr-2" />
-                                          Send via {ch.display_phone_number || ch.verified_name || `#${ch.id}`}
-                                        </DropdownMenuItem>
-                                      ))}
-                                    </>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          ))}
-                          <div className="flex items-center gap-2 mt-1">
-                            <p className="text-xs text-muted-foreground">
-                              Live Chat:
-                            </p>
-                            {enriched.optins?.find?.(
-                              (o: any) => o.channel === "whatsapp",
-                            ) ? (
-                              <OptinChip
-                                channel="WhatsApp"
-                                subscribed={true}
-                                onToggle={() =>
-                                  unsubscribeMutation.mutate(
-                                    String(
-                                      enriched.optins.find(
-                                        (o: any) => o.channel === "whatsapp",
-                                      ).id,
-                                    ),
-                                  )
-                                }
-                              />
-                            ) : null}
-                          </div>
+                                    Primary
+                                  </Badge>
+                                )}
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent align="end" className="w-64 p-0">
+                                    <div className="px-3 py-2 text-xs font-semibold border-b">
+                                      WhatsApp
+                                    </div>
+                                    {waChannels.length === 0 ? (
+                                      <p className="px-3 py-3 text-xs text-muted-foreground">
+                                        No WhatsApp channel connected.
+                                      </p>
+                                    ) : (
+                                      <div className="divide-y">
+                                        {waChannels.map((ch: any) => {
+                                          const opted = isWaOpted(w, ch);
+                                          return (
+                                            <div
+                                              key={ch.id}
+                                              className="flex items-center justify-between px-3 py-2"
+                                            >
+                                              <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                                                <input
+                                                  type="checkbox"
+                                                  className="h-4 w-4 shrink-0"
+                                                  checked={opted}
+                                                  onChange={(e) =>
+                                                    toggleOptin(w, ch, e.target.checked)
+                                                  }
+                                                />
+                                                <span className="text-xs truncate">
+                                                  {ch.display_phone_number ||
+                                                    ch.verified_name ||
+                                                    `#${ch.id}`}
+                                                </span>
+                                              </label>
+                                              <div className="flex items-center gap-1 shrink-0">
+                                                <span
+                                                  className="flex flex-col items-center"
+                                                  title="Meta (WhatsApp Cloud API)"
+                                                >
+                                                  <img
+                                                    src="/images/integrations/metadas.png"
+                                                    alt="Meta"
+                                                    className="h-3.5 w-3.5 object-contain"
+                                                  />
+                                                  <span className="text-[9px] leading-none text-[#0081f9]">
+                                                    Meta
+                                                  </span>
+                                                </span>
+                                                {opted ? (
+                                                  <button
+                                                    type="button"
+                                                    className="p-1 text-muted-foreground hover:text-foreground"
+                                                    title="Send message"
+                                                    onClick={() => startWhatsappChat(String(ch.id))}
+                                                  >
+                                                    <Send className="h-3.5 w-3.5" />
+                                                  </button>
+                                                ) : (
+                                                  <span
+                                                    className="p-1 text-muted-foreground/40"
+                                                    title="This number is not opted-in to send message."
+                                                  >
+                                                    <Send className="h-3.5 w-3.5" />
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            ),
+                          )}
                         </div>
                       )}
                     </FieldRow>
@@ -1888,11 +2034,6 @@ export default function ContactProfileModal({
                               {e.is_primary && (
                                 <Badge variant="outline" className="text-xs">
                                   Primary
-                                </Badge>
-                              )}
-                              {e.opted_in && (
-                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700">
-                                  Opted in
                                 </Badge>
                               )}
                               <DropdownMenu>

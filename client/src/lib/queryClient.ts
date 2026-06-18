@@ -79,6 +79,7 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | FormData | undefined,
+  options?: { silentStatuses?: number[] },
 ): Promise<Response> {
   const isFormData = data instanceof FormData;
   const token = localStorage.getItem("auth_token");
@@ -111,7 +112,13 @@ export async function apiRequest(
   try {
     await throwIfResNotOk(res);
   } catch (error) {
-    handleApiError(error);
+    // Some callers (e.g. polling a conversation that may have just been deleted)
+    // expect certain statuses and handle them silently. Skip the global toast for
+    // those, but still throw so the caller's catch can react.
+    const status = error instanceof ApiError ? error.status : 0;
+    if (!options?.silentStatuses?.includes(status)) {
+      handleApiError(error);
+    }
     throw error;
   }
   return res;

@@ -113,29 +113,41 @@ export default function ContactsSection() {
     }
   });
 
+  // Country dial codes for the Add Contact phone field. replyagent stores a
+  // number as +<dialcode><national>, so we need the country to normalise local
+  // input. Cached forever (custom-fields/countries is static).
+  const { data: countriesResponse } = useQuery({
+    queryKey: ["/api/custom-fields/countries"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/custom-fields/countries");
+      return res.json();
+    },
+    staleTime: Infinity,
+  });
+  const countries: { id: string; name: string; phone_code: string }[] = Array.isArray(countriesResponse)
+    ? countriesResponse
+    : (countriesResponse?.data || countriesResponse?.countries || []);
+
   // Map backend contacts to frontend format
   const contacts: Contact[] = (contactsResponse?.contacts || contactsResponse || []).map((c: any) => ({
     id: (c.id || '').toString(),
     name: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'No Name',
-    phoneNumber: c.title || c.phone || '-',
+    phoneNumber: c.primary_mobile || '-',
     tags: (c.tag_links || []).map((tl: any) => tl.tags?.name || tl.name || tl).filter(Boolean),
     createdAt: c.created_at ? new Date(c.created_at).toISOString().split('T')[0] : '-',
     lastActive: c.updated_at ? new Date(c.updated_at).toISOString().split('T')[0] : '-',
     updatedBy: 'System'
   }));
 
-  // Auto-open contact from URL ?open=ID
+  // Auto-open contact from URL ?open=ID — open modal directly without needing contact in list
   useEffect(() => {
-    if (!contacts.length) return;
     const params = new URLSearchParams(searchParams);
     const openId = params.get("open");
     if (!openId) return;
-    const found = contacts.find((c) => c.id === openId);
-    if (found) {
-      setSelectedContactForDetails(found);
-      setLocation("/contacts", { replace: true });
-    }
-  }, [contacts, searchParams]);
+    setSelectedContactForDetails({ id: openId, name: '' } as any);
+    setShowDetailsModal(true);
+    setLocation("/contacts", { replace: true });
+  }, [searchParams]);
 
   // Add Mutation
   const addMutation = useMutation({
@@ -147,14 +159,23 @@ export default function ContactsSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       toast({ title: "Contact added" });
       setShowAddContactModal(false);
+      setNewContactName("");
+      setNewContactPhone("");
+      setNewContactCountryId("");
+      setNewContactTags([]);
     },
     onError: (err: any) => {
-      // Friendlier title for the contacts cap (backend throws "Reached the limit" when
-      // limited_contacts is on and maximum_contacts has been hit).
-      const msg: string = err?.message ?? "";
+      // apiRequest throws `new Error(res.text())` — for a NestJS exception the body
+      // is JSON ({statusCode, message, error}), so pull out `.message` for a clean toast.
+      let msg: string = err?.message ?? "";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.message) msg = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message;
+      } catch { /* plain string */ }
       const isLimit = /reached the limit/i.test(msg);
+      const isDup = /already exists/i.test(msg);
       toast({
-        title: isLimit ? "Contact limit reached" : "Error",
+        title: isLimit ? "Contact limit reached" : isDup ? "Duplicate contact" : "Error",
         description: isLimit
           ? "This workspace has hit its maximum number of contacts. Increase the cap in the agency edit screen or delete unused contacts first."
           : msg,
@@ -219,6 +240,7 @@ export default function ContactsSection() {
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [newContactName, setNewContactName] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactCountryId, setNewContactCountryId] = useState<string>("");
   const [newContactTags, setNewContactTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
 
@@ -579,12 +601,21 @@ export default function ContactsSection() {
       });
       return;
     }
-    const names = newContactName.split(' ');
+    if (!newContactPhone.trim()) {
+      toast({
+        title: "Missing Fields",
+        description: "Please enter a phone number",
+        variant: "destructive",
+      });
+      return;
+    }
+    const names = newContactName.trim().split(' ');
     addMutation.mutate({
       first_name: names[0],
       last_name: names.slice(1).join(' '),
-      title: newContactPhone, // Temporary mapping
-      tags: newContactTags
+      phone: newContactPhone.trim(),
+      country_id: newContactCountryId || undefined,
+      tags: newContactTags,
     });
   };
 
@@ -1248,15 +1279,31 @@ export default function ContactsSection() {
               />
             </div>
 
-            {/* Phone Input */}
-            <div>
+            {/* Phone Input — country selector (only when country data exists) + number.
+                The number is normalised server-side to +CC… so it dedups against
+                WhatsApp inbound contacts. */}
+            <div className="space-y-1">
               <label className="text-sm font-medium text-foreground">Phone Number<span className="text-red-500 pl-0.5">*</span></label>
+              {countries.length > 0 && (
+                <select
+                  value={newContactCountryId}
+                  onChange={(e) => setNewContactCountryId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus:outline-none transition-colors"
+                >
+                  <option value="">International — type the full number with +</option>
+                  {countries.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (+{(c.phone_code || "").replace(/^\+/, "")})
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 type="tel"
-                placeholder="Enter phone number"
+                placeholder={newContactCountryId ? "Local number (e.g. 300 1234567)" : "Full number incl. country code, e.g. +92 300 1234567"}
                 value={newContactPhone}
                 onChange={(e) => setNewContactPhone(e.target.value)}
-                className="w-full mt-1 px-3 py-2 text-sm border border-input rounded-md bg-background focus:outline-none transition-colors"
+                className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus:outline-none transition-colors"
               />
             </div>
 

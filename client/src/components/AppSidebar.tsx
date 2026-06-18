@@ -49,6 +49,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import ContactProfileModal from "@/components/ContactProfileModal";
 
 export default function AppSidebar() {
   const [location, setLocation] = useLocation();
@@ -69,6 +70,8 @@ export default function AppSidebar() {
   const [searchQuery, setSearchQuery] = useState("");
   const [language, setLanguage] = useState<string[]>(["en-us"]);
   const [searchType, setSearchType] = useState("WhatsApp Number");
+  const [profileContact, setProfileContact] = useState<any>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Real workspaces this user can switch to (replyagent parity). Owner sees all
   // agency workspaces; an agent sees only the ones assigned to them.
@@ -266,7 +269,7 @@ export default function AppSidebar() {
     "Instagram Handle": "instagram",
     "Messenger Username": "messenger",
     "Contact ID": "id",
-    "Support Ticket": "full_name",
+    "Support Ticket": "support_ticket",
   };
 
   const { data: searchResp } = useQuery<any>({
@@ -304,6 +307,7 @@ export default function AppSidebar() {
   ];
 
   return (
+    <>
     <header className={cn(
       "fixed top-0 left-0 right-0 z-50 h-16 transition-all duration-300 border-b no-focus-outline",
       theme === "dark" 
@@ -509,7 +513,8 @@ export default function AppSidebar() {
                           theme === "dark" ? "hover:bg-slate-800" : "hover:bg-slate-50"
                         )}
                         onClick={() => {
-                          setLocation(`/contacts?open=${c.id}`);
+                          setProfileContact({ id: c.id, name: c.full_name });
+                          setShowProfileModal(true);
                           setSearchValue("");
                           setShowSearchResults(false);
                           setIsSearchOpen(false);
@@ -745,5 +750,11 @@ export default function AppSidebar() {
         </div>
       </div>
     </header>
+    <ContactProfileModal
+      open={showProfileModal}
+      onOpenChange={setShowProfileModal}
+      contact={profileContact}
+    />
+    </>
   );
 }

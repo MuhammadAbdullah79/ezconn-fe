@@ -56,6 +56,7 @@ import {
   Calendar,
   Phone as PhoneIcon,
   MousePointerClick,
+  FileText,
   ChevronRight,
   MoreHorizontal,
   MessageSquare,
@@ -426,6 +427,25 @@ export default function ContactProfileModal({
     retry: false,
   });
 
+  // Workspace WhatsApp channels — used to start a chat from a contact's number
+  // (replyagent: the "…" → send-via-channel popup on each number).
+  const { data: allChannelsData } = useQuery({
+    queryKey: ["/api/workspaces/all-channels"],
+    queryFn: async () => {
+      try {
+        return await apiGet("/api/workspaces/all-channels");
+      } catch {
+        return { channels: {} };
+      }
+    },
+    enabled: open,
+    retry: false,
+  });
+  const waChannels: any[] = useMemo(
+    () => allChannelsData?.channels?.whatsapp ?? [],
+    [allChannelsData],
+  );
+
   const allTags: any[] = useMemo(
     () => tagsList?.tags ?? tagsList?.data ?? [],
     [tagsList],
@@ -449,6 +469,8 @@ export default function ContactProfileModal({
   const [searchTasks, setSearchTasks] = useState("");
   const [searchingOpp, setSearchingOpp] = useState(false);
   const [searchOpp, setSearchOpp] = useState("");
+  // Which call's transcription is expanded (Calls sidebar section).
+  const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null);
 
   // Sub-dialog flags
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -458,6 +480,7 @@ export default function ContactProfileModal({
   const [mergeContactsOpen, setMergeContactsOpen] = useState(false);
   const [newCustomFieldOpen, setNewCustomFieldOpen] = useState(false);
   const [newTagOpen, setNewTagOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<any | null>(null);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [newOpportunityOpen, setNewOpportunityOpen] = useState(false);
   const [addPhoneOpen, setAddPhoneOpen] = useState(false);
@@ -513,8 +536,26 @@ export default function ContactProfileModal({
     mutationFn: () => apiDelete(`/api/contacts/${contactId}`),
     onSuccess: () => {
       toast({ title: "Contact deleted" });
-      invalidateProfile();
+      // The contact is gone — DROP its profile query (don't invalidate, which
+      // would refetch a 404 and leave the modal stuck on "Contact not found").
+      queryClient.removeQueries({ queryKey: ["/api/contacts", contactId, "profile"] });
+      // The deleted contact's conversation (if it was the open one) no longer
+      // exists. Drop the stale selection + its polling queries BEFORE navigating so
+      // the inbox doesn't fire a 404 for a deleted inbox ("Inbox not found").
+      try { sessionStorage.removeItem("inbox_selected_conv"); } catch {}
+      queryClient.removeQueries({ queryKey: ["/api/inbox/messages"] });
+      queryClient.removeQueries({ queryKey: ["/api/inbox/get-profile-data"] });
+      // Refresh the views the deletion affects (contact + its chat vanish).
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      // Close both the confirm dialog and the profile modal, then land on the inbox.
+      setConfirmDeleteOpen(false);
       onOpenChange(false);
+      setLocation("/conversations/inbox");
+    },
+    onError: (err: any) => {
+      toast({ title: "Delete failed", description: err?.message ?? "", variant: "destructive" });
     },
   });
 
@@ -621,6 +662,44 @@ export default function ContactProfileModal({
     },
   });
 
+  // Workspace-level management (replyagent CustomField/Tag delete + edit). These
+  // affect the whole workspace, so callers confirm before invoking delete.
+  const deleteCustomFieldMutation = useMutation({
+    mutationFn: (slug: string) => apiDelete(`/api/custom-fields/field/${slug}`),
+    onSuccess: () => {
+      toast({ title: "Custom field deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/custom-fields"] });
+      invalidateProfile();
+    },
+    onError: (err: any) =>
+      toast({ title: "Delete failed", description: err?.message, variant: "destructive" }),
+  });
+
+  const deleteTagMutation = useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/tags/${id}`),
+    onSuccess: () => {
+      toast({ title: "Tag deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags/list"] });
+      invalidateProfile();
+    },
+    onError: (err: any) =>
+      toast({ title: "Delete failed", description: err?.message, variant: "destructive" }),
+  });
+
+  const updateTagMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      apiPatch(`/api/tags/${id}`, payload),
+    onSuccess: () => {
+      toast({ title: "Tag updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags/list"] });
+      invalidateProfile();
+      setNewTagOpen(false);
+      setEditingTag(null);
+    },
+    onError: (err: any) =>
+      toast({ title: "Update failed", description: err?.message, variant: "destructive" }),
+  });
+
   const createTaskMutation = useMutation({
     mutationFn: (payload: any) =>
       apiPost(`/api/tasks`, { ...payload, contact_id: contactId }),
@@ -653,6 +732,9 @@ export default function ContactProfileModal({
   // ─── Derived: filtered lists ───────────────────────────────────────
   const tasks: any[] = enriched?.tasks ?? [];
   const bookings: any[] = enriched?.bookings ?? [];
+  const calls: any[] = enriched?.calls ?? [];
+  const adClicks: any[] = enriched?.ad_clicks ?? [];
+  const companyContacts: any[] = enriched?.company_contacts ?? [];
   const phones: any[] = enriched?.phones ?? [];
   const whatsapps: any[] = enriched?.whatsapps ?? [];
   const emails: any[] = enriched?.emails ?? [];
@@ -675,6 +757,19 @@ export default function ContactProfileModal({
         (t.assignee_name ?? "").toLowerCase().includes(q),
     );
   }, [tasks, searchTasks]);
+
+  // Opportunities search filter (replyagent filterOpportunity — by contact name / title).
+  const opportunities: any[] = enriched?.opportunities ?? [];
+  const filteredOpps = useMemo(() => {
+    if (!searchOpp) return opportunities;
+    const q = searchOpp.toLowerCase();
+    return opportunities.filter(
+      (o) =>
+        (o.name ?? o.title ?? "").toLowerCase().includes(q) ||
+        (o.contact_name ?? o.contact?.full_name ?? "").toLowerCase().includes(q) ||
+        (o.pipeline_step_name ?? "").toLowerCase().includes(q),
+    );
+  }, [opportunities, searchOpp]);
 
   const fullName = enriched?.full_name
     ? enriched.full_name
@@ -740,6 +835,77 @@ export default function ContactProfileModal({
   const handleOpenConversationHistory = () => {
     setLocation(`/conversations/conversation-logs?contact_id=${contactId}`);
     onOpenChange(false);
+  };
+
+  // ─── Per-item actions for OTHER contacts in the company list (replyagent
+  // Lead.* menu). These take an explicit id so they act on the clicked contact,
+  // not the currently-open one. Change-company / merge stay on the contact's own
+  // header (open it first) since those flows are scoped to the open contact.
+  const openCompanyContact = (id: string) => {
+    onOpenChange(false);
+    setLocation(`/contacts?open=${id}`);
+  };
+
+  const downloadContactDataById = async (id: string) => {
+    try {
+      const resp = await apiGet(`/api/contacts/${id}`);
+      const data = resp?.contact ?? resp;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `contact-${id}-data.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Download started" });
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err?.message ?? "", variant: "destructive" });
+    }
+  };
+
+  const downloadConversationById = async (id: string) => {
+    try {
+      const resp = await apiGet(`/api/contacts/${id}/download-conversation`);
+      const blob = new Blob([resp.text ?? ""], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = resp.filename ?? `contact-${id}-conversation.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Conversation downloaded" });
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err?.message ?? "", variant: "destructive" });
+    }
+  };
+
+  const deleteCompanyContactById = async (id: string, name: string) => {
+    if (!window.confirm(`Delete contact "${name}"? This cannot be undone.`)) return;
+    try {
+      await apiDelete(`/api/contacts/${id}`);
+      invalidateProfile();
+      toast({ title: "Contact deleted" });
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err?.message ?? "", variant: "destructive" });
+    }
+  };
+
+  // Start a WhatsApp conversation from this contact via the chosen workspace
+  // channel, then jump to the inbox (replyagent createWhatsappChat).
+  const startWhatsappChat = async (waNumberId: string) => {
+    if (!contactId) return;
+    try {
+      const resp = await apiPost("/api/inbox/start-whatsapp-chat", {
+        contact_id: contactId,
+        wa_number_id: waNumberId,
+      });
+      onOpenChange(false);
+      const inboxId = resp?.inbox_id;
+      setLocation(inboxId ? `/conversations/inbox?inbox=${inboxId}` : "/conversations/inbox");
+      toast({ title: "Chat opened" });
+    } catch (err: any) {
+      toast({ title: "Couldn't start chat", description: err?.message ?? "", variant: "destructive" });
+    }
   };
 
   const handleOpenGallery = () => {
@@ -880,7 +1046,7 @@ export default function ContactProfileModal({
                 <SidebarSectionHeader
                   icon={<UserIcon className="h-3.5 w-3.5" />}
                   label="Contacts"
-                  count={1}
+                  count={1 + companyContacts.length}
                   searching={searchingContacts}
                   onSearchToggle={() => setSearchingContacts((v) => !v)}
                   searchValue={searchContacts}
@@ -888,7 +1054,8 @@ export default function ContactProfileModal({
                   showAdd={true}
                   onAdd={() => setAddLeadOpen(true)}
                 />
-                <div className="px-3 py-2">
+                <div className="px-3 py-2 space-y-1">
+                  {/* Current contact — always shown */}
                   <div className="flex items-center gap-2 bg-primary/10 rounded px-2 py-1.5">
                     <Avatar className="h-6 w-6">
                       <AvatarFallback
@@ -901,6 +1068,75 @@ export default function ContactProfileModal({
                       {fullName}
                     </span>
                   </div>
+                  {/* Other contacts in the same company */}
+                  {companyContacts
+                    .filter((c) =>
+                      !searchContacts ||
+                      (c.full_name ?? "").toLowerCase().includes(searchContacts.toLowerCase())
+                    )
+                    .map((c: any) => {
+                      const n = c.full_name || "Unnamed";
+                      const ini = n.split(/\s+/).map((p: string) => p[0]).join("").slice(0, 2).toUpperCase() || "?";
+                      return (
+                        <div
+                          key={c.id}
+                          className="group flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50"
+                        >
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback
+                              className={`${getAvatarColor(n)} text-white text-[10px]`}
+                            >
+                              {ini}
+                            </AvatarFallback>
+                          </Avatar>
+                          <button
+                            type="button"
+                            title="Open contact"
+                            onClick={() => openCompanyContact(String(c.id))}
+                            className="text-xs flex-1 truncate text-left"
+                          >
+                            {n}
+                          </button>
+                          <button
+                            type="button"
+                            title="Open contact"
+                            onClick={() => openCompanyContact(String(c.id))}
+                            className="hover:text-primary shrink-0"
+                          >
+                            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" className="hover:text-foreground shrink-0">
+                                <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => openCompanyContact(String(c.id))}>
+                                <ExternalLink className="h-3.5 w-3.5 mr-2" />
+                                Open contact
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadContactDataById(String(c.id))}>
+                                <Download className="h-3.5 w-3.5 mr-2" />
+                                Contact data
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadConversationById(String(c.id))}>
+                                <MessageSquare className="h-3.5 w-3.5 mr-2" />
+                                Conversation history
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => deleteCompanyContactById(String(c.id), n)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
                 </div>
 
                 {/* TASKS */}
@@ -1011,12 +1247,12 @@ export default function ContactProfileModal({
                   onAdd={() => setFullOpportunityOpen(true)}
                 />
                 <div className="px-3 py-2 space-y-1">
-                  {(enriched?.opportunities ?? []).length === 0 ? (
+                  {filteredOpps.length === 0 ? (
                     <p className="text-xs text-muted-foreground italic">
                       No opportunities
                     </p>
                   ) : (
-                    (enriched?.opportunities ?? []).map((o: any) => (
+                    filteredOpps.map((o: any) => (
                       <div
                         key={String(o.id)}
                         className="flex items-center gap-2 text-xs px-2 py-1.5 hover:bg-muted/50 rounded"
@@ -1114,10 +1350,60 @@ export default function ContactProfileModal({
                   count={counts.calls ?? 0}
                   showAdd={false}
                 />
-                <div className="px-3 py-2">
-                  <p className="text-xs text-muted-foreground italic">
-                    No call logs
-                  </p>
+                <div className="px-3 py-2 space-y-1">
+                  {calls.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      No call logs
+                    </p>
+                  ) : (
+                    calls.map((c: any) => (
+                      <div
+                        key={String(c.id)}
+                        className="text-xs px-2 py-1.5 hover:bg-muted/50 rounded"
+                      >
+                        <div className="flex items-center gap-2">
+                          <PhoneIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate font-medium">
+                              {c.call_type === "outbound" ? `To: ${c.to_number}` : `From: ${c.from_number}`}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {c.call_duration ? `${c.call_duration}s` : "—"}
+                              {c.created_at ? ` · ${format(new Date(c.created_at), "MMM d, HH:mm")}` : ""}
+                            </p>
+                          </div>
+                          {c.transcription && (
+                            <button
+                              type="button"
+                              title="Show transcription"
+                              className="hover:text-primary shrink-0"
+                              onClick={() =>
+                                setOpenTranscriptId((id) =>
+                                  id === String(c.id) ? null : String(c.id),
+                                )
+                              }
+                            >
+                              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          )}
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                              c.status === "success" || c.status === "completed"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {c.status ?? "—"}
+                          </span>
+                        </div>
+                        {c.transcription && openTranscriptId === String(c.id) && (
+                          <p className="mt-1 ml-5 text-muted-foreground whitespace-pre-wrap border-l-2 border-border pl-2">
+                            {c.transcription}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 {/* AD CLICKS */}
@@ -1127,10 +1413,34 @@ export default function ContactProfileModal({
                   count={counts.ad_clicks ?? 0}
                   showAdd={false}
                 />
-                <div className="px-3 py-2">
-                  <p className="text-xs text-muted-foreground italic">
-                    No ad clicks
-                  </p>
+                <div className="px-3 py-2 space-y-1">
+                  {adClicks.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      No ad clicks
+                    </p>
+                  ) : (
+                    adClicks.map((r: any) => (
+                      <div
+                        key={String(r.id)}
+                        className="text-xs px-2 py-1.5 hover:bg-muted/50 rounded border border-border"
+                      >
+                        <p className="font-medium truncate">
+                          {r.title || r.ad_id || "Ad click"}
+                          {r.ad_id && r.title ? (
+                            <span className="text-muted-foreground ml-1">#{r.ad_id}</span>
+                          ) : null}
+                        </p>
+                        {r.subtitle && (
+                          <p className="text-muted-foreground truncate">{r.subtitle}</p>
+                        )}
+                        {r.created_at && (
+                          <p className="text-muted-foreground">
+                            {format(new Date(r.created_at), "MMM d, yyyy HH:mm")}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 {/* GROUPS */}
@@ -1317,9 +1627,19 @@ export default function ContactProfileModal({
                               className="flex items-center gap-2 text-sm"
                             >
                               <span>{p.full_mobile_number}</span>
+                              {["work", "personal", "other"].includes(String(p.type)) && (
+                                <span className="text-[10px] text-muted-foreground capitalize">
+                                  ({p.type})
+                                </span>
+                              )}
                               {p.is_primary && (
                                 <Badge variant="outline" className="text-xs">
                                   Primary
+                                </Badge>
+                              )}
+                              {p.opted_in && (
+                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700">
+                                  Opted in
                                 </Badge>
                               )}
                               <DropdownMenu>
@@ -1359,6 +1679,14 @@ export default function ContactProfileModal({
                                     >
                                       <X className="h-4 w-4 mr-2" />
                                       Unmark primary
+                                    </DropdownMenuItem>
+                                  )}
+                                  {p.opted_in && p.optin_id && (
+                                    <DropdownMenuItem
+                                      onClick={() => unsubscribeMutation.mutate(String(p.optin_id))}
+                                    >
+                                      <X className="h-4 w-4 mr-2" />
+                                      Unsubscribe
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem
@@ -1416,6 +1744,11 @@ export default function ContactProfileModal({
                                   Primary
                                 </Badge>
                               )}
+                              {w.opted_in && (
+                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700">
+                                  Opted in
+                                </Badge>
+                              )}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -1467,6 +1800,28 @@ export default function ContactProfileModal({
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Remove
                                   </DropdownMenuItem>
+                                  {w.opted_in && w.optin_id && (
+                                    <DropdownMenuItem
+                                      onClick={() => unsubscribeMutation.mutate(String(w.optin_id))}
+                                    >
+                                      <X className="h-4 w-4 mr-2" />
+                                      Unsubscribe
+                                    </DropdownMenuItem>
+                                  )}
+                                  {waChannels.length > 0 && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      {waChannels.map((ch: any) => (
+                                        <DropdownMenuItem
+                                          key={ch.id}
+                                          onClick={() => startWhatsappChat(String(ch.id))}
+                                        >
+                                          <MessageSquare className="h-4 w-4 mr-2" />
+                                          Send via {ch.display_phone_number || ch.verified_name || `#${ch.id}`}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -1525,9 +1880,19 @@ export default function ContactProfileModal({
                               className="flex items-center gap-2 text-sm"
                             >
                               <span>{e.email}</span>
+                              {["work", "personal", "other"].includes(String(e.type)) && (
+                                <span className="text-[10px] text-muted-foreground capitalize">
+                                  ({e.type})
+                                </span>
+                              )}
                               {e.is_primary && (
                                 <Badge variant="outline" className="text-xs">
                                   Primary
+                                </Badge>
+                              )}
+                              {e.opted_in && (
+                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700">
+                                  Opted in
                                 </Badge>
                               )}
                               <DropdownMenu>
@@ -1553,6 +1918,14 @@ export default function ContactProfileModal({
                                     >
                                       <Check className="h-4 w-4 mr-2" />
                                       Mark primary
+                                    </DropdownMenuItem>
+                                  )}
+                                  {e.opted_in && e.optin_id && (
+                                    <DropdownMenuItem
+                                      onClick={() => unsubscribeMutation.mutate(String(e.optin_id))}
+                                    >
+                                      <X className="h-4 w-4 mr-2" />
+                                      Unsubscribe
                                     </DropdownMenuItem>
                                   )}
                                   <DropdownMenuItem
@@ -1785,23 +2158,56 @@ export default function ContactProfileModal({
                     </p>
                   ) : (
                     <div className="space-y-1">
-                      {allCustomFields.slice(0, 8).map((cf: any) => (
-                        <button
+                      {allCustomFields.map((cf: any) => (
+                        <div
                           key={cf.id ?? cf.slug}
-                          className="w-full text-left text-xs px-2 py-1.5 hover:bg-muted/50 rounded flex items-center gap-2"
-                          onClick={() => {
-                            // Switch the middle column to Profile and let the
-                            // user inline-edit the chosen field via the
-                            // dedicated dialog below.
-                            setMidView("form");
-                            setActiveCustomField(cf);
-                          }}
+                          className="flex items-center gap-2 text-xs px-2 py-1.5 hover:bg-muted/50 rounded"
                         >
-                          <span className="font-medium">
+                          <button
+                            className="flex-1 text-left font-medium truncate"
+                            onClick={() => {
+                              // Switch the middle column to Profile and inline-edit
+                              // the chosen field's VALUE via the dialog below.
+                              setMidView("form");
+                              setActiveCustomField(cf);
+                            }}
+                          >
                             {cf.label ?? cf.name}
-                          </span>
-                          <ChevronRight className="h-3 w-3 ml-auto text-muted-foreground" />
-                        </button>
+                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" className="hover:text-foreground shrink-0">
+                                <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setMidView("form");
+                                  setActiveCustomField(cf);
+                                }}
+                              >
+                                <ChevronRight className="h-3.5 w-3.5 mr-2" />
+                                Edit value
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Delete custom field "${cf.label ?? cf.name}" from the whole workspace?`,
+                                    )
+                                  ) {
+                                    deleteCustomFieldMutation.mutate(String(cf.slug));
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                Delete field
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1830,7 +2236,10 @@ export default function ContactProfileModal({
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6"
-                      onClick={() => setNewTagOpen(true)}
+                      onClick={() => {
+                        setEditingTag(null);
+                        setNewTagOpen(true);
+                      }}
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
@@ -1842,32 +2251,71 @@ export default function ContactProfileModal({
                       No tags created
                     </p>
                   ) : (
-                    allTags.slice(0, 12).map((tg: any) => {
+                    allTags.map((tg: any) => {
                       const tagName = tg.name ?? tg;
                       const applied = tags.includes(tagName);
                       return (
-                        <button
+                        <div
                           key={tg.id ?? tagName}
-                          className={`text-xs px-2 py-1.5 rounded border flex items-center gap-1 ${
+                          className={`text-xs rounded border flex items-center ${
                             applied
                               ? "bg-primary/10 border-primary/30"
                               : "hover:bg-muted/50"
                           }`}
-                          onClick={() =>
-                            applied
-                              ? removeTagMutation.mutate(tagName)
-                              : applyTagMutation.mutate(tagName)
-                          }
                         >
-                          <span className="truncate flex-1 text-left">
-                            {tagName}
-                          </span>
-                          {applied ? (
-                            <Check className="h-3 w-3 text-primary" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                          <button
+                            className="flex items-center gap-1 px-2 py-1.5 flex-1 min-w-0"
+                            onClick={() =>
+                              applied
+                                ? removeTagMutation.mutate(tagName)
+                                : applyTagMutation.mutate(tagName)
+                            }
+                          >
+                            <span className="truncate flex-1 text-left">
+                              {tagName}
+                            </span>
+                            {applied ? (
+                              <Check className="h-3 w-3 text-primary shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                            )}
+                          </button>
+                          {tg.id && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button type="button" className="px-1 hover:text-foreground shrink-0">
+                                  <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingTag(tg);
+                                    setNewTagOpen(true);
+                                  }}
+                                >
+                                  <TypeIcon className="h-3.5 w-3.5 mr-2" />
+                                  Edit tag
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        `Delete tag "${tagName}" from the whole workspace?`,
+                                      )
+                                    ) {
+                                      deleteTagMutation.mutate(String(tg.id));
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                  Delete tag
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
-                        </button>
+                        </div>
                       );
                     })
                   )}
@@ -2074,9 +2522,17 @@ export default function ContactProfileModal({
       {/* New Tag */}
       <NewTagDialog
         open={newTagOpen}
-        onOpenChange={setNewTagOpen}
-        onSave={(payload) => createTagMutation.mutate(payload)}
-        saving={createTagMutation.isPending}
+        onOpenChange={(o) => {
+          setNewTagOpen(o);
+          if (!o) setEditingTag(null);
+        }}
+        initial={editingTag}
+        onSave={(payload) =>
+          editingTag?.id
+            ? updateTagMutation.mutate({ id: String(editingTag.id), payload })
+            : createTagMutation.mutate(payload)
+        }
+        saving={createTagMutation.isPending || updateTagMutation.isPending}
       />
 
       {/* New Task */}
@@ -2101,10 +2557,11 @@ export default function ContactProfileModal({
         onOpenChange={setAddPhoneOpen}
         title="Add phone number"
         fieldType="phone"
-        onSave={async (value, primary) => {
+        onSave={async (value, primary, type) => {
           if (!contactId) return;
           await apiPatch(`/api/contacts/${contactId}`, {
             phone: value,
+            type,
             mark_primary: primary,
           });
           invalidateProfile();
@@ -2119,10 +2576,11 @@ export default function ContactProfileModal({
         onOpenChange={setAddEmailOpen}
         title="Add email address"
         fieldType="email"
-        onSave={async (value, primary) => {
+        onSave={async (value, primary, type) => {
           if (!contactId) return;
           await apiPatch(`/api/contacts/${contactId}`, {
             email: value,
+            type,
             mark_primary: primary,
           });
           invalidateProfile();
@@ -2341,28 +2799,34 @@ function NewTagDialog({
   onOpenChange,
   onSave,
   saving,
+  initial,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (payload: any) => void;
   saving: boolean;
+  initial?: any;
 }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState("#3b82f6");
+  const isEdit = !!initial?.id;
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setName(initial?.name ?? "");
+      setColor(initial?.bg_color ?? initial?.color ?? "#3b82f6");
+    } else {
       setName("");
       setColor("#3b82f6");
     }
-  }, [open]);
+  }, [open, initial]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogTitle>New tag</DialogTitle>
+        <DialogTitle>{isEdit ? "Edit tag" : "New tag"}</DialogTitle>
         <DialogDescription>
-          Create a tag you can apply to contacts.
+          {isEdit ? "Update this tag's name or color." : "Create a tag you can apply to contacts."}
         </DialogDescription>
         <div className="space-y-3 py-2">
           <div>
@@ -2574,16 +3038,18 @@ function AddContactFieldDialog({
   onOpenChange: (open: boolean) => void;
   title: string;
   fieldType: "phone" | "email";
-  onSave: (value: string, primary: boolean) => Promise<void>;
+  onSave: (value: string, primary: boolean, type: string) => Promise<void>;
 }) {
   const [value, setValue] = useState("");
   const [primary, setPrimary] = useState(false);
+  const [type, setType] = useState("work");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setValue("");
       setPrimary(false);
+      setType("work");
       setSaving(false);
     }
   }, [open]);
@@ -2604,6 +3070,19 @@ function AddContactFieldDialog({
               fieldType === "email" ? "name@example.com" : "+1 555 1234567"
             }
           />
+          <div>
+            <label className="text-xs text-muted-foreground">Type</label>
+            <Select value={type} onValueChange={setType}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="work">Work</SelectItem>
+                <SelectItem value="personal">Personal</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -2622,7 +3101,7 @@ function AddContactFieldDialog({
             onClick={async () => {
               setSaving(true);
               try {
-                await onSave(value, primary);
+                await onSave(value, primary, type);
               } finally {
                 setSaving(false);
               }

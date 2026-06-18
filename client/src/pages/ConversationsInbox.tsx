@@ -66,6 +66,24 @@ interface Conversation {
   channel: string;
 }
 
+// WhatsApp Cloud API file-size limits (bytes)
+const WA_SIZE_LIMITS: Record<string, number> = {
+  image: 5 * 1024 * 1024,   // 5 MB
+  video: 16 * 1024 * 1024,  // 16 MB
+  audio: 16 * 1024 * 1024,  // 16 MB
+};
+const WA_DOC_LIMIT = 100 * 1024 * 1024; // 100 MB for documents
+
+function getWaLimit(file: File): number {
+  const category = file.type.split('/')[0];
+  return WA_SIZE_LIMITS[category] ?? WA_DOC_LIMIT;
+}
+
+function waLimitLabel(file: File): string {
+  const limit = getWaLimit(file);
+  return limit >= 1024 * 1024 ? `${limit / 1024 / 1024}MB` : `${limit / 1024}KB`;
+}
+
 // Outbound delivery state for WhatsApp messages.
 //   pending  : queued in backend, not yet ack'd by Meta
 //   sent     : Meta accepted (single tick)
@@ -255,19 +273,39 @@ export default function ConversationsInbox() {
       queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
 
       if (selectedConversation && data.inbox_id === selectedConversation.toString()) {
-        if (msg?.direction === 'OUTGOING') {
-          // Outgoing: already in cache from optimistic update — skip
-        } else if (msg?.id && msg?.direction === 'INCOMING' && Array.isArray(msg.parsed_files) && (msg.text || msg.parsed_files.length > 0)) {
-          // Complete text message from socket — add directly without HTTP refetch
+        if (msg?.id && msg?.direction === 'OUTGOING') {
+          // Outgoing: replace optimistic placeholder with real message from socket
+          // (socket fires before HTTP response returns — no need to wait for API)
+          queryClient.setQueryData(["/api/inbox/messages", selectedConversation], (old: any) => {
+            if (!old?.messages) return old;
+            const withoutOptimistic = old.messages.filter((m: any) => !String(m.id).startsWith('opt_'));
+            const alreadyThere = withoutOptimistic.some((m: any) => String(m.id) === String(msg.id));
+            if (alreadyThere) return { ...old, messages: withoutOptimistic };
+            return {
+              ...old,
+              messages: [...withoutOptimistic, {
+                ...msg,
+                parsed_files: Array.isArray(msg.parsed_files) ? msg.parsed_files : [],
+                reactions: [],
+              }],
+            };
+          });
+        } else if (msg?.id) {
+          // Incoming: add directly from socket — no HTTP refetch needed
+          // For media/voice, parsed_files arrive later via message_media_ready
           queryClient.setQueryData(["/api/inbox/messages", selectedConversation], (old: any) => {
             if (!old?.messages) return old;
             const alreadyThere = old.messages.some((m: any) => String(m.id) === String(msg.id));
             if (alreadyThere) return old;
-            return { ...old, messages: [...old.messages, { ...msg, reactions: msg.reactions ?? [] }] };
+            return {
+              ...old,
+              messages: [...old.messages, {
+                ...msg,
+                parsed_files: Array.isArray(msg.parsed_files) ? msg.parsed_files : [],
+                reactions: msg.reactions ?? [],
+              }],
+            };
           });
-        } else {
-          // Media inbound or legacy payload — fallback to full refetch
-          queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
         }
       }
 
@@ -524,29 +562,42 @@ export default function ConversationsInbox() {
     queryKey: ["/api/inbox/messages", selectedConversation],
     queryFn: async () => {
       if (!selectedConversation) return null;
-      const res = await apiRequest("POST", `/api/inbox/messages/${selectedConversation}`, {});
-      return res.json();
+      try {
+        const res = await apiRequest("POST", `/api/inbox/messages/${selectedConversation}`, {}, { silentStatuses: [404] });
+        return res.json();
+      } catch (e: any) {
+        // The selected conversation was deleted (e.g. its contact was deleted).
+        // Clear the stale selection so we fall back to the empty state instead of
+        // looping a scary "Inbox not found" error every refetch.
+        const msg = String(e?.message ?? "");
+        if (/not found/i.test(msg) || /\b404\b/.test(msg)) {
+          setSelectedConversation(null);
+          try { sessionStorage.removeItem("inbox_selected_conv"); } catch {}
+          return null;
+        }
+        throw e;
+      }
     },
     enabled: !!selectedConversation,
     staleTime: 0,
-    refetchOnMount: "always",
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   // Flag to scroll only on conversation switch / initial load, not on every 5s refetch
   useEffect(() => {
     shouldScrollToBottomRef.current = true;
+    setIsChatVisible(false);
   }, [selectedConversation]);
 
   useEffect(() => {
     const convLoaded = conversations.some((c: any) => c.id === selectedConversation);
     if (!shouldScrollToBottomRef.current || !messagesResponse || !convLoaded) return;
-    // Clear flag inside the timer — if timer is cancelled by cleanup, flag stays true so next run retries
     const timer = setTimeout(() => {
       shouldScrollToBottomRef.current = false;
       const el = messagesEndRef.current;
       if (el) el.scrollTop = el.scrollHeight;
-    }, 200);
+      setIsChatVisible(true);
+    }, 100);
     return () => clearTimeout(timer);
   }, [messagesResponse, conversations, selectedConversation]);
 
@@ -838,8 +889,16 @@ export default function ConversationsInbox() {
     queryKey: ["/api/inbox/get-profile-data", selectedConversation],
     queryFn: async () => {
       if (!selectedConversation) return null;
-      const res = await apiRequest("GET", `/api/inbox/get-profile-data/${selectedConversation}`);
-      return res.json();
+      try {
+        const res = await apiRequest("GET", `/api/inbox/get-profile-data/${selectedConversation}`, undefined, { silentStatuses: [404] });
+        return res.json();
+      } catch (e: any) {
+        // Selected conversation deleted — swallow the not-found so it doesn't toast
+        // (the messages query clears the stale selection).
+        const msg = String(e?.message ?? "");
+        if (/not found/i.test(msg) || /\b404\b/.test(msg)) return null;
+        throw e;
+      }
     },
     enabled: !!selectedConversation,
   });
@@ -1000,20 +1059,17 @@ export default function ConversationsInbox() {
       const hasFiles = typeof input !== "string" && ((input.files && input.files.length > 0) || input.audio);
       queryClient.setQueryData(["/api/inbox/messages", selectedConversation], (prev: any) => {
         if (!prev?.messages) return prev;
+        // Remove optimistic placeholder (may already be gone if socket replaced it)
         const withoutOptimistic = prev.messages.filter((m: any) => m.id !== context?.tempId);
-        if (!hasFiles && realMsg) {
-          const alreadyThere = withoutOptimistic.some((m: any) => Number(m.id) === Number(realMsg.id));
+        if (realMsg) {
+          // Socket may have already added the real message — skip if present
+          const alreadyThere = withoutOptimistic.some((m: any) => String(m.id) === String(realMsg.id));
           if (!alreadyThere) {
-            return { ...prev, messages: [...withoutOptimistic, { ...realMsg, reactions: realMsg.reactions ?? [] }] };
+            return { ...prev, messages: [...withoutOptimistic, { ...realMsg, parsed_files: realMsg.parsed_files ?? [], reactions: realMsg.reactions ?? [] }] };
           }
-          return { ...prev, messages: withoutOptimistic };
         }
-        // File messages: remove optimistic placeholder and let the socket/refetch fill in the real one
         return { ...prev, messages: withoutOptimistic };
       });
-      if (hasFiles) {
-        queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
-      }
       queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
     },
     onError: (err: Error, _input, context: any) => {
@@ -1569,6 +1625,7 @@ export default function ConversationsInbox() {
   const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldScrollToBottomRef = useRef(false);
+  const [isChatVisible, setIsChatVisible] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -1614,6 +1671,8 @@ export default function ConversationsInbox() {
     const files = e.currentTarget.files;
     if (files && files.length > 0) {
       const isInstagram = selectedConvObj?.channel === 'instagram';
+      const isWhatsApp = selectedConvObj?.channel === 'whatsapp';
+
       if (isInstagram) {
         const unsupported = Array.from(files).filter((f) => {
           const m = f.type;
@@ -1625,6 +1684,19 @@ export default function ConversationsInbox() {
           return;
         }
       }
+
+      if (isWhatsApp) {
+        const tooBig = Array.from(files).filter(f => f.size > getWaLimit(f));
+        const valid = Array.from(files).filter(f => f.size <= getWaLimit(f));
+        if (tooBig.length > 0) {
+          const labels = tooBig.map(f => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB — limit ${waLimitLabel(f)})`).join(', ');
+          toast({ title: `File size limit exceeded: ${labels}`, variant: 'destructive' });
+        }
+        if (valid.length > 0) setAttachedFiles(prev => [...prev, ...valid]);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
       setAttachedFiles([...attachedFiles, ...Array.from(files)]);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1633,7 +1705,21 @@ export default function ConversationsInbox() {
   // Handle image attachment
   const handleImageAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.currentTarget.files;
-    if (files) {
+    if (files && files.length > 0) {
+      const isWhatsApp = selectedConvObj?.channel === 'whatsapp';
+
+      if (isWhatsApp) {
+        const tooBig = Array.from(files).filter(f => f.size > getWaLimit(f));
+        const valid = Array.from(files).filter(f => f.size <= getWaLimit(f));
+        if (tooBig.length > 0) {
+          const labels = tooBig.map(f => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB — limit ${waLimitLabel(f)})`).join(', ');
+          toast({ title: `File size limit exceeded: ${labels}`, variant: 'destructive' });
+        }
+        if (valid.length > 0) setAttachedFiles(prev => [...prev, ...valid]);
+        if (imageInputRef.current) imageInputRef.current.value = '';
+        return;
+      }
+
       setAttachedFiles([...attachedFiles, ...Array.from(files)]);
     }
     if (imageInputRef.current) imageInputRef.current.value = "";
@@ -2595,7 +2681,7 @@ export default function ConversationsInbox() {
 
 
 
-              <div ref={messagesEndRef} className="flex-1 min-h-0 p-4 overflow-y-auto">
+              <div ref={messagesEndRef} className={`flex-1 min-h-0 p-4 overflow-y-auto transition-opacity duration-150 ${isChatVisible ? "opacity-100" : "opacity-0"}`}>
                 <div className="space-y-4">
                   {(messages || []).map((msg: Message, index: number, allMessages: Message[]) => {
                     const showDateDivider = index === 0 || formatMessageDate(msg.time) !== formatMessageDate(allMessages[index - 1].time);

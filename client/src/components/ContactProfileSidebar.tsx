@@ -94,6 +94,12 @@ interface ContactProfileSidebarProps {
         support_number?: string | null;
         smart_flow?: { name?: string; paused?: boolean } | null;
         channel?: { type?: string; name?: string; number?: string } | null;
+        opportunities?: Array<{
+            id: string; title: string | null; value: number; currency: string;
+            status: string; closing_date: string | null; probability: number;
+            step: { name: string; bg_color: string; txt_color: string } | null;
+            pipeline: { name: string; currency: string } | null;
+        }> | null;
     } | null;
 
     onRefreshProfile?: () => void;
@@ -201,17 +207,18 @@ export default function ContactProfileSidebar({
     };
 
     const handleAdd15Minutes = () => {
-        const maxLimit = 9999 * 60; // 9999 minutes in seconds
+        const maxLimit = 9999 * 60;
         const addedAmount = 900;
-
         let amountToAdd = addedAmount;
         if (flowPauseTimer + addedAmount > maxLimit) {
             amountToAdd = maxLimit - flowPauseTimer;
         }
-
         if (amountToAdd > 0) {
-            setFlowPauseTimer((prev) => prev + amountToAdd);
+            const newTimer = flowPauseTimer + amountToAdd;
+            setFlowPauseTimer(newTimer);
             setMaxTime((prevMax) => prevMax + amountToAdd);
+            // Sync updated duration to backend
+            pauseAutomationMutation.mutate({ action: 'pause_automation', minutes: Math.ceil(newTimer / 60) });
         }
     };
 
@@ -219,12 +226,13 @@ export default function ContactProfileSidebar({
         setIsFlowPaused(false);
         setFlowPauseTimer(900);
         setMaxTime(900);
+        pauseAutomationMutation.mutate({ action: 'resume_automation' });
     };
 
     const handleStartPause = () => {
         setIsFlowPaused(true);
-        // Reset max time if starting a new session (though timer state handles initial 900)
         setMaxTime(Math.max(900, flowPauseTimer));
+        pauseAutomationMutation.mutate({ action: 'pause_automation', minutes: Math.ceil(flowPauseTimer / 60) });
     };
 
     const handleSaveBasicDetails = () => {
@@ -329,6 +337,28 @@ export default function ContactProfileSidebar({
         });
     };
 
+    // Fetch tasks for the current contact (query declared first so refetchTasks
+    // is in scope for createTaskMutation.onSuccess below).
+    const { data: tasksData, refetch: refetchTasks } = useQuery({
+        queryKey: ["/api/tasks", { contact_id: contactId }],
+        queryFn: async () => {
+            if (!contactId) return { tasks: [] };
+            const res = await apiRequest("GET", `/api/tasks?contact_id=${contactId}`);
+            return res.json();
+        },
+        enabled: !!contactId && activeTab === "tasks",
+    });
+    const contactTasks: any[] = tasksData?.tasks || [];
+
+    // Pause / resume automation mutation — persists to backend so it
+    // survives page refresh (updates contacts.automations_paused_till).
+    const pauseAutomationMutation = useMutation({
+        mutationFn: async ({ action, minutes }: { action: string; minutes?: number }) => {
+            const res = await apiRequest("POST", `/api/inbox/profile-action/${conversation.id}`, { action, minutes });
+            return res.json();
+        },
+    });
+
     // Mutation: create task
     const createTaskMutation = useMutation({
         mutationFn: async (data: any) => {
@@ -339,6 +369,7 @@ export default function ContactProfileSidebar({
         onSuccess: () => {
             setIsAddTaskModalOpen(false);
             setNewTask({ note: "", date: "", time: "", agent: "", contact: "" });
+            refetchTasks();
         },
     });
 
@@ -782,14 +813,49 @@ export default function ContactProfileSidebar({
 
                         {/* Opportunities Tab */}
                         {activeTab === "opportunities" && (
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 <Button variant="outline" size="sm" className="w-full btn-outline-primary" onClick={() => setIsAddOpportunityModalOpen(true)}>
                                     <Plus size={14} className="mr-2" /> Add Opportunity
                                 </Button>
-                                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-                                    <BarChart3 size={32} className="mb-2 opacity-50" />
-                                    <p className="text-sm">No opportunities found.</p>
-                                </div>
+                                {(profileData?.opportunities ?? []).length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                                        <BarChart3 size={32} className="mb-2 opacity-50" />
+                                        <p className="text-sm">No opportunities found.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {(profileData?.opportunities ?? []).map((opp) => (
+                                            <div key={opp.id} className="border rounded-md p-3 space-y-1.5 text-xs">
+                                                <p className="font-semibold text-sm truncate">{opp.title ?? "Untitled"}</p>
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    <span className="font-medium text-foreground">{opp.currency} {Number(opp.value).toLocaleString()}</span>
+                                                    <span>·</span>
+                                                    <span>{opp.probability}% probability</span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {opp.pipeline && (
+                                                        <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-muted-foreground">
+                                                            {opp.pipeline.name}
+                                                        </span>
+                                                    )}
+                                                    {opp.step && (
+                                                        <span
+                                                            className="px-1.5 py-0.5 rounded font-medium"
+                                                            style={{ backgroundColor: opp.step.bg_color, color: opp.step.txt_color }}
+                                                        >
+                                                            {opp.step.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {opp.closing_date && (
+                                                    <p className="text-muted-foreground">
+                                                        Closes {new Date(opp.closing_date).toLocaleDateString()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -847,14 +913,36 @@ export default function ContactProfileSidebar({
 
                         {/* Create Task Tab */}
                         {activeTab === "tasks" && (
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 <Button variant="outline" size="sm" className="w-full btn-outline-primary" onClick={() => setIsAddTaskModalOpen(true)}>
                                     <Plus size={14} className="mr-2" /> Add Task
                                 </Button>
-                                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-                                    <ClipboardList size={32} className="mb-2 opacity-50" />
-                                    <p className="text-sm">No tasks found.</p>
-                                </div>
+                                {contactTasks.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                                        <ClipboardList size={32} className="mb-2 opacity-50" />
+                                        <p className="text-sm">No tasks found.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {contactTasks.map((task: any) => (
+                                            <div key={task.id} className="border rounded-md p-3 space-y-1 text-xs">
+                                                <p className="text-sm font-medium leading-snug">{task.description}</p>
+                                                <div className="flex items-center gap-2 text-muted-foreground">
+                                                    {task.datetime && (
+                                                        <span>{new Date(task.datetime).toLocaleString()}</span>
+                                                    )}
+                                                    {task.status && (
+                                                        <span className={`capitalize px-1.5 py-0.5 rounded font-medium ${
+                                                            task.status === 'COMPLETED'
+                                                                ? 'bg-green-100 text-green-700'
+                                                                : 'bg-yellow-100 text-yellow-700'
+                                                        }`}>{task.status.toLowerCase()}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 

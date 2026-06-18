@@ -161,15 +161,20 @@ export default function SettingsPage() {
 
   // Calculate initial activeSection directly from URL
   const initialTabParam = new URLSearchParams(window.location.search).get("tab");
-  // Default to empty so right pane is empty until a selection
   const initialActiveSection = (initialTabParam && (sections.some(s => s.name === initialTabParam) || sections.some(s => s.children?.some((c: any) => c.name === initialTabParam)))) ? initialTabParam : "Manage";
 
+  const channelNames = ["WhatsApp","Instagram","Messenger","Telegram","SMS & Calls","Webchat"];
+  const chatGptNames = ["AI Chat Assistants","AI Voice Assistants","AI Knowledge base","AI Report Builder"];
+  const connectNames = ["Integrations","API","Visual API"];
+  const customizationNames = ["Custom fields","Chat Widget","Iframe","Tags","Quick Replies"];
+  const workspaceNames = ["Manage","Live Chat","White Label","Manage User","Roles & Permissions","Teams"];
+
   const [activeSection, setActiveSection] = useState(initialActiveSection);
-  const [workspaceOpen, setWorkspaceOpen] = useState(true);
-  const [customizationOpen, setCustomizationOpen] = useState(false);
-  const [channelsOpen, setChannelsOpen] = useState(false);
-  const [chatGptOpen, setChatGptOpen] = useState(false);
-  const [connectOpen, setConnectOpen] = useState(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState(workspaceNames.includes(initialActiveSection) || initialActiveSection === "Manage");
+  const [customizationOpen, setCustomizationOpen] = useState(customizationNames.includes(initialActiveSection));
+  const [channelsOpen, setChannelsOpen] = useState(channelNames.includes(initialActiveSection));
+  const [chatGptOpen, setChatGptOpen] = useState(chatGptNames.includes(initialActiveSection));
+  const [connectOpen, setConnectOpen] = useState(connectNames.includes(initialActiveSection));
   const [profilePictureUrl, setProfilePictureUrl] = useState(""); // Default profile picture
   const [notificationsEnabled, setNotificationsEnabled] = useState(false); // User preference for notifications, off by default
   const [browserNotificationsDenied, setBrowserNotificationsDenied] = useState(Notification.permission === 'denied'); // Initialize based on actual browser permission
@@ -186,6 +191,11 @@ export default function SettingsPage() {
   const [, navigate] = useLocation(); // Get navigate function from wouter
   const search = useSearch(); // Get the query string from wouter
   const [searchQuery, setSearchQuery] = useState("");
+
+  const goToSection = (name: string) => {
+    setActiveSection(name);
+    navigate(`/settings?tab=${encodeURIComponent(name)}`, { replace: true });
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -300,10 +310,7 @@ export default function SettingsPage() {
                       {filteredSections[0]?.children?.map((item: any, idx: number) => (
                         <React.Fragment key={item.path}>
                           <button
-                            onClick={() => {
-                              navigate(item.path);
-                              setActiveSection(item.name)
-                            }}
+                            onClick={() => goToSection(item.name)}
                             className={`w-full text-left px-3 py-2 text-sm rounded-md transition-all duration-200 
           ${activeSection === item.name
                                 ? "bg-primary text-white shadow-sm transform scale-[1.02]"
@@ -350,7 +357,7 @@ export default function SettingsPage() {
                               return (
                                 <React.Fragment key={child.name}>
                                   <button
-                                    onClick={() => setActiveSection(child.name)}
+                                    onClick={() => goToSection(child.name)}
                                     className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
                                       ? "bg-primary text-white shadow-sm"
                                       : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
@@ -396,7 +403,7 @@ export default function SettingsPage() {
                             {section.children?.map((child: any, idx: number) => (
                               <React.Fragment key={child.name}>
                                 <button
-                                  onClick={() => setActiveSection(child.name)}
+                                  onClick={() => goToSection(child.name)}
                                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
                                     ? "bg-primary text-white shadow-sm"
                                     : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
@@ -436,7 +443,7 @@ export default function SettingsPage() {
                             {section.children?.map((child: any, idx: number) => (
                               <React.Fragment key={child.name}>
                                 <button
-                                  onClick={() => setActiveSection(child.name)}
+                                  onClick={() => goToSection(child.name)}
                                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
                                     ? "bg-primary text-white shadow-sm"
                                     : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
@@ -476,7 +483,7 @@ export default function SettingsPage() {
                             {section.children?.map((child: any, idx: number) => (
                               <React.Fragment key={child.name}>
                                 <button
-                                  onClick={() => setActiveSection(child.name)}
+                                  onClick={() => goToSection(child.name)}
                                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
                                     ? "bg-primary text-white shadow-sm"
                                     : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
@@ -497,9 +504,7 @@ export default function SettingsPage() {
                     <div key={section.name} className="border-b border-slate-200/60 dark:border-slate-800 pb-3 mb-3 relative hover:bg-slate-50/50 dark:hover:bg-slate-800/50 rounded-lg transition-colors">
                       <div className="absolute -left-2 top-0 w-1 h-6 bg-primary/60 rounded-full" />
                       <button
-                        onClick={() => {
-                          navigate(`/settings?tab=${section.name}`);
-                        }}
+                        onClick={() => goToSection(section.name)}
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.name
                           ? "bg-primary text-white shadow-sm"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"

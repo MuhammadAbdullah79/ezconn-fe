@@ -17,8 +17,10 @@ import {
   Check,
   Loader2,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -115,6 +117,7 @@ export default function QrCodeManageView({
 }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   // ─── Local view state ───────────────────────────────────────────
   const [mode, setMode] = useState<"list" | "new">("list");
@@ -187,7 +190,7 @@ export default function QrCodeManageView({
 
   // ─── Mutations ─────────────────────────────────────────────────
   const createMutation = useMutation({
-    mutationFn: async (payload: { name: string; instance_id: string; token: string }) => {
+    mutationFn: async (payload: { name: string }) => {
       const res = await apiRequest("POST", "/api/zapi/create-instance", payload);
       return res.json();
     },
@@ -245,7 +248,8 @@ export default function QrCodeManageView({
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string | number) => {
-      await apiRequest("DELETE", `/api/zapi/delete-instance/${id}`);
+      // Send the delete-media choice (replyagent passes delete_media in the body).
+      await apiRequest("DELETE", `/api/zapi/delete-instance/${id}`, { delete_media: deleteMedia });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/zapi/instances"] });
@@ -419,23 +423,13 @@ export default function QrCodeManageView({
       setNameError("Instance name is required");
       return;
     }
-    if (!newInstanceId.trim() || !newToken.trim()) {
-      toast({
-        title: "Missing credentials",
-        description: "Z-API instance ID and token are required.",
-        variant: "destructive",
-      });
-      return;
-    }
     if (!newTerms) {
       setTermsError("Please accept the Z-API terms");
       return;
     }
-    createMutation.mutate({
-      name: newName.trim(),
-      instance_id: newInstanceId.trim(),
-      token: newToken.trim(),
-    });
+    // Name only — the backend provisions the Z-API instance on demand
+    // (replyagent: createInstance(name) → instance_id + token generated).
+    createMutation.mutate({ name: newName.trim() });
   }
 
   function openDefaultReply(instance: ZapiInstance) {
@@ -796,24 +790,6 @@ export default function QrCodeManageView({
               />
               {nameError && <p className="text-rose-500 text-[11px] font-bold">{nameError}</p>}
             </div>
-            <div className="space-y-2">
-              <label className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Z-API instance ID</label>
-              <input
-                value={newInstanceId}
-                onChange={(e) => setNewInstanceId(e.target.value)}
-                placeholder="3D8…"
-                className={inputCls}
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <label className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Z-API token</label>
-              <input
-                value={newToken}
-                onChange={(e) => setNewToken(e.target.value)}
-                placeholder="paste the token from your Z-API dashboard"
-                className={inputCls}
-              />
-            </div>
           </div>
 
           <label className="flex items-start gap-3 cursor-pointer">
@@ -972,19 +948,31 @@ export default function QrCodeManageView({
 
             <div className={cn("flex justify-end gap-2 pt-4 border-t", softBorder)}>
               {drInstance?.auto_reply_automation_id && (
-                <button
-                  onClick={() =>
-                    drInstance &&
-                    autoReplyMutation.mutate({
-                      id: drInstance.id,
-                      auto_reply_automation_id: null,
-                      auto_reply_interval: drInterval,
-                    })
-                  }
-                  className="h-11 px-6 rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-500/5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
-                >
-                  <Trash2 size={12} /> Remove
-                </button>
+                <>
+                  {/* View Automation — open the linked automation (replyagent parity). */}
+                  <button
+                    onClick={() => {
+                      const aid = drAutomationId ?? drInstance?.auto_reply_automation_id;
+                      if (aid) { setDrInstance(null); setLocation(`/automations/${aid}`); }
+                    }}
+                    className="h-11 px-6 rounded-xl border border-primary/30 text-primary hover:bg-primary/5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  >
+                    <ExternalLink size={12} /> View Automation
+                  </button>
+                  <button
+                    onClick={() =>
+                      drInstance &&
+                      autoReplyMutation.mutate({
+                        id: drInstance.id,
+                        auto_reply_automation_id: null,
+                        auto_reply_interval: drInterval,
+                      })
+                    }
+                    className="h-11 px-6 rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-500/5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                  >
+                    <Trash2 size={12} /> Remove
+                  </button>
+                </>
               )}
               <button onClick={() => setDrInstance(null)} className={outlineBtn}>
                 Cancel

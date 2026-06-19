@@ -5,13 +5,19 @@ import {
   Plus,
   Instagram,
   RefreshCw,
+  RotateCw,
   Bot,
   Trash2,
   AlertCircle,
   Users,
-  Settings,
   Sparkles,
   History,
+  Reply,
+  MessageSquare,
+  BookOpen,
+  Image as ImageIcon,
+  UserCog,
+  Copy,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,9 +39,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
-import InstagramPageSettings from "./InstagramPageSettings";
+import InstagramDefaultReplyDialog from "./InstagramDefaultReplyDialog";
+import InstagramIceBreakersDialog from "./InstagramIceBreakersDialog";
+import InstagramMainMenuDialog from "./InstagramMainMenuDialog";
+import InstagramStoryMentionDialog from "./InstagramStoryMentionDialog";
+import InstagramPageUsersDialog from "./InstagramPageUsersDialog";
 
-type View = "list" | "preferred" | "old" | "page";
+type View = "list" | "preferred" | "old";
 
 const IG_SCOPES = [
   "instagram_business_basic",
@@ -55,6 +65,12 @@ const FB_SCOPES = [
 function buildIgAuthUrl(appId: string): string {
   const redirectUri = encodeURIComponent(`${window.location.origin}/instagram-callback`);
   return `https://www.instagram.com/oauth/authorize?client_id=${appId}&redirect_uri=${redirectUri}&scope=${encodeURIComponent(IG_SCOPES)}&response_type=code`;
+}
+
+// Reconnect variant: carries the existing page id in OAuth `state` so the
+// callback refreshes that account's token in place (replyagent "Refresh").
+function buildIgReconnectAuthUrl(appId: string, pageId: string | number): string {
+  return `${buildIgAuthUrl(appId)}&state=${encodeURIComponent(String(pageId))}`;
 }
 
 function buildFbAuthUrl(appId: string, version: string): string {
@@ -115,13 +131,27 @@ export default function InstagramSection() {
   const igGradient = "bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600";
 
   const [view, setView] = useState<View>("list");
-  const [selectedPage, setSelectedPage] = useState<any>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<any>(null);
+  // replyagent "delete_media": also purge this account's stored media on delete.
+  const [deleteMedia, setDeleteMedia] = useState(false);
+  const [showLimitReached, setShowLimitReached] = useState(false);
+  // Per-account action modals (replyagent action-row → modal pattern).
+  const [defaultReplyAccount, setDefaultReplyAccount] = useState<any>(null);
+  const [iceBreakersAccount, setIceBreakersAccount] = useState<any>(null);
+  const [mainMenuAccount, setMainMenuAccount] = useState<any>(null);
+  const [storyMentionAccount, setStoryMentionAccount] = useState<any>(null);
+  const [pageUsersAccount, setPageUsersAccount] = useState<any>(null);
 
   const { data: channels, isLoading } = useQuery({
     queryKey: ["/api/integrations/channels"],
     queryFn: async () => (await apiRequest("GET", "/api/integrations/channels")).json(),
+  });
+
+  // Workspace carries the per-channel cap (replyagent: instagram_channels_limit).
+  const { data: workspaceData } = useQuery({
+    queryKey: ["/api/workspaces/current"],
+    queryFn: async () => (await apiRequest("GET", "/api/workspaces/current")).json(),
   });
 
   const allAccounts: any[] = channels?.instagram || [];
@@ -129,9 +159,13 @@ export default function InstagramSection() {
   const oldAccounts = allAccounts.filter((a) => a.platform === "facebook");
   const activeAccounts = view === "preferred" ? preferredAccounts : oldAccounts;
 
+  // Limit gating (Preferred accounts). Pure-FE, mirrors replyagent's hasLimit.
+  const igLimit = Number(workspaceData?.instagram_channels_limit ?? 1);
+  const limitReached = preferredAccounts.length >= igLimit;
+
   const deleteMutation = useMutation({
-    mutationFn: async (id: string | number) => {
-      await apiRequest("DELETE", `/api/integrations/channels/instagram/${id}`);
+    mutationFn: async ({ id, deleteMedia }: { id: string | number; deleteMedia: boolean }) => {
+      await apiRequest("DELETE", `/api/integrations/channels/instagram/${id}`, { delete_media: deleteMedia });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/integrations/channels"] });
@@ -167,15 +201,38 @@ export default function InstagramSection() {
     const fbAppId = "979553311024998";
     const version = "v22.0";
     if (view === "preferred") {
+      // Block OAuth once the workspace's Instagram cap is hit (replyagent).
+      if (limitReached) {
+        setShowLimitReached(true);
+        return;
+      }
       window.location.href = buildIgAuthUrl(igAppId);
     } else {
       window.location.href = buildFbAuthUrl(fbAppId, version);
     }
   }
 
-  function openPageSettings(account: any) {
-    setSelectedPage(account);
-    setView("page");
+  // Reconnect = re-run IG OAuth carrying this page's id so the existing row's
+  // token is refreshed in place (replyagent "Refresh"). Preferred accounts only.
+  function handleReconnect(account: any) {
+    const igAppId = "996773679700787";
+    window.location.href = buildIgReconnectAuthUrl(igAppId, account.id);
+  }
+
+  // Old (Facebook-managed) reconnect = re-run FB OAuth; the page-picker upserts
+  // the existing row by ig_user_id/page_id so its token is refreshed in place
+  // (replyagent OLD "Refresh" also re-auths through Facebook).
+  function handleReconnectOld() {
+    const fbAppId = "979553311024998";
+    const version = "v22.0";
+    window.location.href = buildFbAuthUrl(fbAppId, version);
+  }
+
+  function copyId(id: string | number) {
+    navigator.clipboard?.writeText(String(id)).then(
+      () => toast({ title: "Copied", description: "Instagram Page ID copied to clipboard." }),
+      () => {},
+    );
   }
 
   if (isLoading) {
@@ -183,19 +240,6 @@ export default function InstagramSection() {
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
-    );
-  }
-
-  // ── Page Settings view ──────────────────────────────────────────────
-  if (view === "page" && selectedPage) {
-    return (
-      <InstagramPageSettings
-        page={selectedPage}
-        onBack={() => {
-          setView(selectedPage.platform === "facebook" ? "old" : "preferred");
-          setSelectedPage(null);
-        }}
-      />
     );
   }
 
@@ -224,11 +268,9 @@ export default function InstagramSection() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                {isPreferred && (
-                  <button onClick={handleAddNew} className={primaryOutlineBtn}>
-                    <Plus size={12} /> Add New
-                  </button>
-                )}
+                <button onClick={handleAddNew} className={primaryOutlineBtn}>
+                  <Plus size={12} /> Add New
+                </button>
                 <button onClick={() => setView("list")} className={outlineBtn}>
                   <ChevronLeft size={12} /> Back
                 </button>
@@ -249,14 +291,12 @@ export default function InstagramSection() {
                     <p className={cn("text-[11px] font-medium opacity-60 leading-relaxed", sub)}>
                       {isPreferred
                         ? "Connect an Instagram Business account to start automating conversations."
-                        : "This integration method is no longer supported. Please use the new Instagram integration method that only requires Instagram Login for authentication."}
+                        : "Connect an Instagram account linked through a Facebook Business Page to manage it here."}
                     </p>
                   </div>
-                  {isPreferred && (
-                    <button onClick={handleAddNew} className={primaryOutlineBtn}>
-                      Connect now
-                    </button>
-                  )}
+                  <button onClick={handleAddNew} className={primaryOutlineBtn}>
+                    Connect now
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -287,15 +327,30 @@ export default function InstagramSection() {
                                 <span className={cn("text-[9px] font-medium truncate max-w-[200px]", sub)}>{account.fail_reason}</span>
                               )}
                             </div>
+                            {/* Instagram Page ID (replyagent: insta_page_id), show-if-present */}
+                            {account.ig_user_id && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <span className={cn("text-[8px] font-black uppercase tracking-widest opacity-40", sub)}>ID</span>
+                                <span className={cn("text-[10px] font-mono truncate max-w-[180px] opacity-70", sub)}>{account.ig_user_id}</span>
+                                <button
+                                  onClick={() => copyId(account.ig_user_id)}
+                                  className={cn("opacity-50 hover:opacity-100 transition-opacity", sub)}
+                                  title="Copy Instagram Page ID"
+                                >
+                                  <Copy size={10} />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
                           <button
-                            onClick={() => openPageSettings(account)}
+                            onClick={() => (isPreferred ? handleReconnect(account) : handleReconnectOld())}
                             className={cn(outlineBtn, "h-9 px-4")}
+                            title="Re-authorize this account and refresh its access token"
                           >
-                            <Settings size={11} /> Settings
+                            <RotateCw size={11} /> Reconnect
                           </button>
                           <button
                             onClick={() => syncMutation.mutate(account.id)}
@@ -325,13 +380,7 @@ export default function InstagramSection() {
                                 />
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => openPageSettings(account)}
-                                className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
-                              >
-                                <Settings size={12} className="text-primary" /> Page Settings
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => { setAccountToDelete(account); setShowDeleteConfirm(true); }}
+                                onClick={() => { setAccountToDelete(account); setDeleteMedia(false); setShowDeleteConfirm(true); }}
                                 className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500"
                               >
                                 <Trash2 size={12} /> Delete
@@ -341,19 +390,48 @@ export default function InstagramSection() {
                         </div>
                       </div>
 
-                      {/* Stats */}
-                      <div className="grid grid-cols-3 divide-x" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
-                        {[
-                          { label: "Posts",     value: account.media_count?.toLocaleString()    || "0" },
-                          { label: "Followers", value: account.followers_count?.toLocaleString() || "0" },
-                          { label: "Following", value: account.follows_count?.toLocaleString()   || "0" },
-                        ].map((stat) => (
-                          <div key={stat.label} className="px-6 py-4 text-center" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
-                            <p className={cn("text-[18px] font-black", text)}>{stat.value}</p>
+                      {/* Stats — only render those > 0 (replyagent show-if->0) */}
+                      {(() => {
+                        const visibleStats = [
+                          { label: "Posts",     value: account.media_count },
+                          { label: "Followers", value: account.followers_count },
+                          { label: "Following", value: account.follows_count },
+                        ].filter((s) => s.value != null && Number(s.value) > 0);
+                        if (visibleStats.length === 0) return null;
+                        return (
+                      <div className="flex divide-x" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
+                        {visibleStats.map((stat) => (
+                          <div key={stat.label} className="flex-1 px-6 py-4 text-center" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
+                            <p className={cn("text-[18px] font-black", text)}>{Number(stat.value).toLocaleString()}</p>
                             <p className={cn("text-[9px] font-black uppercase tracking-widest opacity-60 mt-0.5", sub)}>{stat.label}</p>
                           </div>
                         ))}
                       </div>
+                        );
+                      })()}
+
+                      {/* Action row (replyagent: per-account feature buttons, ACTIVE only) */}
+                      {(account.status ?? "ACTIVE") === "ACTIVE" && (
+                        <div className={cn("px-6 py-4 border-t flex flex-wrap gap-2", softBorder)}>
+                          <button onClick={() => setDefaultReplyAccount(account)} className={cn(outlineBtn, "h-9 px-4")}>
+                            <Reply size={11} /> Default reply
+                          </button>
+                          <button onClick={() => setIceBreakersAccount(account)} className={cn(outlineBtn, "h-9 px-4")}>
+                            <MessageSquare size={11} /> Quick starter
+                          </button>
+                          <button onClick={() => setMainMenuAccount(account)} className={cn(outlineBtn, "h-9 px-4")}>
+                            <BookOpen size={11} /> Main menu
+                          </button>
+                          {account.platform !== "facebook" && (
+                            <button onClick={() => setStoryMentionAccount(account)} className={cn(outlineBtn, "h-9 px-4")}>
+                              <ImageIcon size={11} /> Story mention
+                            </button>
+                          )}
+                          <button onClick={() => setPageUsersAccount(account)} className={cn(outlineBtn, "h-9 px-4")}>
+                            <UserCog size={11} /> Page users
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -377,13 +455,80 @@ export default function InstagramSection() {
                   </p>
                 </div>
               </div>
+              <label className={cn("flex items-start gap-3 px-3 py-3 rounded-xl border cursor-pointer transition-all", deleteMedia ? "border-rose-500/40 bg-rose-500/5" : softBorder)}>
+                <input
+                  type="checkbox"
+                  checked={deleteMedia}
+                  onChange={(e) => setDeleteMedia(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-rose-500 cursor-pointer"
+                />
+                <span className={cn("text-[11px] font-medium leading-relaxed", sub)}>
+                  Also delete all stored media (avatar &amp; message attachments) for this account from storage. This cannot be undone.
+                </span>
+              </label>
               <div className="flex justify-end gap-2">
                 <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() => { deleteMutation.mutate(accountToDelete.id); setShowDeleteConfirm(false); }}
+                  onClick={() => { deleteMutation.mutate({ id: accountToDelete.id, deleteMedia }); setShowDeleteConfirm(false); }}
                   className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
                 >
                   <Trash2 size={12} /> Delete
+                </AlertDialogAction>
+              </div>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <InstagramDefaultReplyDialog
+          open={!!defaultReplyAccount}
+          account={defaultReplyAccount}
+          onClose={() => setDefaultReplyAccount(null)}
+        />
+
+        <InstagramIceBreakersDialog
+          open={!!iceBreakersAccount}
+          account={iceBreakersAccount}
+          onClose={() => setIceBreakersAccount(null)}
+        />
+
+        <InstagramMainMenuDialog
+          open={!!mainMenuAccount}
+          account={mainMenuAccount}
+          onClose={() => setMainMenuAccount(null)}
+        />
+
+        <InstagramStoryMentionDialog
+          open={!!storyMentionAccount}
+          account={storyMentionAccount}
+          onClose={() => setStoryMentionAccount(null)}
+        />
+
+        <InstagramPageUsersDialog
+          open={!!pageUsersAccount}
+          account={pageUsersAccount}
+          onClose={() => setPageUsersAccount(null)}
+        />
+
+        {/* Limit reached (replyagent: contact admin to raise the cap) */}
+        <AlertDialog open={showLimitReached} onOpenChange={setShowLimitReached}>
+          <AlertDialogContent className={cn("rounded-[2rem] border p-0 max-w-md overflow-hidden", card, border)}>
+            <div className="p-6 space-y-5 text-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                  <AlertCircle size={22} />
+                </div>
+                <div>
+                  <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Limit reached</h2>
+                  <p className={cn("text-[11px] font-medium opacity-60 mt-1.5 leading-relaxed", sub)}>
+                    You have reached the maximum limit of{" "}
+                    <span className="font-black text-amber-500">{igLimit}</span> Instagram{" "}
+                    {igLimit === 1 ? "account" : "accounts"}. Please contact your administrator to increase the limit.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-center">
+                <AlertDialogAction className="h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest transition-all">
+                  OK
                 </AlertDialogAction>
               </div>
             </div>

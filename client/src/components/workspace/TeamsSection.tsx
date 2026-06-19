@@ -359,18 +359,36 @@ export default function TeamsSection() {
                             </div>
                             <div className="flex items-center gap-2">
                               {distribution === "PRIORITY" && (
-                                <div className={cn("flex items-center gap-2 px-2.5 py-1.5 rounded-lg border", dark ? "border-slate-800 bg-slate-950/50" : "border-slate-200 bg-white")}>
+                                <div className={cn("flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg border", dark ? "border-slate-800 bg-slate-950/50" : "border-slate-200 bg-white")}>
                                   <span className={cn("text-[9px] font-black uppercase tracking-widest", sub)}>Priority</span>
-                                  <Input
-                                    type="number"
+                                  {/* Range slider (replyagent) + number box — both clamped 0–100, synced. */}
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
                                     value={agent.priority || 0}
                                     onChange={(e) => {
+                                      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
                                       const updated = [...selectedAgents];
-                                      updated[idx] = { ...updated[idx], priority: parseInt(e.target.value) || 0 };
+                                      updated[idx] = { ...updated[idx], priority: v };
+                                      setSelectedAgents(updated);
+                                    }}
+                                    className="h-1.5 w-24 cursor-pointer accent-primary"
+                                  />
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={agent.priority || 0}
+                                    onChange={(e) => {
+                                      const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                                      const updated = [...selectedAgents];
+                                      updated[idx] = { ...updated[idx], priority: v };
                                       setSelectedAgents(updated);
                                     }}
                                     className={cn("h-6 w-12 text-center text-[12px] font-black rounded border-none bg-transparent focus-visible:ring-0 p-0", text)}
                                   />
+                                  <span className={cn("text-[11px] font-black", sub)}>%</span>
                                 </div>
                               )}
                               <button

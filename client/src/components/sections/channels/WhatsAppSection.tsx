@@ -1315,10 +1315,10 @@ function AccountCard(props: {
             rel="noopener noreferrer"
             className={outlineBtn}
           >
-            Manage on Meta <ExternalLink size={12} />
+            Access BM <ExternalLink size={12} />
           </a>
           <a
-            href="https://business.whatsapp.com/products/platform-pricing"
+            href="https://developers.facebook.com/docs/whatsapp/pricing/"
             target="_blank"
             rel="noopener noreferrer"
             className={cn("text-[11px] font-bold underline-offset-2 hover:underline", dark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")}
@@ -1404,6 +1404,7 @@ function AccountCard(props: {
               onDefaultReply={() => props.onDefaultReply(number)}
               onToggleFeeder={() => props.onToggleFeeder(number)}
               onRegister={() => props.onRegisterNumber(number)}
+              onTemplates={props.onOpenTemplates}
             />
           ))
         )}
@@ -1424,6 +1425,7 @@ function PhoneNumberRow(props: {
   onDefaultReply: () => void;
   onToggleFeeder: () => void;
   onRegister: () => void;
+  onTemplates: () => void;
 }) {
   const { number, dark, text, sub, card, border } = props;
 
@@ -1623,6 +1625,12 @@ function PhoneNumberRow(props: {
               className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
             >
               <ReplyAll size={12} /> Default reply
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={props.onTemplates}
+              className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
+            >
+              <CopyIcon size={12} /> Manage Templates
             </DropdownMenuItem>
             <DropdownMenuItem onClick={props.onReconnect} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
               <RotateCw size={12} /> Refresh status
@@ -1966,7 +1974,7 @@ function EmptyIntegrationState({
         <img src="/images/automations/whatsapp.svg" alt="WhatsApp" className="w-8 h-8" />
       </div>
       <div className="space-y-1.5 max-w-sm">
-        <h3 className={cn("text-[14px] font-black tracking-tight", text)}>No integration found</h3>
+        <h3 className={cn("text-[14px] font-black tracking-tight", text)}>WhatsApp is not connected yet</h3>
         <p className={cn("text-[11px] font-medium opacity-60 leading-relaxed", sub)}>
           Connect your WhatsApp Business account now to get started.
         </p>

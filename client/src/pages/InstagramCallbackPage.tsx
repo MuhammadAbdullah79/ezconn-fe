@@ -12,6 +12,9 @@ export default function InstagramCallbackPage() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const errorParam = params.get("error");
+    // `state` carries the page id when this is a RECONNECT (re-auth of an
+    // existing account) rather than a fresh connect.
+    const reconnectPageId = params.get("state");
 
     if (errorParam) {
       const desc = params.get("error_description") ?? errorParam;
@@ -30,14 +33,24 @@ export default function InstagramCallbackPage() {
 
     const redirectUri = `${window.location.origin}/instagram-callback`;
 
-    apiRequest("POST", "/api/instagram/connect-business", { code, redirect_uri: redirectUri })
+    const endpoint = reconnectPageId
+      ? "/api/instagram/reconnect-business"
+      : "/api/instagram/connect-business";
+    const payload: Record<string, any> = { code, redirect_uri: redirectUri };
+    if (reconnectPageId) payload.page_id = reconnectPageId;
+
+    apiRequest("POST", endpoint, payload)
       .then(async (res) => {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.message ?? "Connection failed");
         }
         setStatus("success");
-        setMessage("Instagram account connected successfully!");
+        setMessage(
+          reconnectPageId
+            ? "Instagram account reconnected successfully!"
+            : "Instagram account connected successfully!",
+        );
         setTimeout(() => setLocation("/"), 2500);
       })
       .catch((err) => {

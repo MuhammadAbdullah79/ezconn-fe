@@ -77,6 +77,8 @@ export default function ManageAgentSection() {
 
   const [view, setView] = useState<"list" | "add" | "edit">("list");
   const [editingId, setEditingId] = useState<string | number | null>(null);
+  // True when editing the workspace owner — role is then locked (replyagent: is_owner).
+  const [editingOwner, setEditingOwner] = useState(false);
   const [activeTab, setActiveTab] = useState("agent");
   const [mobileAccess, setMobileAccess] = useState(false);
   const [limitIp, setLimitIp] = useState(false);
@@ -133,7 +135,15 @@ export default function ManageAgentSection() {
       return res.json();
     },
   });
+  // Workspace info — for the Login Policy timezone label (replyagent: workspace.timezone).
+  const { data: workspaceInfo } = useQuery<any>({
+    queryKey: ["/api/workspaces/current"],
+    queryFn: async () => (await apiRequest("GET", "/api/workspaces/current")).json(),
+  });
+  const workspaceTimezone = workspaceInfo?.timezone || "UTC";
+  // Only ACTIVE roles are assignable (replyagent: roles.filter(r => r.status === 'ACTIVE')).
   const roles: { id: string; name: string }[] = (rolesApiData?.roles || rolesApiData || [])
+    .filter((r: any) => (r.status ? r.status === "ACTIVE" : !r.isArchived))
     .map((r: any) => ({ id: String(r.id), name: r.name || "Role" }));
 
   // Real data for the agent access-scope tabs (replyagent user_accesses)
@@ -248,7 +258,7 @@ export default function ManageAgentSection() {
   // Real {id,label} lists for the scope tabs (ids saved into user_accesses)
   const systemFieldsList = (systemFieldsApi?.fields || []).map((f: any) => ({ id: String(f.id), label: f.name || f.slug || "Field" }));
   const customFieldsList = (customFieldsApi?.fields || []).map((f: any) => ({ id: String(f.id), label: f.label || f.name || f.system_name || "Field" }));
-  const tagsList = (tagsApiData?.tags || []).map((t: any) => ({ id: String(t.id), label: t.name || "Tag" }));
+  const tagsList = (tagsApiData?.tags || []).map((t: any) => ({ id: String(t.id), label: t.name || "Tag", color: t.bg_color || "#f3f4f6" }));
   const agentsList = agents.map((a) => ({ id: a.id, label: a.name || a.email }));
 
   // Flatten the real /all-channels payload into one selectable list. Each entry id is
@@ -267,6 +277,18 @@ export default function ManageAgentSection() {
   // Channel type → icon asset under /images/automations (zapi shares whatsapp, twilio = sms)
   const channelIcon = (type: string) =>
     `/images/automations/${type === "zapi" ? "whatsapp" : type === "twilio" ? "sms" : type}.svg`;
+
+  // Pick black/white text for a tag chip based on its background luminance
+  // (replyagent renders tags as their own coloured chips).
+  const readableText = (bg: string) => {
+    const hex = (bg || "").replace("#", "");
+    if (hex.length !== 6) return "#0f172a";
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.6 ? "#0f172a" : "#ffffff";
+  };
 
   const toggleAll = (
     checked: boolean,
@@ -305,12 +327,14 @@ export default function ManageAgentSection() {
     setSelectedChatAgents([]);
     setSelectedChatChannels([]);
     setEditingId(null);
+    setEditingOwner(false);
     setActiveTab("agent");
   };
 
   const handleEdit = (agent: Agent) => {
     setEditingId(agent.id);
     const o = agent.original || {};
+    setEditingOwner(o.is_owner == 1 || o.is_owner === true);
     const names = agent.name.split(" ");
     setFirstName(o.first_name || names[0] || "");
     setLastName(o.last_name || names.slice(1).join(" ") || "");
@@ -347,7 +371,11 @@ export default function ManageAgentSection() {
     setSelectedSystemFields(Array.isArray(o.systemFields) ? o.systemFields.map(String) : []);
     setSelectedCustomFields(Array.isArray(o.customFields) ? o.customFields.map(String) : []);
     setSelectedTags(Array.isArray(o.tags) ? o.tags.map(String) : []);
-    setSelectedChatAgents(Array.isArray(o.agents) ? o.agents.map(String) : []);
+    // An agent always keeps access to their own conversations — force self into
+    // the selection so the counter and saved payload include it (replyagent: own id pushed on mount).
+    setSelectedChatAgents(
+      Array.from(new Set([...(Array.isArray(o.agents) ? o.agents.map(String) : []), String(agent.id)])),
+    );
     // Channel access prefill — encode the per-type id lists back into `${type}:${id}`
     const chSel: string[] = [];
     const chObj = o.channels || {};
@@ -361,6 +389,15 @@ export default function ManageAgentSection() {
       toast({
         title: "Validation Error",
         description: "Please fill in First Name and Email.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Email must be a valid address (replyagent Vuelidate `email`).
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid email address.",
         variant: "destructive",
       });
       return;
@@ -502,77 +539,88 @@ export default function ManageAgentSection() {
                 <TabsContent value="agent" className="m-0 outline-none space-y-8">
                   <SectionHeading dark={dark} title="Agent" description="Basic information about this agent." />
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-3xl">
-                    <Field dark={dark} label="First Name" required>
-                      <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputCls} placeholder="e.g. Jonathan" />
-                    </Field>
-                    <Field dark={dark} label="Last Name">
-                      <Input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputCls} placeholder="e.g. Wick" />
-                    </Field>
-                    <Field dark={dark} label="Email Address" required>
-                      <Input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="wick@hightable.com" />
-                    </Field>
-                    <Field dark={dark} label="Role">
-                      <Select value={role} onValueChange={setRole}>
-                        <SelectTrigger className={inputCls}>
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
-                          {roles.length === 0 ? (
-                            <div className="px-3 py-2 text-[11px] font-medium opacity-60">No roles yet</div>
-                          ) : (
-                            roles.map((r) => (
-                              <SelectItem key={r.id} value={r.id} className="text-[12px] font-bold">{r.name}</SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field dark={dark} label="Interface Language">
-                      <Select value={language} onValueChange={setLanguage}>
-                        <SelectTrigger className={inputCls}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
-                          <SelectItem value="en-us" className="text-[12px] font-bold">English (US)</SelectItem>
-                          <SelectItem value="pt-br" className="text-[12px] font-bold">Portuguese (Brazil)</SelectItem>
-                          <SelectItem value="es" className="text-[12px] font-bold">Spanish</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
+                  {/* Two-column layout mirroring replyagent: left = identity fields,
+                      right = Phone / WhatsApp (with inline Enable-notifications). */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5 max-w-5xl">
+                    {/* Left column — identity */}
+                    <div className="space-y-5">
+                      <Field dark={dark} label="First Name" required>
+                        <Input value={firstName} maxLength={100} onChange={(e) => setFirstName(e.target.value)} className={inputCls} placeholder="e.g. Jonathan" />
+                      </Field>
+                      <Field dark={dark} label="Last Name">
+                        <Input value={lastName} maxLength={100} onChange={(e) => setLastName(e.target.value)} className={inputCls} placeholder="e.g. Wick" />
+                      </Field>
+                      <Field dark={dark} label="Email Address" required>
+                        <Input value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} placeholder="wick@hightable.com" />
+                      </Field>
+                      <Field dark={dark} label="Role">
+                        {editingOwner ? (
+                          // Workspace owner's role is locked (replyagent: is_owner → disabled "Workspace Owner").
+                          <Input value="Workspace Owner" disabled className={cn(inputCls, "opacity-70")} />
+                        ) : (
+                          <Select value={role} onValueChange={setRole}>
+                            <SelectTrigger className={inputCls}>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
+                              {roles.length === 0 ? (
+                                <div className="px-3 py-2 text-[11px] font-medium opacity-60">No roles yet</div>
+                              ) : (
+                                roles.map((r) => (
+                                  <SelectItem key={r.id} value={r.id} className="text-[12px] font-bold">{r.name}</SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </Field>
+                      {/* Interface Language is only set on create — hidden when editing
+                          (replyagent: v-show="!isEditing"). */}
+                      {view !== "edit" && (
+                        <Field dark={dark} label="Interface Language">
+                          <Select value={language} onValueChange={setLanguage}>
+                            <SelectTrigger className={inputCls}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className={cn("rounded-xl border shadow-2xl", dark ? "bg-[#0f1829] border-slate-800 text-white" : "bg-white border-slate-200")}>
+                              <SelectItem value="en-us" className="text-[12px] font-bold">English (US)</SelectItem>
+                              <SelectItem value="pt-br" className="text-[12px] font-bold">Portuguese (Brazil)</SelectItem>
+                              <SelectItem value="es" className="text-[12px] font-bold">Spanish</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                      )}
+                    </div>
 
-                  <div className="pt-6 border-t space-y-3 max-w-4xl" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
-                    <h4 className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Contact</h4>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Right column — Phone / WhatsApp (replyagent placement) */}
+                    <div className="space-y-5">
                       {[
-                        { label: "Phone Number", icon: Phone, value: phoneNumber, setter: setPhoneNumber, country: phoneCountry, countrySetter: setPhoneCountry, notify: phoneNotifications, notifySetter: setPhoneNotifications, notifyDisabled: false },
-                        { label: "WhatsApp Number", icon: MessageSquare, value: whatsappNumber, setter: setWhatsappNumber, country: whatsappCountry, countrySetter: setWhatsappCountry, notify: whatsappNotifications, notifySetter: setWhatsappNotifications, notifyDisabled: !whatsappNumber.trim() },
+                        { label: "Phone Number", value: phoneNumber, setter: setPhoneNumber, country: phoneCountry, countrySetter: setPhoneCountry, notify: phoneNotifications, notifySetter: setPhoneNotifications, notifyDisabled: false, notifyTip: "Receive SMS notifications for new conversations on this number." },
+                        { label: "WhatsApp Number", value: whatsappNumber, setter: setWhatsappNumber, country: whatsappCountry, countrySetter: setWhatsappCountry, notify: whatsappNotifications, notifySetter: setWhatsappNotifications, notifyDisabled: !whatsappNumber.trim(), notifyTip: "Receive WhatsApp notifications for new conversations on this number." },
                       ].map((row) => (
-                        <div key={row.label} className={cn("p-3 rounded-2xl border flex items-center gap-2.5", softBg, softBorder)}>
-                          <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
-                            <row.icon size={14} />
+                        <Field key={row.label} dark={dark} label={row.label}>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <PhoneInputWithFlag
+                                country={row.country}
+                                onCountryChange={row.countrySetter}
+                                value={row.value}
+                                onChange={row.setter}
+                                inputClassName={inputCls}
+                                isDark={dark}
+                              />
+                              {phoneError(row.value, row.country) && (
+                                <p className="text-[11px] text-rose-500 mt-1">{phoneError(row.value, row.country)}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Switch checked={row.notify} disabled={row.notifyDisabled} onCheckedChange={row.notifySetter} className="data-[state=checked]:bg-primary disabled:opacity-40" />
+                              <span className={cn("text-[11px] font-bold flex items-center gap-1 cursor-help whitespace-nowrap", sub)} title={row.notifyTip}>
+                                Enable notifications <Info size={11} />
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <FieldLabel dark={dark}>{row.label}</FieldLabel>
-                            <PhoneInputWithFlag
-                              country={row.country}
-                              onCountryChange={row.countrySetter}
-                              value={row.value}
-                              onChange={row.setter}
-                              inputClassName={inputCls}
-                              isDark={dark}
-                            />
-                            {phoneError(row.value, row.country) && (
-                              <p className="text-[11px] text-rose-500 mt-1">{phoneError(row.value, row.country)}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 pl-2.5 border-l shrink-0" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(226 232 240)" }}>
-                            <p className={cn("text-[9px] font-black uppercase tracking-wider leading-tight max-w-[64px]", text)} title="Enable notifications">Enable notifications</p>
-                            <Switch checked={row.notify} disabled={row.notifyDisabled} onCheckedChange={row.notifySetter} className="data-[state=checked]:bg-primary disabled:opacity-40" />
-                          </div>
-                        </div>
+                        </Field>
                       ))}
                     </div>
                   </div>
@@ -647,9 +695,16 @@ export default function ManageAgentSection() {
                   <div className="flex items-center justify-between gap-4">
                     <SectionHeading dark={dark} title="Login Policy" description="Specify the allowed login hours for this agent in the Workspace." />
                     <div className={cn("px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest shrink-0", dark ? "bg-slate-950/50 border-slate-800 text-slate-300" : "bg-slate-50 border-slate-200 text-slate-600")}>
-                      <Globe className="inline w-3 h-3 mr-1" /> Timezone: America/Fortaleza
+                      <Globe className="inline w-3 h-3 mr-1" /> Timezone: {workspaceTimezone}
                     </div>
                   </div>
+
+                  {/* Owner's login policy is locked (replyagent: owner_login_policy_disabled). */}
+                  {editingOwner && (
+                    <p className="text-[12px] font-bold text-rose-500">
+                      The workspace owner's login policy cannot be restricted.
+                    </p>
+                  )}
 
                   <div className={cn("rounded-[1.5rem] border overflow-hidden", softBg, softBorder)}>
                     <Table>
@@ -672,6 +727,7 @@ export default function ManageAgentSection() {
                             <TableCell className="py-3 px-6">
                               <Select
                                 value={loginVal}
+                                disabled={editingOwner}
                                 onValueChange={(v) => {
                                   setPolicyField(`${k}_login`, v);
                                   // Clear logout if it is no longer after the new login time
@@ -679,7 +735,7 @@ export default function ManageAgentSection() {
                                   if (lo && lo <= v) setPolicyField(`${k}_logout`, "");
                                 }}
                               >
-                                <SelectTrigger className={cn(inputCls, "h-9")}>
+                                <SelectTrigger className={cn(inputCls, "h-9", editingOwner && "opacity-50")}>
                                   <SelectValue placeholder="Select Time" />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-[300px] rounded-xl">
@@ -688,8 +744,8 @@ export default function ManageAgentSection() {
                               </Select>
                             </TableCell>
                             <TableCell className="py-3 px-6">
-                              <Select value={loginPolicy[`${k}_logout`] || ""} onValueChange={(v) => setPolicyField(`${k}_logout`, v)} disabled={!loginVal}>
-                                <SelectTrigger className={cn(inputCls, "h-9", !loginVal && "opacity-50")}>
+                              <Select value={loginPolicy[`${k}_logout`] || ""} onValueChange={(v) => setPolicyField(`${k}_logout`, v)} disabled={!loginVal || editingOwner}>
+                                <SelectTrigger className={cn(inputCls, "h-9", (!loginVal || editingOwner) && "opacity-50")}>
                                   <SelectValue placeholder="Select Time" />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-[300px] rounded-xl">
@@ -711,10 +767,10 @@ export default function ManageAgentSection() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={cn("text-[12px] font-black uppercase tracking-widest", text)}>Limit access by IP address</p>
-                        {limitIp && <Input value={loginPolicy.ip || ""} onChange={(e) => setPolicyField("ip", e.target.value)} placeholder="Type IP Address..." className={cn(inputCls, "h-9 mt-2 max-w-xs")} />}
+                        {limitIp && <Input value={loginPolicy.ip || ""} disabled={editingOwner} onChange={(e) => setPolicyField("ip", e.target.value)} placeholder="Type IP Address..." className={cn(inputCls, "h-9 mt-2 max-w-xs")} />}
                       </div>
                     </div>
-                    <Switch checked={limitIp} onCheckedChange={setLimitIp} className="data-[state=checked]:bg-primary" />
+                    <Switch checked={limitIp} disabled={editingOwner} onCheckedChange={setLimitIp} className="data-[state=checked]:bg-primary disabled:opacity-40" />
                   </div>
                 </TabsContent>
 
@@ -747,7 +803,15 @@ export default function ManageAgentSection() {
                       <div className={cn("flex items-center gap-3 px-5 py-3 border-b", softBorder, dark ? "bg-slate-900/30" : "bg-white/60")}>
                         <Checkbox
                           checked={cfg.selected.length === cfg.list.length && cfg.list.length > 0}
-                          onCheckedChange={(c) => toggleAll(c as boolean, cfg.list.map((i: any) => i.id), cfg.setter)}
+                          onCheckedChange={(c) => {
+                            const all = cfg.list.map((i: any) => i.id);
+                            // Chat Agents: deselect-all still keeps the agent's own row (replyagent parity).
+                            if (cfg.key === "chat-agents" && !c && editingId != null) {
+                              cfg.setter([String(editingId)]);
+                            } else {
+                              toggleAll(c as boolean, all, cfg.setter);
+                            }
+                          }}
                         />
                         <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Select All</span>
                       </div>
@@ -776,7 +840,17 @@ export default function ManageAgentSection() {
                                 {cfg.key === "chat-channels" && item.type && (
                                   <img src={channelIcon(item.type)} alt={item.type} className="w-7 h-7 rounded-lg shrink-0 object-contain" />
                                 )}
-                                <span className={cn("text-[12px] font-bold", text)}>{item.label}</span>
+                                {cfg.key === "tags" ? (
+                                  // Tags render as their own coloured chip (replyagent <Tag>).
+                                  <span
+                                    className="text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                                    style={{ backgroundColor: item.color, color: readableText(item.color) }}
+                                  >
+                                    {item.label}
+                                  </span>
+                                ) : (
+                                  <span className={cn("text-[12px] font-bold", text)}>{item.label}</span>
+                                )}
                                 {isSelf && <span className={cn("text-[9px] font-black uppercase tracking-widest", sub)}>You</span>}
                               </div>
                               {checked && <Check size={14} className="text-primary" />}

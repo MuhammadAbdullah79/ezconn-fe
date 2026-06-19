@@ -47,6 +47,7 @@ import {
 import CustomDropdown from "@/components/CustomDropdown";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import ContactProfileModal from "@/components/ContactProfileModal";
@@ -295,16 +296,23 @@ export default function AppSidebar() {
   }, [isSearchOpen]);
 
   // Menu items for search filtering
-  const menuItems = [
+  // Per-item permission gating (replyagent: each nav link has a `v-canany`).
+  // An item with `permissions` is hidden unless the user has one of them; items
+  // without `permissions` are always shown (gated in their own chunks later).
+  const allMenuItems: Array<{ label: string; href: string; icon: any; permissions?: string[] }> = [
     { label: "Insights", href: "/insights", icon: BarChart2 },
     { label: "Smart Flows", href: "/automations", icon: GitMerge },
-    { label: "Campaign Manager", href: "/campaigns", icon: Send },
-    { label: "Contacts", href: "/contacts", icon: Users },
-    { label: "Inbox", href: "/conversations/inbox", icon: Mail },
+    { label: "Campaign Manager", href: "/campaigns", icon: Send, permissions: ["workspace.broadcast.view"] },
+    { label: "Contacts", href: "/contacts", icon: Users, permissions: ["workspace.company.view"] },
+    { label: "Inbox", href: "/conversations/inbox", icon: Mail, permissions: ["workspace.inbox.access"] },
     { label: "Conversation Logs", href: "/conversations/conversation-logs", icon: FileText },
     { label: "Call Logs", href: "/conversations/call-logs", icon: Phone },
     { label: "Settings", href: "/settings", icon: Settings },
   ];
+
+  // Hide nav items the current user lacks permission for (replyagent v-canany parity).
+  const userPerms = (getUserInfo().permissions as string[] | undefined) ?? [];
+  const menuItems = allMenuItems.filter((item) => hasAnyPerm(userPerms, item.permissions ?? []));
 
   return (
     <>

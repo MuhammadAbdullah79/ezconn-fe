@@ -56,6 +56,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 
 const mockVoices = [
   { name: "Alloy", id: "alloy" },
@@ -82,6 +83,19 @@ export default function AIVoiceAssistantsSection() {
   const dark = mode === "dark";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // AI Feeder access (replyagent $canAny over the feeder permissions).
+  const _voicePerms = getUserInfo().permissions ?? [];
+  const canManageFeeder = hasAnyPerm(_voicePerms, [
+    "workspace.ai.create_feeder",
+    "workspace.ai.edit_feeder",
+    "workspace.ai.delete_feeder",
+  ]);
+  // Voice assistant permissions (replyagent AIVoice/Index.vue $can).
+  //  - voice.manage → create / edit / status-toggle
+  //  - voice.delete → delete
+  const canVoiceManage = hasAnyPerm(_voicePerms, ["workspace.ai.voice.manage"]);
+  const canVoiceDelete = hasAnyPerm(_voicePerms, ["workspace.ai.voice.delete"]);
 
   const [viewMode, setViewMode] = useState<"list" | "edit">("list");
   const [editStep, setEditStep] = useState<"type_selection" | "form">("type_selection");
@@ -787,9 +801,11 @@ export default function AIVoiceAssistantsSection() {
                 <span className={text}>{availableCredits}</span>
                 <span className="opacity-60">mins/secs</span>
               </div>
-              <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
-                <Plus size={12} /> Add Assistant
-              </button>
+              {canVoiceManage && (
+                <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
+                  <Plus size={12} /> Add Assistant
+                </button>
+              )}
             </div>
           </div>
 
@@ -844,18 +860,21 @@ export default function AIVoiceAssistantsSection() {
                         <td className="py-3 px-6">
                           <Switch
                             checked={agent.status === "ACTIVE"}
+                            disabled={!canVoiceManage}
                             onCheckedChange={handleStatusToggle}
                             className="data-[state=checked]:bg-primary"
                           />
                         </td>
                         <td className="py-3 px-6 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleEdit(agent)}
-                              className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-primary/10 hover:text-primary text-slate-400" : "hover:bg-primary/10 hover:text-primary text-slate-500")}
-                            >
-                              <Pencil size={12} />
-                            </button>
+                            {canVoiceManage && (
+                              <button
+                                onClick={() => handleEdit(agent)}
+                                className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-primary/10 hover:text-primary text-slate-400" : "hover:bg-primary/10 hover:text-primary text-slate-500")}
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            )}
                             <button
                               onClick={() => toast({ title: "Logs", description: `Opening logs for ${agent.name}` })}
                               className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-primary/10 hover:text-primary text-slate-400" : "hover:bg-primary/10 hover:text-primary text-slate-500")}
@@ -869,18 +888,22 @@ export default function AIVoiceAssistantsSection() {
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[160px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
-                                <DropdownMenuItem
-                                  onClick={() => toast({ title: "AI Feeder", description: `Opening AI Feeder for ${agent.name}` })}
-                                  className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
-                                >
-                                  <Plug size={12} /> AI Feeder
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => { setAgentToDelete(agent); setShowDeleteConfirm(true); }}
-                                  className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500"
-                                >
-                                  <Trash2 size={12} /> Delete
-                                </DropdownMenuItem>
+                                {canManageFeeder && (
+                                  <DropdownMenuItem
+                                    onClick={() => toast({ title: "AI Feeder", description: `Opening AI Feeder for ${agent.name}` })}
+                                    className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
+                                  >
+                                    <Plug size={12} /> AI Feeder
+                                  </DropdownMenuItem>
+                                )}
+                                {canVoiceDelete && (
+                                  <DropdownMenuItem
+                                    onClick={() => { setAgentToDelete(agent); setShowDeleteConfirm(true); }}
+                                    className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500"
+                                  >
+                                    <Trash2 size={12} /> Delete
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>

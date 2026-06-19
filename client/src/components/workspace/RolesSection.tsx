@@ -3,11 +3,28 @@ import {
   Shield, ShieldCheck, Plus, ChevronLeft, Loader2, Archive, RotateCcw,
   Pencil, Settings, Share2, UserCog, Sparkles, Lock,
   Search, CheckCircle2, Zap, User, Users, Scale, Bot,
+  ChevronDown, Info, Link2, Calendar,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -36,6 +53,9 @@ const WORKSPACE_GROUP_ICONS: Record<string, React.ElementType> = {
   'workspace.company.*':     Users,
   'workspace.broadcast.*':   Sparkles,
   'workspace.legal.*':       Scale,
+  'workspace.settings.connect': Link2,
+  'workspace.ai.*':          Bot,
+  'workspace.booking.*':     Calendar,
 };
 
 export default function RolesSection() {
@@ -54,6 +74,12 @@ export default function RolesSection() {
   const [editingRole, setEditingRole] = useState<any>(null);
   // expandedCategory is now the group slug from acl_permissions (e.g. 'workspace.inbox.*')
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  // Accordion: which permission groups are expanded (replyagent Disclosure parity —
+  // each group collapses/expands independently; all collapsed by default).
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  // Confirm dialog before saving an EDIT (replyagent prompt: "changes will affect
+  // all users assigned this role").
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   const card       = dark ? "bg-[#0f1829]"    : "bg-white";
@@ -150,7 +176,17 @@ export default function RolesSection() {
   });
 
   const togglePermission = (slug: string) => {
+    if (roleLocked) return; // owner/system role permissions are not editable
     setPermissions((prev) => ({ ...prev, [slug]: !prev[slug] }));
+  };
+
+  // Accordion expand/collapse for a permission group (replyagent Disclosure).
+  const toggleGroup = (slug: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      next.has(slug) ? next.delete(slug) : next.add(slug);
+      return next;
+    });
   };
 
   const handleEnableAll = (checked: boolean) => {
@@ -177,16 +213,43 @@ export default function RolesSection() {
     setExpandedCategory(permsTree?.[0]?.slug || null);
   };
 
-  const handleSave = () => {
-    if (!roleName.trim()) {
-      toast({ title: "Validation", description: "Role name is required.", variant: "destructive" });
-      return;
-    }
+  // Role being edited is a built-in/system role (e.g. owner) → permissions locked
+  // (replyagent: role.slug === 'owner' → all switches ON + disabled).
+  const roleLocked = !!editingRole?.isSystem;
+
+  // Validation mirrors replyagent: name required (3–100), description ≤300,
+  // at least one permission selected.
+  const validateRole = (): string | null => {
+    const name = roleName.trim();
+    if (!name) return "Please enter role name";
+    if (name.length < 3 || name.length > 100) return "Minimum 3 and maximum 100 characters allowed";
+    if (roleDescription.length > 300) return "Maximum 300 characters allowed";
+    if (collectSelectedSlugs().length === 0) return "Please select at least one permission";
+    return null;
+  };
+
+  // Actually persist the role (called directly for create, or after the edit
+  // confirmation prompt).
+  const doSave = () => {
     const slugs = collectSelectedSlugs();
     if (editingRole) {
       updateMutation.mutate({ id: editingRole.id, data: { name: roleName, description: roleDescription, icon: selectedIcon.name, permissions: slugs } });
     } else {
       createMutation.mutate({ name: roleName, description: roleDescription, icon: selectedIcon.name, permissions: slugs });
+    }
+  };
+
+  const handleSave = () => {
+    const err = validateRole();
+    if (err) {
+      toast({ title: "Validation", description: err, variant: "destructive" });
+      return;
+    }
+    // Editing affects every user assigned this role → confirm first (replyagent prompt).
+    if (editingRole) {
+      setConfirmSaveOpen(true);
+    } else {
+      doSave();
     }
   };
 
@@ -313,115 +376,125 @@ export default function RolesSection() {
                 </div>
               </div>
 
-              {/* Right Panel: Permissions */}
+              {/* Right Panel: Permissions — collapsible accordion (replyagent Disclosure parity) */}
               <div className="flex-1 flex flex-col min-w-0">
-                {/* Category Tabs — now driven by real acl_permissions groups */}
-                <div className={cn("px-6 py-3 border-b flex gap-2 overflow-x-auto", softBorder)}>
-                  {loadingPerms ? (
-                    <div className="flex items-center gap-2 py-1">
-                      <Loader2 size={12} className="animate-spin text-primary" />
-                      <span className={cn("text-[10px]", sub)}>Loading...</span>
-                    </div>
-                  ) : (permsTree || []).map((group: any) => {
-                    const count = (group.children || []).filter((c: any) => permissions[c.slug]).length;
-                    const active = expandedCategory === group.slug;
-                    const Icon = WORKSPACE_GROUP_ICONS[group.slug] || Shield;
-                    return (
-                      <button
-                        key={group.slug}
-                        onClick={() => setExpandedCategory(group.slug)}
-                        className={cn(
-                          "inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest px-4 h-9 rounded-xl transition-all whitespace-nowrap",
-                          active
-                            ? "bg-primary text-white shadow-lg shadow-primary/20"
-                            : dark
-                              ? "bg-slate-950/50 text-slate-400 hover:text-primary"
-                              : "bg-white text-slate-500 hover:text-primary border border-slate-200"
-                        )}
-                      >
-                        <Icon size={12} />
-                        {group.name}
-                        {count > 0 && (
-                          <span className={cn(
-                            "px-1.5 py-0.5 rounded text-[9px] font-black",
-                            active ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
-                          )}>
-                            {count}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Permissions List — driven by selected group's children */}
-                <div className="flex-1 p-6">
-                  {loadingPerms ? (
-                    <div className="flex items-center justify-center py-20">
-                      <Loader2 size={20} className="animate-spin text-primary" />
-                    </div>
-                  ) : (permsTree || [])
-                    .filter((g: any) => g.slug === expandedCategory)
-                    .map((cat: any) => (
-                      <div key={cat.slug} className="space-y-4">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                            {(() => { const Icon = WORKSPACE_GROUP_ICONS[cat.slug] || Shield; return <Icon size={14} />; })()}
-                          </div>
-                          <div>
-                            <h2 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{cat.name}</h2>
-                            <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
-                              Grant access to {cat.name.toLowerCase()} capabilities
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          {(cat.children || []).map((perm: any) => {
-                            const checked = !!permissions[perm.slug];
-                            return (
-                              <div
-                                key={perm.slug}
-                                onClick={() => togglePermission(perm.slug)}
-                                className={cn(
-                                  "flex items-center justify-between p-4 rounded-[1.25rem] border cursor-pointer transition-all",
-                                  checked
-                                    ? "bg-primary/5 border-primary/30"
-                                    : dark
-                                      ? "bg-slate-950/40 border-slate-800 hover:border-primary/20"
-                                      : "bg-slate-50/50 border-slate-100 hover:border-primary/20"
-                                )}
-                              >
-                                <div className="flex items-start gap-3 pr-4">
-                                  <div className={cn(
-                                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
-                                    checked ? "bg-primary text-white" : "bg-primary/10 text-primary"
-                                  )}>
-                                    <CheckCircle2 size={14} />
-                                  </div>
-                                  <div>
-                                    <p className={cn("text-[12px] font-black tracking-tight", text)}>{perm.name}</p>
-                                    <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>{perm.description}</p>
-                                  </div>
-                                </div>
-                                <Switch
-                                  checked={checked}
-                                  onCheckedChange={() => togglePermission(perm.slug)}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="data-[state=checked]:bg-primary shrink-0"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
+                <TooltipProvider delayDuration={200}>
+                  <div className="flex-1 p-6 space-y-3 overflow-y-auto">
+                    {loadingPerms ? (
+                      <div className="flex items-center justify-center py-20">
+                        <Loader2 size={20} className="animate-spin text-primary" />
                       </div>
-                    ))
-                  }
-                </div>
+                    ) : (permsTree || []).map((group: any) => {
+                      const Icon = WORKSPACE_GROUP_ICONS[group.slug] || Shield;
+                      const open = openGroups.has(group.slug);
+                      const count = (group.children || []).filter((c: any) => permissions[c.slug]).length;
+                      return (
+                        <div key={group.slug} className={cn("rounded-[1.25rem] border overflow-hidden", dark ? "border-slate-800" : "border-slate-200")}>
+                          {/* Group header — click to expand/collapse */}
+                          <button
+                            type="button"
+                            onClick={() => toggleGroup(group.slug)}
+                            className={cn(
+                              "w-full flex items-center justify-between px-5 py-4 transition-all",
+                              dark ? "bg-slate-950/40 hover:bg-slate-950/60" : "bg-slate-50/60 hover:bg-slate-100/60"
+                            )}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary/10 text-primary shrink-0">
+                                <Icon size={14} />
+                              </div>
+                              <h2 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{group.name}</h2>
+                              {count > 0 && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-primary/10 text-primary">{count}</span>
+                              )}
+                            </div>
+                            <ChevronDown size={16} className={cn("text-slate-400 transition-transform duration-200", open && "rotate-180")} />
+                          </button>
+
+                          {/* Group panel — permission rows */}
+                          {open && (
+                            <div className="px-5 pb-4 pt-1 space-y-3">
+                              {(group.children || []).map((perm: any) => {
+                                const checked = roleLocked ? true : !!permissions[perm.slug];
+                                return (
+                                  <div
+                                    key={perm.slug}
+                                    onClick={() => togglePermission(perm.slug)}
+                                    className={cn(
+                                      "flex items-center justify-between p-4 rounded-[1.25rem] border transition-all",
+                                      roleLocked ? "cursor-not-allowed" : "cursor-pointer",
+                                      checked
+                                        ? "bg-primary/5 border-primary/30"
+                                        : dark
+                                          ? "bg-slate-950/40 border-slate-800 hover:border-primary/20"
+                                          : "bg-slate-50/50 border-slate-100 hover:border-primary/20"
+                                    )}
+                                  >
+                                    <div className="flex items-start gap-3 pr-4">
+                                      <div className={cn(
+                                        "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all",
+                                        checked ? "bg-primary text-white" : "bg-primary/10 text-primary"
+                                      )}>
+                                        <CheckCircle2 size={14} />
+                                      </div>
+                                      <div>
+                                        <p className={cn("text-[12px] font-black tracking-tight flex items-center gap-1.5", text)}>
+                                          {perm.name}
+                                          {perm.tooltip && (
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <span onClick={(e) => e.stopPropagation()} className="text-slate-400 hover:text-primary cursor-help">
+                                                  <Info size={12} />
+                                                </span>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="right" className="max-w-xs text-[11px] leading-relaxed">
+                                                {perm.tooltip}
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          )}
+                                        </p>
+                                        <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>{perm.description}</p>
+                                      </div>
+                                    </div>
+                                    <Switch
+                                      checked={checked}
+                                      disabled={roleLocked}
+                                      onCheckedChange={() => togglePermission(perm.slug)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="data-[state=checked]:bg-primary shrink-0"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </TooltipProvider>
               </div>
 
             </div>
         </CardContent>
+
+        {/* Confirm before saving an EDIT — replyagent prompt parity. */}
+        <AlertDialog open={confirmSaveOpen} onOpenChange={setConfirmSaveOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Save changes?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The changes will affect all the users who are assigned this role. Are you sure you want to continue?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { setConfirmSaveOpen(false); doSave(); }}>
+                Yes, continue
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </Card>
     );
   }

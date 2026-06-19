@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 import { useSocket } from "@/hooks/use-socket";
 import {
@@ -868,6 +869,26 @@ export default function ConversationsInbox() {
     },
   });
 
+  // Delete a single sent message (replyagent ZapiMessages deleteMessage). Gated
+  // in the UI by `canDeleteMessage`. Backend: POST /api/inbox/message/delete.
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (vars: { messageId: number; channel: string }) => {
+      const res = await apiRequest("POST", `/api/inbox/message/delete`, {
+        message_id: vars.messageId,
+        channel: vars.channel,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      if (selectedConversation) {
+        queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
+      }
+      toast({ title: "Message deleted" });
+    },
+    onError: (err: any) =>
+      toast({ title: "Couldn't delete message", description: err?.message ?? "", variant: "destructive" }),
+  });
+
   // ─── Folders sidebar (uses already-existing /folders endpoints) ───
 
   const { data: foldersResponse } = useQuery<any>({
@@ -1158,6 +1179,41 @@ export default function ConversationsInbox() {
       };
     } catch { return { id: null, name: 'Me' }; }
   }, []);
+
+  // ─── Reply permission gate (replyagent MessageComposer parity) ───
+  // The reply composer is shown only when the agent may message this chat:
+  //   isAssigned (has `send_message` perm OR the chat is assigned to ME)
+  //   || canMessageUnassignedConversations (has `message_unassigned` perm)
+  // Otherwise the composer is replaced with an "assign this chat" prompt.
+  // Owners hold `workspace.*`, so this is always true for them (no regression).
+  const userPerms = (getUserInfo().permissions as string[] | undefined) ?? [];
+  const canSendWithoutAssignment = hasAnyPerm(userPerms, ["workspace.inbox.user.can.send_message"]);
+  const canMessageUnassigned = hasAnyPerm(userPerms, ["workspace.inbox.message_unassigned_conversations"]);
+  const assignedToMe = !!currentUser.id && assignedAgent === currentUser.id;
+  const canReply = canSendWithoutAssignment || assignedToMe || canMessageUnassigned;
+  // Whether the agent may (re)assign conversations (replyagent: v-can on the
+  // assign action). Owners hold `workspace.*` so this is always true for them.
+  const canAssignConversations = hasAnyPerm(userPerms, ["workspace.inbox.user.can.assign_conversations"]);
+  // "Block" permissions hide a folder when the agent HAS them (replyagent
+  // getSystemFolders). These use an EXACT slug match — NOT hasAnyPerm — so a
+  // `workspace.*` owner (who lacks the literal block slug) is never blocked.
+  const blockQueueFolder = userPerms.includes("workspace.inbox.user.queue_blocked");
+  const blockDoneFolder = userPerms.includes("workspace.inbox.block_done_folder");
+  // Block the delete-conversation action when the agent holds this "block"
+  // permission (replyagent hasBlockedDeleting). Exact match → owners aren't blocked.
+  const blockDeletingChats = userPerms.includes("workspace.inbox.user.block_deleting_chats");
+  // "Allow" permission — agent may delete individual sent messages (replyagent
+  // ZapiMessages canDeleteMessages). Owners pass via the `workspace.*` wildcard.
+  const canDeleteMessage = hasAnyPerm(userPerms, ["workspace.inbox.qr.delete_message"]);
+  // "Hide" permission — when the agent HOLDS `contact.view_channel`, the contact's
+  // channel info (phone/whatsapp/email) is hidden (replyagent canSeeChannels).
+  // Exact match → owners (no literal slug) keep seeing channel info.
+  const canSeeChannels = !userPerms.includes("workspace.inbox.contact.view_channel");
+  // "Block" permission — when the agent HOLDS `contact.view_profile`, the button
+  // that opens the full contact profile is hidden (replyagent: Profile button is
+  // wrapped in v-if="!includes('...view_profile')"). Exact match → owners (no
+  // literal slug) keep access to the full profile.
+  const canViewProfile = !userPerms.includes("workspace.inbox.contact.view_profile");
 
   // Fetch workspace members — inbox is workspace-scoped. Workspace users lack
   // agency.users.* permission, so calling /agencies/:id/members would 403.
@@ -2065,7 +2121,10 @@ export default function ConversationsInbox() {
                   { key: "queue",     label: "Queue",     count: tabCounts.queue },
                   { key: "upcoming",  label: "Upcoming",  count: tabCounts.upcoming },
                   { key: "completed", label: "Done",      count: tabCounts.completed },
-                ].map(({ key, label, count }) => (
+                ].filter(({ key }) =>
+                  !(key === "queue" && blockQueueFolder) &&
+                  !(key === "completed" && blockDoneFolder)
+                ).map(({ key, label, count }) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
@@ -2658,20 +2717,24 @@ export default function ConversationsInbox() {
                           Schedule reminder
                         </DropdownMenuItem>
 
-                        <DropdownMenuSeparator />
-
-                        {/* Delete conversation (soft delete) */}
-                        <DropdownMenuItem
-                          onClick={() => {
-                            if (selectedConversation) {
-                              deleteInboxMutation.mutate(selectedConversation);
-                            }
-                          }}
-                          className="text-red-600 dark:text-red-400"
-                        >
-                          <Trash2 size={16} className="mr-2" />
-                          Delete conversation
-                        </DropdownMenuItem>
+                        {/* Delete conversation (soft delete) — hidden when the agent
+                            holds `block_deleting_chats` (replyagent parity). */}
+                        {!blockDeletingChats && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (selectedConversation) {
+                                  deleteInboxMutation.mutate(selectedConversation);
+                                }
+                              }}
+                              className="text-red-600 dark:text-red-400"
+                            >
+                              <Trash2 size={16} className="mr-2" />
+                              Delete conversation
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -2753,6 +2816,20 @@ export default function ConversationsInbox() {
                                   />
                                 </PopoverContent>
                               </Popover>
+                              {canDeleteMessage && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const ch = conversations.find((c: Conversation) => c.id === selectedConversation)?.channel || "whatsapp";
+                                    deleteMessageMutation.mutate({ messageId: msg.id, channel: ch });
+                                  }}
+                                  className="h-7 w-7 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-110 transition-transform"
+                                  title="Delete message"
+                                  data-testid={`button-delete-${msg.id}`}
+                                >
+                                  <Trash2 size={13} className="text-muted-foreground" />
+                                </button>
+                              )}
                             </div>
                           )}
 
@@ -2932,6 +3009,20 @@ export default function ConversationsInbox() {
                                   />
                                 </PopoverContent>
                               </Popover>
+                              {canDeleteMessage && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const ch = conversations.find((c: Conversation) => c.id === selectedConversation)?.channel || "whatsapp";
+                                    deleteMessageMutation.mutate({ messageId: msg.id, channel: ch });
+                                  }}
+                                  className="h-7 w-7 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-110 transition-transform"
+                                  title="Delete message"
+                                  data-testid={`button-delete-${msg.id}`}
+                                >
+                                  <Trash2 size={13} className="text-muted-foreground" />
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2942,8 +3033,9 @@ export default function ConversationsInbox() {
               </div>
               <Separator />
 
-              {/* Message Input or Assignment Prompt */}
-              {assignedAgent !== null ? (
+              {/* Message Input or Assignment Prompt — gated by reply permission
+                  (replyagent: isAssigned || canMessageUnassignedConversations) */}
+              {canReply ? (
                 <div className="p-4 flex-shrink-0 relative">
                   {/* Attached files preview */}
                   {(attachedFiles.length > 0 || recordedAudio) && (
@@ -3218,7 +3310,7 @@ export default function ConversationsInbox() {
                 <div className="p-6 flex-shrink-0 bg-muted/30 flex flex-col items-center justify-center gap-3">
                   <AlertCircle className="w-6 h-6 text-muted-foreground" />
                   <div className="text-center">
-                    <p className="text-sm font-medium text-foreground">Assign this chat to start messaging</p>
+                    <p className="text-sm font-medium text-foreground">To send messages, please assign this chat to an agent.</p>
                     <p className="text-xs text-muted-foreground mt-1">Use the assignment options in the contact profile to get started</p>
                   </div>
                 </div>
@@ -3265,6 +3357,9 @@ export default function ConversationsInbox() {
               onUpdateBasicDetails={handleUpdateBasicDetails}
               assignedAgent={assignedAgent}
               onAssignAgent={handleAssignAgent}
+              canAssignConversations={canAssignConversations}
+              canSeeChannels={canSeeChannels}
+              canViewProfile={canViewProfile}
               agentOptions={agentOptions}
               involvedTeams={involvedTeamsByConv[selectedConversation || 0]}
               onUpdateInvolvedTeams={handleUpdateInvolvedTeams}

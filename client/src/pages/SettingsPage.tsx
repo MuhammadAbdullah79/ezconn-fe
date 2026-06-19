@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   LayoutGrid,
@@ -81,10 +82,66 @@ export default function SettingsPage() {
     },
   });
   const allowBranding = currentWorkspace?.allow_branding ?? true;
+  // Gate the Live Chat settings by `workspace.inbox.manage` (replyagent: settings
+  // nav item + route both require it). Owners hold `workspace.*` so they pass.
+  const canManageLiveChat = hasAnyPerm(
+    (getUserInfo().permissions as string[] | undefined) ?? [],
+    ["workspace.inbox.manage"],
+  );
+
+  // Connect settings — gate each nav sub-item (replyagent Settings.vue):
+  //  - Integrations → $canAny over the 6 integration permissions
+  //  - API          → public_api
+  //  - Visual API   → visual_api
+  // Owners hold `workspace.*` so they pass via the wildcard.
+  const _connectPerms = (getUserInfo().permissions as string[] | undefined) ?? [];
+  const canConnectIntegrations = hasAnyPerm(_connectPerms, [
+    "workspace.settings.open_ai",
+    "workspace.settings.cloudinary",
+    "workspace.settings.active_campaign",
+    "workspace.settings.make_dot_com",
+    "workspace.settings.ms_tts",
+    "workspace.settings.eleven_labs",
+  ]);
+  const canPublicApi = hasAnyPerm(_connectPerms, ["workspace.settings.public_api"]);
+  const canVisualApi = hasAnyPerm(_connectPerms, ["workspace.settings.visual_api"]);
+
+  // AI (ChatGPT) settings — gate each sub-section by its permissions (replyagent
+  // Settings.vue $canAny per AI sub-area). Owners hold `workspace.*`.
+  //  - AI Chat Assistants ← create/edit/delete_knowledgebase
+  const canAiAssistants = hasAnyPerm(_connectPerms, [
+    "workspace.ai.create_knowledgebase",
+    "workspace.ai.edit_knowledgebase",
+    "workspace.ai.delete_knowledgebase",
+  ]);
+  //  - AI Knowledge base ← create_kb / delete_kb
+  const canAiKnowledgeBase = hasAnyPerm(_connectPerms, [
+    "workspace.ai.create_kb",
+    "workspace.ai.delete_kb",
+  ]);
+  //  - AI Voice Assistants ← voice.view
+  const canAiVoice = hasAnyPerm(_connectPerms, ["workspace.ai.voice.view"]);
+  //  - AI Report Builder ← manage_reports (single perm gates the whole screen)
+  const canAiReports = hasAnyPerm(_connectPerms, ["workspace.ai.manage_reports"]);
+  const chatGptChildren = [
+    ...(canAiAssistants ? [{ name: "AI Chat Assistants" }] : []),
+    ...(canAiVoice ? [{ name: "AI Voice Assistants" }] : []),
+    ...(canAiKnowledgeBase ? [{ name: "AI Knowledge base" }] : []),
+    ...(canAiReports ? [{ name: "AI Report Builder" }] : []),
+  ];
+
+  const connectChildren = [
+    ...(canConnectIntegrations ? [{ name: "Integrations", icon: Plug }] : []),
+    ...(canPublicApi ? [{ name: "API", icon: Code2 }] : []),
+    ...(canVisualApi ? [{ name: "Visual API", icon: Network }] : []),
+  ];
 
   const workspaceChildren = [
     { name: "Manage", path: "/settings/workspace/ManageSection" },
-    { name: "Live Chat", path: "/settings/workspace/live-chat" },
+    // Hide the Live Chat settings sub-item unless the agent may manage live chat.
+    ...(canManageLiveChat
+      ? [{ name: "Live Chat", path: "/settings/workspace/live-chat" }]
+      : []),
     // Hide the White Label sub-item when the agency has turned branding off for this workspace.
     ...(allowBranding
       ? [{ name: "White Label", path: "/settings/workspace/white-label" }]
@@ -118,22 +175,12 @@ export default function SettingsPage() {
     {
       name: "ChatGPT",
       icon: Bot,
-      children: [
-        { name: "AI Chat Assistants" },
-        { name: "AI Voice Assistants" },
-        { name: "AI Knowledge base" },
-        { name: "AI Report Builder" },
-
-      ],
+      children: chatGptChildren,
     },
     {
       name: "Connect",
       icon: Plug,
-      children: [
-        { name: "Integrations", icon: Plug },
-        { name: "API", icon: Code2 },
-        { name: "Visual API", icon: Network },
-      ],
+      children: connectChildren,
     },
 
     {
@@ -421,6 +468,7 @@ export default function SettingsPage() {
                   }
 
                   if (section.name === "ChatGPT") {
+                    if (!section.children || section.children.length === 0) return null;
                     return (
                       <div key={section.name} className="border-b border-slate-200/60 dark:border-slate-800 pb-3 mb-3 relative">
                         <div className="absolute -left-2 top-0 w-1 h-6 bg-primary/60 rounded-full" />
@@ -461,6 +509,7 @@ export default function SettingsPage() {
                   }
 
                   if (section.name === "Connect") {
+                    if (!section.children || section.children.length === 0) return null;
                     return (
                       <div key={section.name} className="border-b border-slate-200/60 dark:border-slate-800 pb-3 mb-3 relative">
                         <div className="absolute -left-2 top-0 w-1 h-6 bg-primary/60 rounded-full" />
@@ -524,12 +573,12 @@ export default function SettingsPage() {
           </Card>
 
           {/* Right Content Area */}
-          <div className="flex-1 flex flex-col min-h-0 p-6 bg-slate-50/60 dark:bg-[#0b1120] settings-pane">
+          <div className="flex-1 min-w-0 flex flex-col min-h-0 p-6 bg-slate-50/60 dark:bg-[#0b1120] settings-pane">
             <Card className="flex-1 overflow-auto border-0 shadow-none bg-transparent dark:bg-transparent">
               {activeSection === "Manage" && (
                 <ManageSection />)}
 
-              {activeSection === "Live Chat" && (
+              {activeSection === "Live Chat" && canManageLiveChat && (
                 <LiveChatSection />
               )}
 
@@ -564,27 +613,27 @@ export default function SettingsPage() {
               )}
 
 
-              {activeSection === "AI Chat Assistants" && (
+              {activeSection === "AI Chat Assistants" && canAiAssistants && (
                 <AIChatAssistantsSection />
               )}
-              {activeSection === "AI Voice Assistants" && (
+              {activeSection === "AI Voice Assistants" && canAiVoice && (
                 <AIVoiceAssistantsSection />
               )}
-              {activeSection === "AI Knowledge base" && (
+              {activeSection === "AI Knowledge base" && canAiKnowledgeBase && (
                 <AIKnowledgeBaseSection />
               )}
-              {activeSection === "AI Report Builder" && (
+              {activeSection === "AI Report Builder" && canAiReports && (
                 <AIReportBuilderSection />
               )}
 
 
-              {activeSection === "Integrations" && (
+              {activeSection === "Integrations" && canConnectIntegrations && (
                 <IntegrationsSection />
               )}
-              {activeSection === "API" && (
+              {activeSection === "API" && canPublicApi && (
                 <APISection />
               )}
-              {activeSection === "Visual API" && (
+              {activeSection === "Visual API" && canVisualApi && (
                 <VisualAPISection />
               )}
 

@@ -288,11 +288,13 @@ export function AddressEditor({
   onSave,
   onCancel,
   saving = false,
+  disabled = false,
 }: {
   initial: AddressValue;
   onSave: (next: AddressValue) => void;
   onCancel: () => void;
   saving?: boolean;
+  disabled?: boolean;
 }) {
   const [a, setA] = useState<AddressValue>(initial);
   return (
@@ -301,29 +303,35 @@ export function AddressEditor({
         value={a.street ?? ""}
         onChange={(e) => setA({ ...a, street: e.target.value })}
         placeholder="Street"
+        disabled={disabled}
       />
       <div className="grid grid-cols-2 gap-2">
         <Input
           value={a.city ?? ""}
           onChange={(e) => setA({ ...a, city: e.target.value })}
           placeholder="City"
+          disabled={disabled}
         />
         <Input
           value={a.state ?? ""}
           onChange={(e) => setA({ ...a, state: e.target.value })}
           placeholder="State"
+          disabled={disabled}
         />
         <Input
           value={a.zip ?? ""}
           onChange={(e) => setA({ ...a, zip: e.target.value })}
           placeholder="Zip"
+          disabled={disabled}
         />
         <Input
           value={a.country ?? ""}
           onChange={(e) => setA({ ...a, country: e.target.value })}
           placeholder="Country"
+          disabled={disabled}
         />
       </div>
+      {!disabled && (
       <div className="flex justify-end gap-1">
         <Button variant="ghost" size="icon" onClick={onCancel}>
           <X className="h-4 w-4" />
@@ -341,6 +349,7 @@ export function AddressEditor({
           )}
         </Button>
       </div>
+      )}
     </div>
   );
 }
@@ -389,12 +398,14 @@ const COMMON_LOCALES = [
 export function LanguagePicker({
   value,
   onChange,
+  disabled = false,
 }: {
   value: string | null | undefined;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   return (
-    <Select value={value ?? ""} onValueChange={onChange}>
+    <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select language" />
       </SelectTrigger>
@@ -412,12 +423,14 @@ export function LanguagePicker({
 export function LocalePicker({
   value,
   onChange,
+  disabled = false,
 }: {
   value: string | null | undefined;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   return (
-    <Select value={value ?? ""} onValueChange={onChange}>
+    <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select locale" />
       </SelectTrigger>
@@ -435,9 +448,11 @@ export function LocalePicker({
 export function TimezonePicker({
   value,
   onChange,
+  disabled = false,
 }: {
   value: string | null | undefined;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   // Use Intl supportedValuesOf when available; fall back to a curated list.
   const timezones = useMemo(() => {
@@ -467,7 +482,7 @@ export function TimezonePicker({
   }, []);
 
   return (
-    <Select value={value ?? ""} onValueChange={onChange}>
+    <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className="w-full">
         <SelectValue placeholder="Select timezone" />
       </SelectTrigger>

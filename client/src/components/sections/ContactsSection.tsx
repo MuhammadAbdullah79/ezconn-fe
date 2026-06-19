@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSearch, useLocation } from "wouter";
-import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Edit2, Copy, Calendar, X, Download } from "react-feather";
+import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Trash2, Edit2, Copy, Calendar, X, Download, Upload } from "react-feather";
 import { ChevronsUpDown, ChevronDown, ChevronUp, Plus, Filter, ArrowUpDown, GripVertical, MoreVertical, Users, Tag } from "lucide-react";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
@@ -23,6 +23,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 
 type SortDirection = "asc" | "desc" | "default";
 
@@ -82,6 +83,20 @@ export default function ContactsSection() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // "Allow" permissions (replyagent $can) — owners pass via the `workspace.*`
+  // wildcard, so restricted agents are the only ones gated.
+  //  - manage  → Create/Update contacts (Add Contact, Edit, Bulk Edit)
+  //  - delete  → Delete contact + Bulk Delete
+  //  - export  → Export CSV
+  const userPerms = getUserInfo().permissions ?? [];
+  const canManageContacts = hasAnyPerm(userPerms, ["workspace.company.manage"]);
+  const canDeleteContacts = hasAnyPerm(userPerms, ["workspace.company.delete"]);
+  const canExportContacts = hasAnyPerm(userPerms, ["workspace.company.export"]);
+  //  - import      → upload a CSV of contacts (replyagent canImportFiles)
+  //  - export_psid → export Facebook/Instagram PSIDs (replyagent canExportPSID)
+  const canImportContacts = hasAnyPerm(userPerms, ["workspace.company.import"]);
+  const canExportPSID = hasAnyPerm(userPerms, ["workspace.company.export_psid"]);
 
   // Fetch tags
   const { data: tagsResponse } = useQuery({
@@ -183,6 +198,68 @@ export default function ContactsSection() {
       });
     },
   });
+
+  // ── Import (CSV) ── native CSV import (replyagent canImportFiles equivalent).
+  // Backend `POST /api/contacts/import/csv` accepts the raw CSV text and dedups
+  // by email/phone, auto-creating tags. Header columns expected:
+  // first_name, last_name, email, phone, tags (tags ';'-separated).
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<{ created: number; updated: number; total: number } | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const importMutation = useMutation({
+    mutationFn: async (csv: string) => {
+      const res = await apiRequest("POST", "/api/contacts/import/csv", { csv });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      setImportResult({
+        created: data?.created ?? 0,
+        updated: data?.updated ?? 0,
+        total: data?.total ?? 0,
+      });
+      toast({
+        title: "Import complete",
+        description: `${data?.created ?? 0} created, ${data?.updated ?? 0} updated.`,
+      });
+    },
+    onError: (err: any) => {
+      let msg: string = err?.message ?? "";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.message) msg = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message;
+      } catch { /* plain string */ }
+      toast({ title: "Import failed", description: msg || "Could not import the file.", variant: "destructive" });
+    },
+  });
+
+  const handleRunImport = async () => {
+    if (!importFile) return;
+    const text = await importFile.text();
+    importMutation.mutate(text);
+  };
+
+  const handleCloseImport = () => {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportResult(null);
+    if (importInputRef.current) importInputRef.current.value = "";
+  };
+
+  const downloadImportTemplate = () => {
+    const csv = "first_name,last_name,email,phone,tags\nJohn,Doe,john@example.com,+12025550123,vip;newsletter\n";
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "contacts-import-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Delete Mutation
   const deleteMutation = useMutation({
@@ -701,6 +778,56 @@ export default function ContactsSection() {
     });
   };
 
+  // Export Facebook/Instagram PSIDs for the selected contacts (replyagent
+  // EXPORT_PSID). Only INSTAGRAM/MESSENGER contacts produce a row; the backend
+  // pulls the page-scoped sender_id from insta_chats / fb_chats.
+  const [exportingPSID, setExportingPSID] = useState(false);
+  const handleExportPSID = async () => {
+    if (selectedRows.size === 0) {
+      toast({
+        title: "No Contacts Selected",
+        description: "Please select at least one contact to export PSIDs",
+        variant: "destructive",
+      });
+      return;
+    }
+    setExportingPSID(true);
+    try {
+      const ids = Array.from(selectedRows);
+      const res = await apiRequest("POST", "/api/contacts/export/psid", { ids });
+      const data = await res.json();
+      const csv: string = data?.csv ?? "";
+      // Header-only CSV → no IG/Messenger PSIDs in the selection.
+      if (!csv || csv.trim().split("\n").length <= 1) {
+        toast({
+          title: "No PSIDs found",
+          description: "None of the selected contacts are from Instagram or Messenger.",
+        });
+        return;
+      }
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", data?.filename || "PSID.csv");
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Export Successful", description: "PSIDs exported as CSV" });
+    } catch (err: any) {
+      let msg: string = err?.message ?? "";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.message) msg = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message;
+      } catch { /* plain string */ }
+      toast({ title: "Export failed", description: msg || "Could not export PSIDs.", variant: "destructive" });
+    } finally {
+      setExportingPSID(false);
+    }
+  };
+
   const handleColumnSort = (column: string) => {
     const existingSort = sorts.find(s => s.column === column);
     if (existingSort) {
@@ -768,13 +895,25 @@ export default function ContactsSection() {
             </div>
 
             <div className="flex items-center gap-3">
-              <Button
-                onClick={() => setShowAddContactModal(true)}
-                className="h-8 px-4 rounded-lg bg-primary text-primary-foreground font-semibold text-[11px] shadow-lg shadow-primary/20 transition-all duration-300 active:scale-95 flex items-center gap-2 border-0 hover:bg-primary/90"
-              >
-                <Plus size={14} strokeWidth={2.5} />
-                <span>Add Contact</span>
-              </Button>
+              {canImportContacts && (
+                <Button
+                  variant="outline"
+                  onClick={() => { setImportResult(null); setShowImportModal(true); }}
+                  className="h-8 px-4 rounded-lg font-semibold text-[11px] transition-all duration-300 active:scale-95 flex items-center gap-2"
+                >
+                  <Upload size={14} strokeWidth={2.5} />
+                  <span>Import</span>
+                </Button>
+              )}
+              {canManageContacts && (
+                <Button
+                  onClick={() => setShowAddContactModal(true)}
+                  className="h-8 px-4 rounded-lg bg-primary text-primary-foreground font-semibold text-[11px] shadow-lg shadow-primary/20 transition-all duration-300 active:scale-95 flex items-center gap-2 border-0 hover:bg-primary/90"
+                >
+                  <Plus size={14} strokeWidth={2.5} />
+                  <span>Add Contact</span>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -1012,30 +1151,47 @@ export default function ContactsSection() {
                   <span className="text-[11px] font-bold text-primary uppercase tracking-tight">Contacts selected</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    onClick={handleOpenBulkEdit}
-                    className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-primary/30 dark:border-primary/30 text-primary hover:bg-primary/10 dark:hover:bg-primary/15 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                    variant="outline"
-                  >
-                    <Edit2 size={13} />
-                    <span>Edit Tags</span>
-                  </Button>
-                  <Button
-                    onClick={handleExportSelectedAsCSV}
-                    className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-primary/30 dark:border-primary/30 text-primary hover:bg-primary/10 dark:hover:bg-primary/15 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                    variant="outline"
-                  >
-                    <Download size={13} />
-                    <span>Export CSV</span>
-                  </Button>
-                  <Button
-                    onClick={handleOpenBulkDelete}
-                    className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-rose-200 dark:border-rose-900/30 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
-                    variant="outline"
-                  >
-                    <Trash2 size={13} />
-                    <span>Delete Selected</span>
-                  </Button>
+                  {canManageContacts && (
+                    <Button
+                      onClick={handleOpenBulkEdit}
+                      className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-primary/30 dark:border-primary/30 text-primary hover:bg-primary/10 dark:hover:bg-primary/15 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                      variant="outline"
+                    >
+                      <Edit2 size={13} />
+                      <span>Edit Tags</span>
+                    </Button>
+                  )}
+                  {canExportContacts && (
+                    <Button
+                      onClick={handleExportSelectedAsCSV}
+                      className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-primary/30 dark:border-primary/30 text-primary hover:bg-primary/10 dark:hover:bg-primary/15 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                      variant="outline"
+                    >
+                      <Download size={13} />
+                      <span>Export CSV</span>
+                    </Button>
+                  )}
+                  {canExportPSID && (
+                    <Button
+                      onClick={handleExportPSID}
+                      disabled={exportingPSID}
+                      className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-primary/30 dark:border-primary/30 text-primary hover:bg-primary/10 dark:hover:bg-primary/15 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                      variant="outline"
+                    >
+                      {exportingPSID ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download size={13} />}
+                      <span>Export PSID</span>
+                    </Button>
+                  )}
+                  {canDeleteContacts && (
+                    <Button
+                      onClick={handleOpenBulkDelete}
+                      className="h-7 px-3 rounded-lg bg-white dark:bg-slate-800 border-rose-200 dark:border-rose-900/30 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 text-[10px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-2"
+                      variant="outline"
+                    >
+                      <Trash2 size={13} />
+                      <span>Delete Selected</span>
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -1171,19 +1327,25 @@ export default function ContactsSection() {
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-36 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl">
-                                <DropdownMenuItem onClick={() => handleEditContact(contact)} className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
-                                  <Edit2 size={13} className="text-slate-400" />
-                                  <span>Edit</span>
-                                </DropdownMenuItem>
+                                {canManageContacts && (
+                                  <DropdownMenuItem onClick={() => handleEditContact(contact)} className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                                    <Edit2 size={13} className="text-slate-400" />
+                                    <span>Edit</span>
+                                  </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={() => handleCopyContact(contact)} className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                                   <Copy size={13} className="text-slate-400" />
                                   <span>Copy</span>
                                 </DropdownMenuItem>
-                                <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
-                                <DropdownMenuItem onClick={() => handleDeleteContact(contact)} className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors cursor-pointer">
-                                  <Trash2 size={13} />
-                                  <span>Delete</span>
-                                </DropdownMenuItem>
+                                {canDeleteContacts && (
+                                  <>
+                                    <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
+                                    <DropdownMenuItem onClick={() => handleDeleteContact(contact)} className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors cursor-pointer">
+                                      <Trash2 size={13} />
+                                      <span>Delete</span>
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -1258,6 +1420,71 @@ export default function ContactsSection() {
           </div>
         </div>
       </div>
+
+      {/* Import Contacts Modal */}
+      <Dialog open={showImportModal} onOpenChange={(o) => { if (!o) handleCloseImport(); else setShowImportModal(true); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader className="mb-2">
+            <DialogTitle>Import Contacts</DialogTitle>
+          </DialogHeader>
+
+          {importResult ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-muted-foreground">Created</span><span className="font-semibold text-emerald-600">{importResult.created}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Updated</span><span className="font-semibold text-blue-600">{importResult.updated}</span></div>
+                <div className="flex justify-between border-t border-slate-200 dark:border-slate-800 pt-1 mt-1"><span className="text-muted-foreground">Total</span><span className="font-semibold">{importResult.total}</span></div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={handleCloseImport}>Done</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Upload a <span className="font-medium">.csv</span> file. Expected columns:{" "}
+                <code className="text-[11px]">first_name, last_name, email, phone, tags</code>{" "}
+                (multiple tags separated by <code className="text-[11px]">;</code>). Existing contacts
+                are matched by email/phone and updated.
+              </p>
+
+              <button
+                type="button"
+                onClick={downloadImportTemplate}
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-primary hover:underline"
+              >
+                <Download size={13} />
+                <span>Download CSV template</span>
+              </button>
+
+              <div>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+                />
+                {importFile && (
+                  <p className="mt-1.5 text-[11px] text-muted-foreground truncate">Selected: {importFile.name}</p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={handleCloseImport}>Cancel</Button>
+                <Button
+                  onClick={handleRunImport}
+                  disabled={!importFile || importMutation.isPending}
+                  className="flex items-center gap-2"
+                >
+                  {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload size={14} />}
+                  <span>{importMutation.isPending ? "Importing..." : "Import"}</span>
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Add Contact Modal */}
       <Dialog open={showAddContactModal} onOpenChange={setShowAddContactModal}>

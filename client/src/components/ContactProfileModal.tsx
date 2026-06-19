@@ -86,6 +86,7 @@ import {
   Send,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
 // apiRequest returns a raw Response; these wrappers parse JSON so callers can
@@ -446,6 +447,51 @@ export default function ContactProfileModal({
     enabled: open,
     retry: false,
   });
+  // Workspace members — used to populate the task-assignee dropdown. Only agents
+  // with the `receive_tasks` permission are eligible (replyagent: getUsers() filters
+  // members by $userCanDo(U.permissions, "...receive_tasks")).
+  const { data: membersData } = useQuery({
+    queryKey: ["/api/workspaces/members"],
+    queryFn: async () => {
+      try {
+        return await apiGet("/api/workspaces/members");
+      } catch {
+        return [];
+      }
+    },
+    enabled: open,
+    retry: false,
+  });
+  const taskAssignees = useMemo(() => {
+    const members: any[] = Array.isArray(membersData) ? membersData : (membersData?.members ?? membersData?.data ?? []);
+    return members
+      .filter((m: any) =>
+        String(m.status).toUpperCase() === "ACTIVE" &&
+        hasAnyPerm(m.permissions ?? [], ["workspace.inbox.user.can.receive_tasks"]),
+      )
+      .map((m: any) => ({
+        id: String(m.id),
+        name: (m.full_name || `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || m.email || `User ${m.id}`),
+      }));
+  }, [membersData]);
+
+  // "Hide" permission: when the agent HOLDS `contact.view_channel`, the contact's
+  // channel info (Phone / WhatsApp / Email) is hidden (replyagent canSeeChannels).
+  // Exact match → owners (no literal slug) keep seeing it.
+  const canSeeChannels = !((getUserInfo().permissions as string[] | undefined) ?? [])
+    .includes("workspace.inbox.contact.view_channel");
+
+  // "Allow" permissions (replyagent CompanyProfile canManageCompany / canDeleteCompany)
+  // — owners pass via the `workspace.*` wildcard, only restricted agents are gated.
+  //  - manage → create/update contact fields (name, gender, title, channels,
+  //             address/locale, custom-field VALUES, company assignment)
+  //  - delete → the "Delete contact" action
+  const _userPerms = (getUserInfo().permissions as string[] | undefined) ?? [];
+  const canManageContacts = hasAnyPerm(_userPerms, ["workspace.company.manage"]);
+  const canDeleteContacts = hasAnyPerm(_userPerms, ["workspace.company.delete"]);
+  // merge → the "Merge Contacts" action (replyagent canMergeContact)
+  const canMergeContacts = hasAnyPerm(_userPerms, ["workspace.company.merge"]);
+
   const waChannels: any[] = useMemo(
     () => allChannelsData?.channels?.whatsapp ?? [],
     [allChannelsData],
@@ -760,8 +806,20 @@ export default function ContactProfileModal({
   });
 
   const createTaskMutation = useMutation({
-    mutationFn: (payload: any) =>
-      apiPost(`/api/tasks`, { ...payload, contact_id: contactId }),
+    mutationFn: (payload: any) => {
+      // The backend expects `date` + `time` separately (it combines them in the
+      // workspace timezone). The dialog provides a single datetime-local string
+      // ("YYYY-MM-DDTHH:mm") — split it so task creation actually succeeds.
+      const dt = String(payload.datetime ?? "");
+      const [date, time] = dt.includes("T") ? dt.split("T") : [dt, ""];
+      return apiPost(`/api/tasks`, {
+        description: payload.description,
+        date,
+        time,
+        user_id: payload.user_id || null,
+        contact_id: contactId,
+      });
+    },
     onSuccess: () => {
       toast({ title: "Task created" });
       invalidateProfile();
@@ -1000,15 +1058,17 @@ export default function ContactProfileModal({
               <span>Source: {enriched?.source ?? "manual"}</span>
             </div>
             <div className="flex-1" />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive"
-              onClick={() => setConfirmDeleteOpen(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete contact
-            </Button>
+            {canDeleteContacts && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive"
+                onClick={() => setConfirmDeleteOpen(true)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete contact
+              </Button>
+            )}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1054,30 +1114,38 @@ export default function ContactProfileModal({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-52">
-                          <DropdownMenuItem
-                            onClick={() => setChangeCompanyOpen(true)}
-                          >
-                            <Repeat className="h-4 w-4 mr-2" />
-                            Change company
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setMergeContactsOpen(true)}
-                          >
-                            <GitMerge className="h-4 w-4 mr-2" />
-                            Merge Contacts
-                          </DropdownMenuItem>
+                          {canManageContacts && (
+                            <DropdownMenuItem
+                              onClick={() => setChangeCompanyOpen(true)}
+                            >
+                              <Repeat className="h-4 w-4 mr-2" />
+                              Change company
+                            </DropdownMenuItem>
+                          )}
+                          {canMergeContacts && (
+                            <DropdownMenuItem
+                              onClick={() => setMergeContactsOpen(true)}
+                            >
+                              <GitMerge className="h-4 w-4 mr-2" />
+                              Merge Contacts
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={handleDownloadContactData}>
                             <Download className="h-4 w-4 mr-2" />
                             Contact data
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setConfirmDeleteOpen(true)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
+                          {canDeleteContacts && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setConfirmDeleteOpen(true)}
+                                className="text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={handleDownloadConversation}>
                             <MessageSquare className="h-4 w-4 mr-2" />
@@ -1110,7 +1178,7 @@ export default function ContactProfileModal({
                   onSearchToggle={() => setSearchingContacts((v) => !v)}
                   searchValue={searchContacts}
                   onSearchChange={setSearchContacts}
-                  showAdd={true}
+                  showAdd={canManageContacts}
                   onAdd={() => setAddLeadOpen(true)}
                 />
                 <div className="px-3 py-2 space-y-1">
@@ -1183,14 +1251,18 @@ export default function ContactProfileModal({
                                 <MessageSquare className="h-3.5 w-3.5 mr-2" />
                                 Conversation history
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => deleteCompanyContactById(String(c.id), n)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
+                              {canDeleteContacts && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => deleteCompanyContactById(String(c.id), n)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -1596,6 +1668,7 @@ export default function ContactProfileModal({
                         value={enriched.first_name}
                         placeholder="Add first name"
                         saving={savingField === "first_name"}
+                        disabled={!canManageContacts}
                         onSave={(v) =>
                           handleSavePatch("first_name", { first_name: v })
                         }
@@ -1611,6 +1684,7 @@ export default function ContactProfileModal({
                         value={enriched.last_name}
                         placeholder="Add last name"
                         saving={savingField === "last_name"}
+                        disabled={!canManageContacts}
                         onSave={(v) =>
                           handleSavePatch("last_name", { last_name: v })
                         }
@@ -1623,6 +1697,7 @@ export default function ContactProfileModal({
                     <FieldRow label="Gender">
                       <Select
                         value={enriched.gender ?? "not_specified"}
+                        disabled={!canManageContacts}
                         onValueChange={(v) =>
                           handleSavePatch("gender", {
                             field: { slug: "gender", value: v },
@@ -1652,6 +1727,7 @@ export default function ContactProfileModal({
                         value={enriched.title}
                         placeholder="Add title"
                         saving={savingField === "title"}
+                        disabled={!canManageContacts}
                         onSave={(v) =>
                           handleSavePatch("title", { title: v })
                         }
@@ -1660,18 +1736,24 @@ export default function ContactProfileModal({
 
                     <Separator />
 
+                    {/* Phone / WhatsApp / Email — hidden when the agent holds
+                        `contact.view_channel` (replyagent canSeeChannels). */}
+                    {canSeeChannels && (
+                      <>
                     {/* Phone numbers */}
                     <FieldRow
                       label="Phone"
                       icon={<PhoneIcon className="h-4 w-4 text-emerald-600" />}
                       actionRight={
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setAddPhoneOpen(true)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
+                        canManageContacts ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setAddPhoneOpen(true)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        ) : undefined
                       }
                     >
                       <div className="space-y-2">
@@ -1696,6 +1778,7 @@ export default function ContactProfileModal({
                                   Primary
                                 </Badge>
                               )}
+                              {canManageContacts && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -1757,6 +1840,7 @@ export default function ContactProfileModal({
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
+                              )}
                             </div>
                           ))
                         )}
@@ -1770,13 +1854,15 @@ export default function ContactProfileModal({
                       label="WhatsApp"
                       icon={<MessageSquare className="h-4 w-4 text-emerald-600" />}
                       actionRight={
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setAddPhoneOpen(true)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
+                        canManageContacts ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setAddPhoneOpen(true)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        ) : undefined
                       }
                     >
                       {whatsapps.length === 0 ? (
@@ -1892,9 +1978,14 @@ export default function ContactProfileModal({
                               // ── Display mode: number + Primary + workspace-numbers popup ──
                               <div key={w.id} className="flex items-center gap-2">
                                 <span
-                                  className="text-sm cursor-pointer hover:underline"
-                                  title="Click to edit"
+                                  className={
+                                    canManageContacts
+                                      ? "text-sm cursor-pointer hover:underline"
+                                      : "text-sm"
+                                  }
+                                  title={canManageContacts ? "Click to edit" : undefined}
                                   onClick={() =>
+                                    canManageContacts &&
                                     setEditMobile({
                                       id: String(w.id),
                                       // Prefill with the full international form so re-normalising
@@ -2005,13 +2096,15 @@ export default function ContactProfileModal({
                       label="Email"
                       icon={<Mail className="h-4 w-4 text-blue-600" />}
                       actionRight={
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setAddEmailOpen(true)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
+                        canManageContacts ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setAddEmailOpen(true)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        ) : undefined
                       }
                     >
                       <div className="space-y-2">
@@ -2036,6 +2129,7 @@ export default function ContactProfileModal({
                                   Primary
                                 </Badge>
                               )}
+                              {canManageContacts && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -2083,6 +2177,7 @@ export default function ContactProfileModal({
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
+                              )}
                             </div>
                           ))
                         )}
@@ -2090,6 +2185,8 @@ export default function ContactProfileModal({
                     </FieldRow>
 
                     <Separator />
+                      </>
+                    )}
 
                     {/* Address (replyagent parity) */}
                     <FieldRow
@@ -2099,6 +2196,7 @@ export default function ContactProfileModal({
                       <AddressEditor
                         initial={(enriched as any)?.address ?? {}}
                         saving={savingField === "address"}
+                        disabled={!canManageContacts}
                         onSave={async (a) => {
                           await handleSavePatch("address", {
                             field: {
@@ -2121,6 +2219,7 @@ export default function ContactProfileModal({
                     >
                       <LanguagePicker
                         value={enriched.language}
+                        disabled={!canManageContacts}
                         onChange={(v) =>
                           handleSavePatch("language", {
                             field: { slug: "language", value: v },
@@ -2139,6 +2238,7 @@ export default function ContactProfileModal({
                     >
                       <LocalePicker
                         value={enriched.locale}
+                        disabled={!canManageContacts}
                         onChange={(v) =>
                           handleSavePatch("locale", {
                             field: { slug: "locale", value: v },
@@ -2157,6 +2257,7 @@ export default function ContactProfileModal({
                     >
                       <TimezonePicker
                         value={enriched.timezone}
+                        disabled={!canManageContacts}
                         onChange={(v) =>
                           handleSavePatch("timezone", {
                             field: { slug: "timezone", value: v },
@@ -2183,13 +2284,15 @@ export default function ContactProfileModal({
                               className="text-xs flex items-center gap-1"
                             >
                               <span>{tg}</span>
-                              <button
-                                type="button"
-                                onClick={() => removeTagMutation.mutate(tg)}
-                                className="hover:text-destructive"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
+                              {canManageContacts && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeTagMutation.mutate(tg)}
+                                  className="hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
                             </Badge>
                           ))
                         )}
@@ -2204,7 +2307,10 @@ export default function ContactProfileModal({
             {/* ── RIGHT PANEL: system / custom fields / tags ── */}
             <div className="col-span-3 border-l bg-muted/10 overflow-hidden flex flex-col">
               <ScrollArea className="flex-1 p-4">
-                {/* SYSTEM FIELDS */}
+                {/* SYSTEM FIELDS — quick add/edit chips for contact fields;
+                    gated by company.manage (replyagent canManageCompany). */}
+                {canManageContacts && (
+                <>
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                   System Fields
                 </h4>
@@ -2260,6 +2366,8 @@ export default function ContactProfileModal({
                     onClick={() => setMidView("form")}
                   />
                 </div>
+                </>
+                )}
 
                 {/* CUSTOM FIELDS */}
                 <div className="flex items-center justify-between mb-3">
@@ -2272,16 +2380,18 @@ export default function ContactProfileModal({
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => {
-                        setCustomFieldPickerOpen(true);
-                      }}
-                    >
-                      <Search className="h-3.5 w-3.5" />
-                    </Button>
+                    {canManageContacts && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => {
+                          setCustomFieldPickerOpen(true);
+                        }}
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -2365,14 +2475,16 @@ export default function ContactProfileModal({
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => setTagPickerOpen(true)}
-                    >
-                      <Search className="h-3.5 w-3.5" />
-                    </Button>
+                    {canManageContacts && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => setTagPickerOpen(true)}
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -2406,10 +2518,12 @@ export default function ContactProfileModal({
                         >
                           <button
                             className="flex items-center gap-1 px-2 py-1.5 flex-1 min-w-0"
+                            disabled={!canManageContacts}
                             onClick={() =>
-                              applied
+                              canManageContacts &&
+                              (applied
                                 ? removeTagMutation.mutate(tagName)
-                                : applyTagMutation.mutate(tagName)
+                                : applyTagMutation.mutate(tagName))
                             }
                           >
                             <span className="truncate flex-1 text-left">
@@ -2582,22 +2696,24 @@ export default function ContactProfileModal({
             >
               Cancel
             </Button>
-            <Button
-              onClick={async () => {
-                if (!activeCustomField) return;
-                await handleSavePatch("custom_field", {
-                  field: {
-                    slug: activeCustomField.slug,
-                    value: activeCustomFieldDraft,
-                  },
-                  field_type: "CUSTOM_FIELD",
-                });
-                setActiveCustomField(null);
-                setActiveCustomFieldDraft("");
-              }}
-            >
-              Save
-            </Button>
+            {canManageContacts && (
+              <Button
+                onClick={async () => {
+                  if (!activeCustomField) return;
+                  await handleSavePatch("custom_field", {
+                    field: {
+                      slug: activeCustomField.slug,
+                      value: activeCustomFieldDraft,
+                    },
+                    field_type: "CUSTOM_FIELD",
+                  });
+                  setActiveCustomField(null);
+                  setActiveCustomFieldDraft("");
+                }}
+              >
+                Save
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -2682,6 +2798,7 @@ export default function ContactProfileModal({
         onOpenChange={setNewTaskOpen}
         onSave={(payload) => createTaskMutation.mutate(payload)}
         saving={createTaskMutation.isPending}
+        assignees={taskAssignees}
       />
 
       {/* New Opportunity */}
@@ -3010,19 +3127,24 @@ function NewTaskDialog({
   onOpenChange,
   onSave,
   saving,
+  assignees = [],
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (payload: any) => void;
   saving: boolean;
+  // Agents eligible to receive tasks (replyagent: getUsers() filtered by receive_tasks).
+  assignees?: { id: string; name: string }[];
 }) {
   const [description, setDescription] = useState("");
   const [datetime, setDatetime] = useState("");
+  const [assigneeId, setAssigneeId] = useState("none");
 
   useEffect(() => {
     if (!open) {
       setDescription("");
       setDatetime("");
+      setAssigneeId("none");
     }
   }, [open]);
 
@@ -3050,6 +3172,22 @@ function NewTaskDialog({
               onChange={(e) => setDatetime(e.target.value)}
             />
           </div>
+          <div>
+            <Label>Assign to</Label>
+            <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unassigned</SelectItem>
+                {assignees.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -3057,7 +3195,13 @@ function NewTaskDialog({
           </Button>
           <Button
             disabled={!description || saving}
-            onClick={() => onSave({ description, datetime })}
+            onClick={() =>
+              onSave({
+                description,
+                datetime,
+                user_id: assigneeId === "none" ? null : assigneeId,
+              })
+            }
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Create
@@ -3276,6 +3420,9 @@ function MergeContactsDialog({
   const [destination, setDestination] = useState<any | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [merging, setMerging] = useState(false);
+  // Current contact re-fetched in the same shape as the destination so the
+  // preview union is accurate (replyagent re-loads it via merge-lead too).
+  const [currentNormalized, setCurrentNormalized] = useState<any | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -3284,8 +3431,73 @@ function MergeContactsDialog({
       setDestination(null);
       setConfirming(false);
       setMerging(false);
+      setCurrentNormalized(null);
+      return;
     }
-  }, [open]);
+    if (currentContact?.id) {
+      apiGet(`/api/contacts/${currentContact.id}/merge-preview`)
+        .then((resp: any) => setCurrentNormalized(resp))
+        .catch(() => setCurrentNormalized(null));
+    }
+  }, [open, currentContact]);
+
+  // Build the merge preview: destination + the current contact's unique data
+  // (mirrors replyagent's client-side union). Falls back to destination alone
+  // until the normalized current contact has loaded.
+  const buildPreview = (cur: any, dst: any) => {
+    if (!dst) return null;
+    if (!cur) return dst;
+    const mergeArr = (
+      dstArr: any[],
+      curArr: any[],
+      keyFn: (x: any) => string,
+    ) => {
+      const m = new Map<string, any>();
+      for (const it of dstArr ?? []) m.set(keyFn(it), it);
+      for (const it of curArr ?? []) {
+        const k = keyFn(it);
+        if (!m.has(k)) m.set(k, it);
+      }
+      return Array.from(m.values());
+    };
+    const earlier =
+      cur.created_at && dst.created_at
+        ? new Date(cur.created_at) < new Date(dst.created_at)
+          ? cur.created_at
+          : dst.created_at
+        : dst.created_at ?? cur.created_at;
+    return {
+      ...dst,
+      created_at: earlier,
+      mobile_contacts: mergeArr(dst.mobile_contacts, cur.mobile_contacts, (m) =>
+        String(m.national_mobile_number ?? m.full_mobile_number ?? m.mobile_number ?? ""),
+      ),
+      email_contacts: mergeArr(dst.email_contacts, cur.email_contacts, (e) =>
+        String(e.email ?? ""),
+      ),
+      tag_links: mergeArr(dst.tag_links, cur.tag_links, (t) =>
+        String(t.tag_id ?? t.name ?? ""),
+      ),
+      custom_fields_data: mergeArr(
+        dst.custom_fields_data,
+        cur.custom_fields_data,
+        (cf) => String(cf.id ?? cf.label ?? ""),
+      ),
+      telegram_chats: mergeArr(dst.telegram_chats, cur.telegram_chats, (x) =>
+        String(x.from_id ?? x.id ?? ""),
+      ),
+      whatsapp_chats: mergeArr(dst.whatsapp_chats, cur.whatsapp_chats, (x) =>
+        String(x.wa_id ?? x.id ?? ""),
+      ),
+      facebook_chats: mergeArr(dst.facebook_chats, cur.facebook_chats, (x) =>
+        String(x.sender_id ?? x.id ?? ""),
+      ),
+      instagram_chats: mergeArr(dst.instagram_chats, cur.instagram_chats, (x) =>
+        String(x.username ?? x.id ?? ""),
+      ),
+    };
+  };
+  const previewContact = buildPreview(currentNormalized, destination);
 
   useEffect(() => {
     if (!open || !currentContact) return;
@@ -3358,8 +3570,8 @@ function MergeContactsDialog({
         <div className="grid grid-cols-3 gap-4 mt-3 min-h-[300px]">
           <div className="border-r pr-3">
             <h6 className="font-semibold mb-2 text-sm">Current contact</h6>
-            {currentContact ? (
-              <ContactSummary c={currentContact} />
+            {currentNormalized || currentContact ? (
+              <ContactSummary c={currentNormalized ?? currentContact} />
             ) : (
               <p className="text-xs text-muted-foreground">No contact loaded</p>
             )}
@@ -3398,8 +3610,8 @@ function MergeContactsDialog({
           </div>
           <div>
             <h6 className="font-semibold mb-2 text-sm">Preview</h6>
-            {destination ? (
-              <ContactSummary c={destination} />
+            {previewContact ? (
+              <ContactSummary c={previewContact} />
             ) : (
               <p className="text-xs text-muted-foreground">
                 Select a destination to preview the merge result.
@@ -3495,6 +3707,29 @@ function ContactSummary({ c, className = "" }: { c: any; className?: string }) {
           ))}
         </div>
       )}
+      {c.custom_fields_data?.length > 0 && (
+        <div className="space-y-0.5 pt-0.5">
+          {c.custom_fields_data.map((cf: any) => (
+            <div key={cf.id ?? cf.label}>
+              <span className="text-muted-foreground">{cf.label}:</span>{" "}
+              {cf.value}
+            </div>
+          ))}
+        </div>
+      )}
+      {(() => {
+        const channels: string[] = [];
+        if (c.telegram_chats?.length) channels.push("Telegram");
+        if (c.whatsapp_chats?.length) channels.push("WhatsApp");
+        if (c.facebook_chats?.length) channels.push("Facebook");
+        if (c.instagram_chats?.length) channels.push("Instagram");
+        return channels.length > 0 ? (
+          <div>
+            <span className="text-muted-foreground">Channels:</span>{" "}
+            {channels.join(", ")}
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }

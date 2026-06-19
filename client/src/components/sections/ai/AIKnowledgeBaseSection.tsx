@@ -30,6 +30,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 
 const mockFetchedPages = [
   { page: "https://example.com/about",        title: "About Us" },
@@ -44,6 +45,13 @@ export default function AIKnowledgeBaseSection() {
   const dark = mode === "dark";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // "Allow" permissions (replyagent AIStudio/Knowledgebase.vue). replyagent has
+  // no edit_kb — create_kb covers create AND edit; delete_kb covers delete.
+  // Owners hold `workspace.*` so they pass via the wildcard.
+  const _kbPerms = getUserInfo().permissions ?? [];
+  const canCreateKB = hasAnyPerm(_kbPerms, ["workspace.ai.create_kb"]);
+  const canDeleteKB = hasAnyPerm(_kbPerms, ["workspace.ai.delete_kb"]);
 
   const [viewMode, setViewMode] = useState<"list" | "edit">("list");
 
@@ -476,9 +484,11 @@ export default function AIKnowledgeBaseSection() {
                 </p>
               </div>
             </div>
-            <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
-              <Plus size={12} /> Add Knowledge Base
-            </button>
+            {canCreateKB && (
+              <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
+                <Plus size={12} /> Add Knowledge Base
+              </button>
+            )}
           </div>
 
           {/* Body */}
@@ -494,9 +504,11 @@ export default function AIKnowledgeBaseSection() {
                     Create a knowledge base to train your AI agents on your specific business data.
                   </p>
                 </div>
-                <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
-                  <Plus size={12} /> Create Knowledge Base
-                </button>
+                {canCreateKB && (
+                  <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
+                    <Plus size={12} /> Create Knowledge Base
+                  </button>
+                )}
               </div>
             ) : (
               <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
@@ -513,8 +525,8 @@ export default function AIKnowledgeBaseSection() {
                     {knowledgeBases.map((kb: any) => (
                       <tr
                         key={kb.id}
-                        onClick={() => handleEdit(kb)}
-                        className={cn("border-b last:border-0 transition-colors cursor-pointer", softBorder, dark ? "hover:bg-slate-900/40" : "hover:bg-white/60")}
+                        onClick={() => canCreateKB && handleEdit(kb)}
+                        className={cn("border-b last:border-0 transition-colors", softBorder, canCreateKB ? "cursor-pointer" : "", dark ? "hover:bg-slate-900/40" : "hover:bg-white/60")}
                       >
                         <td className={cn("py-3 px-6 text-[12px] font-black", text)}>{kb.name}</td>
                         <td className="py-3 px-6">
@@ -536,12 +548,14 @@ export default function AIKnowledgeBaseSection() {
                           </Badge>
                         </td>
                         <td className="py-3 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => { setKbToDelete(kb); setShowDeleteConfirm(true); }}
-                            className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-rose-500/10 hover:text-rose-500 text-slate-400" : "hover:bg-rose-500/10 hover:text-rose-500 text-slate-500")}
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          {canDeleteKB && (
+                            <button
+                              onClick={() => { setKbToDelete(kb); setShowDeleteConfirm(true); }}
+                              className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-rose-500/10 hover:text-rose-500 text-slate-400" : "hover:bg-rose-500/10 hover:text-rose-500 text-slate-500")}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}

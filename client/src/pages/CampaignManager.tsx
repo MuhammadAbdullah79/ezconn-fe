@@ -48,6 +48,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { useMemo } from "react";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 
 interface SortEntry {
   column: string;
@@ -108,6 +109,13 @@ interface EngagementData {
 
 export default function CampaignManager() {
   const { toast } = useToast();
+  // "Allow" permissions (replyagent canManageBraodcasts / canDeleteBraodcasts) —
+  // owners pass via the `workspace.*` wildcard, only restricted agents are gated.
+  //  - manage → create / edit / clone / send-now / archive
+  //  - delete → delete a broadcast (+ bulk delete)
+  const _broadcastPerms = getUserInfo().permissions ?? [];
+  const canManageBroadcasts = hasAnyPerm(_broadcastPerms, ["workspace.broadcast.manage"]);
+  const canDeleteBroadcasts = hasAnyPerm(_broadcastPerms, ["workspace.broadcast.delete"]);
   const [selectedCampaigns, setSelectedCampaigns] = useState<number[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -987,7 +995,8 @@ export default function CampaignManager() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Button 
+                    {canManageBroadcasts && (
+                    <Button
                         onClick={() => setCreateOpen(true)}
                         className="h-8 px-4 rounded-lg bg-primary text-primary-foreground font-semibold text-[11px] shadow-lg shadow-primary/20 transition-all duration-300 active:scale-95 flex items-center gap-2 border-0 hover:bg-primary/90"
                         data-testid="button-create-campaign"
@@ -995,6 +1004,7 @@ export default function CampaignManager() {
                         <Plus size={14} strokeWidth={2.5} />
                         <span>Create Campaign</span>
                     </Button>
+                    )}
                 </div>
             </div>
 
@@ -1103,10 +1113,10 @@ export default function CampaignManager() {
                         <span className="text-[11px] font-semibold text-primary">Campaigns selected</span>
                     </div>
                     <div className="flex gap-2">
-                        {getArchivableCampaigns().length > 0 && (
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
+                        {canManageBroadcasts && getArchivableCampaigns().length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => setShowBulkArchiveModal(true)}
                                 className="h-7 px-3 rounded-md bg-white dark:bg-slate-900 border-primary/30 text-primary hover:bg-primary/10 text-[10px] font-semibold transition-all"
                             >
@@ -1114,10 +1124,10 @@ export default function CampaignManager() {
                                 Archive Selected
                             </Button>
                         )}
-                        {getDeletableCampaigns().length > 0 && (
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
+                        {canDeleteBroadcasts && getDeletableCampaigns().length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => setShowBulkDeleteModal(true)}
                                 className="h-7 px-3 rounded-md bg-white dark:bg-slate-900 border-red-200 text-red-500 hover:bg-red-50 text-[10px] font-semibold transition-all"
                             >
@@ -1213,13 +1223,15 @@ export default function CampaignManager() {
                                             <p className="text-[14px] font-bold text-slate-900 dark:text-white">No campaigns found</p>
                                             <p className="text-[11px] font-medium text-slate-400">Create your first messaging campaign to reach your customers</p>
                                         </div>
-                                        <Button 
-                                            variant="outline" 
-                                            onClick={() => setCreateOpen(true)} 
-                                            className="mt-1 h-7.5 px-5 rounded-lg text-[10px] font-bold border-primary/30 text-primary hover:bg-primary/10 transition-all shadow-sm"
-                                        >
-                                            Create one now
-                                        </Button>
+                                        {canManageBroadcasts && (
+                                          <Button
+                                              variant="outline"
+                                              onClick={() => setCreateOpen(true)}
+                                              className="mt-1 h-7.5 px-5 rounded-lg text-[10px] font-bold border-primary/30 text-primary hover:bg-primary/10 transition-all shadow-sm"
+                                          >
+                                              Create one now
+                                          </Button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>
@@ -1289,7 +1301,8 @@ export default function CampaignManager() {
                                                     <BarChart2 size={14} className="text-primary" />
                                                     View Details
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem 
+                                                {canManageBroadcasts && (
+                                                <DropdownMenuItem
                                                     onClick={() => {
                                                         setEditingCampaignId(campaign.id);
                                                         setCreateOpen(true);
@@ -1299,6 +1312,8 @@ export default function CampaignManager() {
                                                     <Edit2 size={14} className="text-primary" />
                                                     Edit
                                                 </DropdownMenuItem>
+                                                )}
+                                                {canManageBroadcasts && (
                                                 <DropdownMenuItem
                                                     onClick={() => handleOpenCloneDialog(campaign.id)}
                                                     className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer hover:bg-primary/10 dark:hover:bg-primary/15 hover:text-primary"
@@ -1306,7 +1321,8 @@ export default function CampaignManager() {
                                                     <Copy size={14} className="text-primary" />
                                                     Clone
                                                 </DropdownMenuItem>
-                                                {(campaign.status === "draft" || campaign.status === "failed") && (
+                                                )}
+                                                {canManageBroadcasts && (campaign.status === "draft" || campaign.status === "failed") && (
                                                     <DropdownMenuItem
                                                         onClick={() => sendBroadcastMutation.mutate(campaign.id)}
                                                         className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 rounded-lg cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
@@ -1317,21 +1333,25 @@ export default function CampaignManager() {
                                                 )}
                                                 <div className="h-px bg-slate-100 dark:bg-slate-800 my-1 mx-1"></div>
                                                 {campaign.status !== "archived" ? (
-                                                    <DropdownMenuItem 
+                                                    canManageBroadcasts && (
+                                                    <DropdownMenuItem
                                                         onClick={() => handleOpenArchiveModal(campaign)}
                                                         className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                                                     >
                                                         <Archive size={14} className="text-slate-500" />
                                                         Archive
                                                     </DropdownMenuItem>
+                                                    )
                                                 ) : (
-                                                    <DropdownMenuItem 
+                                                    canDeleteBroadcasts && (
+                                                    <DropdownMenuItem
                                                         className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-red-500 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20"
                                                         onClick={() => handleOpenDeleteModal(campaign)}
                                                     >
                                                         <Trash2 size={14} />
                                                         Delete
                                                     </DropdownMenuItem>
+                                                    )
                                                 )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>

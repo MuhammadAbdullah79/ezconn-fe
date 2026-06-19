@@ -42,6 +42,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
 
 const gptModels = [
   { name: "gpt-4o",        value: "gpt-4o" },
@@ -54,6 +55,19 @@ export default function AIChatAssistantsSection() {
   const dark = mode === "dark";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // "Allow" permissions (replyagent $can on the knowledgebase / AI-assistant
+  // screen). Owners hold `workspace.*` so they pass via the wildcard.
+  const _aiPerms = getUserInfo().permissions ?? [];
+  const canCreateKB = hasAnyPerm(_aiPerms, ["workspace.ai.create_knowledgebase"]);
+  const canEditKB = hasAnyPerm(_aiPerms, ["workspace.ai.edit_knowledgebase"]);
+  const canDeleteKB = hasAnyPerm(_aiPerms, ["workspace.ai.delete_knowledgebase"]);
+  // AI Feeder access (replyagent $canAny over the feeder permissions).
+  const canManageFeeder = hasAnyPerm(_aiPerms, [
+    "workspace.ai.create_feeder",
+    "workspace.ai.edit_feeder",
+    "workspace.ai.delete_feeder",
+  ]);
 
   const [viewMode, setViewMode] = useState<"list" | "edit">("list");
 
@@ -565,9 +579,11 @@ export default function AIChatAssistantsSection() {
                 <span>Limit: {limit}</span>
                 <Info size={11} className="opacity-50" />
               </div>
-              <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
-                <Plus size={12} /> Add Assistant
-              </button>
+              {canCreateKB && (
+                <button onClick={() => handleEdit(null)} className={primaryOutlineBtn}>
+                  <Plus size={12} /> Add Assistant
+                </button>
+              )}
             </div>
           </div>
 
@@ -618,18 +634,21 @@ export default function AIChatAssistantsSection() {
                         <td className="py-3 px-6">
                           <Switch
                             checked={agent.status === "ACTIVE"}
+                            disabled={!canEditKB}
                             onCheckedChange={() => handleStatusToggle(agent.id, agent.status)}
                             className="data-[state=checked]:bg-primary"
                           />
                         </td>
                         <td className="py-3 px-6 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleEdit(agent)}
-                              className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-primary/10 hover:text-primary text-slate-400" : "hover:bg-primary/10 hover:text-primary text-slate-500")}
-                            >
-                              <Pencil size={12} />
-                            </button>
+                            {canEditKB && (
+                              <button
+                                onClick={() => handleEdit(agent)}
+                                className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-primary/10 hover:text-primary text-slate-400" : "hover:bg-primary/10 hover:text-primary text-slate-500")}
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            )}
                             <button
                               onClick={() => toast({ title: "Logs", description: `Opening logs for ${agent.name}` })}
                               className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-primary/10 hover:text-primary text-slate-400" : "hover:bg-primary/10 hover:text-primary text-slate-500")}
@@ -643,18 +662,22 @@ export default function AIChatAssistantsSection() {
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[160px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
-                                <DropdownMenuItem
-                                  onClick={() => toast({ title: "AI Feeder", description: `Opening AI Feeder for ${agent.name}` })}
-                                  className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
-                                >
-                                  <Plug size={12} /> AI Feeder
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => { setAgentToDelete(agent); setShowDeleteConfirm(true); }}
-                                  className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500"
-                                >
-                                  <Trash2 size={12} /> Delete
-                                </DropdownMenuItem>
+                                {canManageFeeder && (
+                                  <DropdownMenuItem
+                                    onClick={() => toast({ title: "AI Feeder", description: `Opening AI Feeder for ${agent.name}` })}
+                                    className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
+                                  >
+                                    <Plug size={12} /> AI Feeder
+                                  </DropdownMenuItem>
+                                )}
+                                {canDeleteKB && (
+                                  <DropdownMenuItem
+                                    onClick={() => { setAgentToDelete(agent); setShowDeleteConfirm(true); }}
+                                    className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500"
+                                  >
+                                    <Trash2 size={12} /> Delete
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>

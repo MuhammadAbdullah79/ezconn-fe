@@ -85,7 +85,7 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
       </Route>
 
       <Route path="/conversations/inbox">
-        <ProtectedRoute><ConversationsInbox /></ProtectedRoute>
+        <ProtectedRoute permissions={["workspace.inbox.access"]}><ConversationsInbox /></ProtectedRoute>
       </Route>
 
       <Route path="/conversations/conversation-logs">
@@ -98,10 +98,10 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
         <ProtectedRoute><TemplateManager /></ProtectedRoute>
       </Route>
       <Route path="/campaigns">
-        <ProtectedRoute><CampaignManager /></ProtectedRoute>
+        <ProtectedRoute permissions={["workspace.broadcast.view"]}><CampaignManager /></ProtectedRoute>
       </Route>
       <Route path="/contacts">
-        <ProtectedRoute><ContactsPage /></ProtectedRoute>
+        <ProtectedRoute permissions={["workspace.company.view"]}><ContactsPage /></ProtectedRoute>
       </Route>
       <Route path="/users">
         <ProtectedRoute><UserManagementPage /></ProtectedRoute>

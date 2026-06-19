@@ -60,6 +60,16 @@ interface ContactProfileSidebarProps {
     // Chat Assignment
     assignedAgent: string | null;
     onAssignAgent: (agentId: string) => void;
+    // Whether the current agent may (re)assign — gates the assign controls
+    // (replyagent: v-can="'workspace.inbox.user.can.assign_conversations'").
+    canAssignConversations?: boolean;
+    // Whether the agent may see the contact's channel info (phone/whatsapp/email).
+    // False = `contact.view_channel` held → hide it (replyagent canSeeChannels).
+    canSeeChannels?: boolean;
+    // Whether the agent may open the full contact profile. False = `contact.view_profile`
+    // held → the avatar/name trigger no longer opens the profile modal (replyagent:
+    // the "Profile" button is hidden via v-if="!includes('...view_profile')").
+    canViewProfile?: boolean;
     agentOptions: { id: string; name: string }[];
 
     // Teams
@@ -117,6 +127,9 @@ export default function ContactProfileSidebar({
     onUpdateBasicDetails,
     assignedAgent,
     onAssignAgent,
+    canAssignConversations = true,
+    canSeeChannels = true,
+    canViewProfile = true,
     agentOptions,
     involvedTeams,
     onUpdateInvolvedTeams,
@@ -401,8 +414,10 @@ export default function ContactProfileSidebar({
                 <CardContent className="space-y-6 pt-8">
                     <div className="flex flex-col items-center gap-3">
                         <button
-                            className="flex flex-col items-center gap-3 hover:opacity-80 transition-opacity focus:outline-none"
+                            className={`flex flex-col items-center gap-3 focus:outline-none ${canViewProfile ? "hover:opacity-80 transition-opacity cursor-pointer" : "cursor-default"}`}
+                            disabled={!canViewProfile}
                             onClick={() => {
+                                if (!canViewProfile) return;
                                 if ((profileData as any)?.contact?.id) setIsDetailsModalOpen(true);
                             }}
                         >
@@ -410,8 +425,10 @@ export default function ContactProfileSidebar({
                                 <AvatarFallback className={`text-2xl ${getAvatarColor(displayName)}`}>{initials}</AvatarFallback>
                             </Avatar>
                             <div className="text-center">
-                                <h3 className="font-semibold text-lg hover:underline">{displayName}</h3>
-                                <p className="text-sm text-muted-foreground">{conversation?.phoneNumber}</p>
+                                <h3 className={`font-semibold text-lg ${canViewProfile ? "hover:underline" : ""}`}>{displayName}</h3>
+                                {canSeeChannels && (
+                                  <p className="text-sm text-muted-foreground">{conversation?.phoneNumber}</p>
+                                )}
                             </div>
                         </button>
                     </div>
@@ -471,6 +488,7 @@ export default function ContactProfileSidebar({
                                                 </span>
                                             </p>
                                         )}
+                                        {canAssignConversations && (
                                         <div className="flex items-center gap-1">
                                             {(!assignedAgent || assignedAgent !== "self") ? (
                                                 <Button
@@ -503,6 +521,7 @@ export default function ContactProfileSidebar({
                                                 popoutAlign="right"
                                             />
                                         </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -972,13 +991,13 @@ export default function ContactProfileSidebar({
                                                 <span className="text-sm font-semibold truncate">{basicDetails.displayName}</span>
                                             </div>
                                         )}
-                                        {basicDetails.number && (
+                                        {canSeeChannels && basicDetails.number && (
                                             <div className="flex items-center justify-between gap-3">
                                                 <span className="text-xs text-muted-foreground">Number</span>
                                                 <span className="text-sm font-semibold truncate">{basicDetails.number}</span>
                                             </div>
                                         )}
-                                        {basicDetails.email && (
+                                        {canSeeChannels && basicDetails.email && (
                                             <div className="flex items-center justify-between gap-3">
                                                 <span className="text-xs text-muted-foreground">Email</span>
                                                 <span className="text-sm font-semibold truncate">{basicDetails.email}</span>
@@ -990,7 +1009,7 @@ export default function ContactProfileSidebar({
                                                 <span className="text-sm font-semibold truncate">{basicDetails.gender}</span>
                                             </div>
                                         )}
-                                        {basicDetails.whatsappOptOut && (
+                                        {canSeeChannels && basicDetails.whatsappOptOut && (
                                             <div className="flex items-center justify-between gap-3">
                                                 <span className="text-xs text-muted-foreground">WhatsApp Opt-out</span>
                                                 <span className="text-sm font-semibold truncate">{basicDetails.whatsappOptOut}</span>

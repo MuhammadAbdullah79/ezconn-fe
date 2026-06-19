@@ -24,12 +24,26 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getUserInfo, hasAnyPerm } from "@/lib/auth";
+
+// Each integration card is gated by its own Connect permission (replyagent
+// Integrations.vue $can per integration). Cards with no entry here (Cal.com,
+// Baserow) have no EZCONN permission and are hidden entirely.
+const INTEGRATION_PERMS: Record<string, string> = {
+  MICROSOFT: "workspace.settings.ms_tts",
+  CLOUDINARY: "workspace.settings.cloudinary",
+  ACTIVECAMPAIGN: "workspace.settings.active_campaign",
+  CHATGPT: "workspace.settings.open_ai",
+  MAKE: "workspace.settings.make_dot_com",
+  ELEVENLABS: "workspace.settings.eleven_labs",
+};
 
 export default function IntegrationsSection() {
   const { mode } = useTheme();
   const dark = mode === "dark";
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const _intPerms = getUserInfo().permissions ?? [];
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<any>({});
 
@@ -177,6 +191,13 @@ export default function IntegrationsSection() {
     },
   ];
 
+  // Show only integrations the agent is permitted to access (owner holds
+  // `workspace.*` so passes all). Cal.com / Baserow have no permission → hidden.
+  const visibleIntegrations = staticIntegrations.filter((i) => {
+    const slug = INTEGRATION_PERMS[i.id];
+    return !!slug && hasAnyPerm(_intPerms, [slug]);
+  });
+
   const handleConnect = (item: any) => {
     if (item.externalUrl) {
       window.open(item.externalUrl, "_blank");
@@ -239,7 +260,7 @@ export default function IntegrationsSection() {
 
             <div className="flex items-center gap-2 shrink-0">
               <Badge variant="outline" className="h-7 px-3 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
-                {staticIntegrations.length} Available
+                {visibleIntegrations.length} Available
               </Badge>
               <Badge variant="outline" className="h-7 px-3 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
                 <Check size={10} className="mr-1" /> {connectedCount} Connected
@@ -250,7 +271,7 @@ export default function IntegrationsSection() {
           {/* Integrations Grid */}
           <div className="p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {staticIntegrations.map((item) => {
+              {visibleIntegrations.map((item) => {
                 const connected = isConnected(item.id);
                 const canToggle = integrationsData?.integrations?.some((i: any) => i.type === item.id);
 

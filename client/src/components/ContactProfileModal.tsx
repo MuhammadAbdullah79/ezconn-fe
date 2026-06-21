@@ -62,6 +62,9 @@ import {
   MessageSquare,
   Image as ImageIcon,
   Clock,
+  Magnet,
+  KeyRound,
+  ArrowLeft,
   Trash2,
   Mail,
   Loader2,
@@ -180,6 +183,26 @@ interface Contact {
   source?: string;
   created_at?: string;
   company_id?: string | number | null;
+}
+
+// Localized source label — mirrors replyagent's $t("contact.source_<source>").
+const SOURCE_LABELS: Record<string, string> = {
+  manual: "Manual",
+  whatsapp: "WhatsApp",
+  imported_file: "Imported file",
+  import: "Imported",
+  api: "API",
+  instagram: "Instagram",
+  messenger: "Messenger",
+  facebook: "Facebook",
+  telegram: "Telegram",
+  webchat: "Webchat",
+  sms: "SMS",
+  zapi: "WhatsApp",
+};
+function sourceLabel(s?: string | null): string {
+  const k = String(s ?? "manual").toLowerCase();
+  return SOURCE_LABELS[k] ?? k.charAt(0).toUpperCase() + k.slice(1);
 }
 
 interface ContactProfileModalProps {
@@ -1041,51 +1064,75 @@ export default function ContactProfileModal({
         <DialogContent
           className="max-w-[1400px] w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col"
           aria-describedby={undefined}
+          hideClose
         >
           <DialogTitle className="sr-only">Contact Profile</DialogTitle>
 
-          {/* ───── Header ───── */}
-          <div className="border-b px-6 py-3 flex items-center gap-4 shrink-0">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>
-                Uploaded on{" "}
-                {enriched?.created_at
-                  ? format(new Date(enriched.created_at), "yyyy-MM-dd HH:mm")
-                  : "—"}
-              </span>
-              <span>•</span>
-              <span>Source: {enriched?.source ?? "manual"}</span>
+          {/* ───── Header (replyagent CompanyProfile top bar) ───── */}
+          <div className="border-b px-6 py-3 flex items-center gap-3 shrink-0">
+            {/* Left: source (magnet + localized label, source_name tooltip) + "on <date>" */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+              {enriched?.source_name ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex items-center gap-1 font-semibold text-foreground cursor-default">
+                        <Magnet className="h-4 w-4" />
+                        {sourceLabel(enriched?.source)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>{enriched.source_name}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className="flex items-center gap-1 font-semibold text-foreground">
+                  <Magnet className="h-4 w-4" />
+                  {sourceLabel(enriched?.source)}
+                </span>
+              )}
+              {enriched?.created_at && (
+                <span className="text-xs">
+                  on {format(new Date(enriched.created_at), "yyyy-MM-dd HH:mm")}
+                </span>
+              )}
             </div>
+
             <div className="flex-1" />
-            {canDeleteContacts && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive"
-                onClick={() => setConfirmDeleteOpen(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete contact
-              </Button>
+
+            {/* Right: pending tag · delete (red) · contact id · history */}
+            {String(enriched?.status) === "PENDING" && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="rounded-md bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 text-[11px] font-bold px-2.5 py-0.5 cursor-default">
+                      Pending
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>This contact is pending</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleOpenConversationHistory}
-                  >
-                    <History className="h-4 w-4 mr-2" />
-                    View contact history
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Open this contact's conversation history
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {canDeleteContacts && String(enriched?.status ?? "ACTIVE") === "ACTIVE" && (
+              <button
+                onClick={() => setConfirmDeleteOpen(true)}
+                className="rounded-md bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400 text-[11px] font-bold px-3 py-0.5 hover:bg-rose-200 dark:hover:bg-rose-500/25 transition-colors"
+              >
+                Delete contact
+              </button>
+            )}
+            {contactId && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground cursor-default">
+                      <KeyRound className="h-3.5 w-3.5" />
+                      {contactId}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Contact ID</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
 
           {/* ───── Body ───── */}
@@ -1161,6 +1208,12 @@ export default function ContactProfileModal({
                       <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                         <span>♂</span>
                         <span>{enriched.support_number_task}</span>
+                      </div>
+                    )}
+                    {contactId && (
+                      <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                        <KeyRound className="h-3 w-3" />
+                        <span>{contactId}</span>
                       </div>
                     )}
                   </div>
@@ -1591,40 +1644,6 @@ export default function ContactProfileModal({
 
             {/* ── MIDDLE COLUMN: lead form / activity timeline ── */}
             <div className="col-span-6 overflow-hidden flex flex-col">
-              {/* Tabs */}
-              <div className="border-b px-6 py-2 flex items-center gap-2 shrink-0">
-                <Button
-                  variant={midView === "form" ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setMidView("form")}
-                >
-                  <UserIcon className="h-3.5 w-3.5 mr-1" />
-                  Profile
-                </Button>
-                <Button
-                  variant={midView === "timeline" ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => setMidView("timeline")}
-                >
-                  <History className="h-3.5 w-3.5 mr-1" />
-                  Activity
-                </Button>
-                <div className="flex-1" />
-                {midView === "timeline" && (
-                  <NoteAddDropdown
-                    contactId={contactId}
-                    onAdded={() => {
-                      queryClient.invalidateQueries({
-                        queryKey: ["/api/notes/timeline", contactId],
-                      });
-                    }}
-                  />
-                )}
-              </div>
-
-              {midView === "timeline" ? (
-                <ActivityTimeline contactId={contactId} />
-              ) : (
               <ScrollArea className="flex-1 px-8 py-6">
                 {!enriched ? (
                   <div className="flex items-center justify-center h-64">
@@ -1774,9 +1793,22 @@ export default function ContactProfileModal({
                                 </span>
                               )}
                               {p.is_primary && (
-                                <Badge variant="outline" className="text-xs">
+                                <span className="rounded-full border border-green-600/30 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-3 py-[2px]">
                                   Primary
-                                </Badge>
+                                </span>
+                              )}
+                              {p.opted_in && (
+                                <span className="rounded-full border border-green-600/30 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-3 py-[2px]">
+                                  Opted In
+                                </span>
+                              )}
+                              {p.opted_in && p.optin_id && (
+                                <button
+                                  onClick={() => unsubscribeMutation.mutate(String(p.optin_id))}
+                                  className="rounded-full border border-red-600/30 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-[10px] px-3 py-[2px] hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                                >
+                                  Unsubscribe
+                                </button>
                               )}
                               {canManageContacts && (
                               <DropdownMenu>
@@ -1998,12 +2030,9 @@ export default function ContactProfileModal({
                                   {w.full_mobile_number}
                                 </span>
                                 {w.is_primary && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs bg-emerald-50 text-emerald-700"
-                                  >
+                                  <span className="rounded-full border border-green-600/30 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-3 py-[2px]">
                                     Primary
-                                  </Badge>
+                                  </span>
                                 )}
                                 <Popover>
                                   <PopoverTrigger asChild>
@@ -2125,9 +2154,22 @@ export default function ContactProfileModal({
                                 </span>
                               )}
                               {e.is_primary && (
-                                <Badge variant="outline" className="text-xs">
+                                <span className="rounded-full border border-green-600/30 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-3 py-[2px]">
                                   Primary
-                                </Badge>
+                                </span>
+                              )}
+                              {e.opted_in && (
+                                <span className="rounded-full border border-green-600/30 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-3 py-[2px]">
+                                  Opted In
+                                </span>
+                              )}
+                              {e.opted_in && e.optin_id && (
+                                <button
+                                  onClick={() => unsubscribeMutation.mutate(String(e.optin_id))}
+                                  className="rounded-full border border-red-600/30 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 text-[10px] px-3 py-[2px] hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                                >
+                                  Unsubscribe
+                                </button>
                               )}
                               {canManageContacts && (
                               <DropdownMenu>
@@ -2269,6 +2311,45 @@ export default function ContactProfileModal({
 
                     <Separator />
 
+                    {/* Custom field VALUES inline in the center (replyagent parity:
+                        each set custom field shows as a labeled row; click to edit
+                        opens the value editor prefilled). */}
+                    {(enriched.custom_fields_data ?? []).map((cf: any) => {
+                      const meta = allCustomFields.find(
+                        (f: any) =>
+                          String(f.slug) === String(cf.slug) ||
+                          String(f.id) === String(cf.id),
+                      );
+                      const hasValue =
+                        cf.value !== undefined &&
+                        cf.value !== null &&
+                        String(cf.value) !== "";
+                      return (
+                        <div key={cf.id ?? cf.label}>
+                          <FieldRow label={cf.label ?? meta?.label ?? meta?.name ?? "Field"}>
+                            <button
+                              className="text-sm text-left hover:underline disabled:no-underline disabled:cursor-default"
+                              disabled={!canManageContacts}
+                              onClick={() => {
+                                setMidView("form");
+                                setActiveCustomField(meta ?? cf);
+                                setActiveCustomFieldDraft(cf.value ?? "");
+                              }}
+                            >
+                              {hasValue ? (
+                                String(cf.value)
+                              ) : (
+                                <span className="text-muted-foreground italic">
+                                  Click to set value
+                                </span>
+                              )}
+                            </button>
+                          </FieldRow>
+                          <Separator />
+                        </div>
+                      );
+                    })}
+
                     {/* Tags inline */}
                     <FieldRow label="Tags">
                       <div className="flex flex-wrap gap-2">
@@ -2301,11 +2382,27 @@ export default function ContactProfileModal({
                   </div>
                 )}
               </ScrollArea>
-              )}
             </div>
 
             {/* ── RIGHT PANEL: system / custom fields / tags ── */}
             <div className="col-span-3 border-l bg-muted/10 overflow-hidden flex flex-col">
+              {/* Right-panel header (replyagent: View contact history + Close) */}
+              <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
+                <button
+                  onClick={handleOpenConversationHistory}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  View contact history
+                </button>
+                <button
+                  onClick={() => onOpenChange(false)}
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Close
+                </button>
+              </div>
               <ScrollArea className="flex-1 p-4">
                 {/* SYSTEM FIELDS — quick add/edit chips for contact fields;
                     gated by company.manage (replyagent canManageCompany). */}

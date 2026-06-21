@@ -107,17 +107,16 @@ export default function ContactsSection() {
     }
   });
 
-  const contactTagOptions = [
-    { id: "__all__", name: "All" },
-    { id: "Marketing", name: "Marketing" },
-    { id: "Test", name: "Test" },
-    ...((tagsResponse?.tags || tagsResponse || []).map((t: any) => ({
-      id: t.name || t.id?.toString(),
-      name: t.name || t
-    })))
-  ].filter((tag, index, self) =>
-    tag.name && index === self.findIndex((t) => t.name === tag.name)
-  );
+  // Real workspace tags only — no hardcoded placeholders (those would create
+  // junk tags like "Marketing"/"Test" on save). The add/edit/bulk pickers use
+  // these; the top filter prepends an "All" sentinel via tagFilterOptions.
+  const realTags = ((tagsResponse?.tags || tagsResponse || []) as any[])
+    .map((t: any) => ({ id: t.name || t.id?.toString(), name: t.name || t }))
+    .filter((tag, index, self) =>
+      tag.name && index === self.findIndex((t) => t.name === tag.name)
+    );
+  const contactTagOptions = realTags;
+  const tagFilterOptions = [{ id: "__all__", name: "All" }, ...realTags];
 
   // Fetch contacts
   const { data: contactsResponse, isLoading: isLoadingContacts } = useQuery({
@@ -937,7 +936,7 @@ export default function ContactsSection() {
             {/* Filters */}
             <div className="flex items-center gap-2">
               <CustomDropdown
-                options={contactTagOptions}
+                options={tagFilterOptions}
                 selected={selectedTags}
                 onChange={setSelectedTags}
                 placeholder="Tags"
@@ -952,7 +951,7 @@ export default function ContactsSection() {
                       <span className={cn("truncate text-[12px]", selectedTags.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
                         {selectedTags.length === 0 || selectedTags.includes("__all__")
                           ? "All"
-                          : contactTagOptions.find(o => o.id === selectedTags[0])?.name ?? selectedTags[0]}
+                          : tagFilterOptions.find(o => o.id === selectedTags[0])?.name ?? selectedTags[0]}
                       </span>
                     </div>
                     <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />

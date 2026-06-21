@@ -530,6 +530,24 @@ export default function ConversationsInbox() {
     };
   });
 
+  // Deep-link from the Contact profile "Live Chat" link: ?contact_id=X →
+  // auto-select that contact's conversation, then strip the param so a refresh
+  // or back-nav doesn't re-trigger it.
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current) return;
+    let cid: string | null = null;
+    try { cid = new URLSearchParams(window.location.search).get("contact_id"); } catch {}
+    if (!cid) return;
+    const match = backendConversations.find(
+      (it: any) => String(it.contacts?.id) === String(cid),
+    );
+    if (match) {
+      setSelectedConversation(Number(match.id));
+      deepLinkedRef.current = true;
+      try { window.history.replaceState({}, "", window.location.pathname); } catch {}
+    }
+  }, [backendConversations]);
 
   const [showContactPanel, setShowContactPanel] = useState(false);
   const [agentStatus, setAgentStatus] = useState<"available" | "away">("available");

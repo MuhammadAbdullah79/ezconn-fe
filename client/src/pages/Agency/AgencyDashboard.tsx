@@ -5,16 +5,15 @@ import {
   Users,
   ShieldCheck,
   TrendingUp,
-  Layout,
-  Cloud,
-  Smartphone,
-  ShoppingBag,
-  Users2,
-  Settings,
-
   CheckCircle2,
   Clock,
   Star,
+  Building2,
+  Activity,
+  MessageSquare,
+  MessagesSquare,
+  PlusCircle,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -82,54 +81,57 @@ const AgencyDashboard = () => {
     },
   ];
 
-  const featureCards = [
+  // Format avg response time in minutes → "—", "Xm", or "Xh Ym".
+  const formatResponseTime = (mins: number | undefined | null) => {
+    if (!mins || mins <= 0) return "—";
+    if (mins < 60) return `${mins}m`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+  };
+
+  const metricCards = [
     {
-      title: "White Label Apps",
-      desc: "Create fully branded apps for your clients with custom domains and branding.",
-      status: "ACTIVE",
-      statusColor: "text-emerald-600 bg-emerald-50",
-      icon: <Layout size={22} className="text-teal-500" />,
-      href: "/agency/settings/white-label",
+      title: "Active Workspaces",
+      value: stats?.active_workspaces ?? 0,
+      icon: <Activity size={20} className="text-emerald-500" />,
+      bg: dark ? "bg-emerald-500/10" : "bg-emerald-50",
     },
     {
-      title: "Client Portal",
-      desc: "Give clients access to track their projects and app performance in real-time.",
-      status: "COMING SOON",
-      statusColor: "text-orange-600 bg-orange-50",
-      icon: <Cloud size={22} className="text-blue-500" />,
-      href: "/agency/saas/plans",
+      title: "Total Users",
+      value: stats?.total_users ?? 0,
+      icon: <Users size={20} className="text-violet-500" />,
+      bg: dark ? "bg-violet-500/10" : "bg-violet-50",
     },
     {
-      title: "Mobile Apps",
-      desc: "White-label mobile apps for iOS and Android with your branding.",
-      status: "ACTIVE",
-      statusColor: "text-emerald-600 bg-emerald-50",
-      icon: <Smartphone size={22} className="text-indigo-500" />,
-      href: "#",
+      title: "Total Conversations",
+      value: stats?.total_conversations ?? 0,
+      icon: <MessagesSquare size={20} className="text-indigo-500" />,
+      bg: dark ? "bg-indigo-500/10" : "bg-indigo-50",
     },
     {
-      title: "Marketplace",
-      desc: "List your agency in the marketplace and reach more clients.",
-      status: "ACTIVE",
-      statusColor: "text-emerald-600 bg-emerald-50",
-      icon: <ShoppingBag size={22} className="text-orange-500" />,
-      href: "/agency/workspaces",
+      title: "Open Conversations",
+      value: stats?.open_conversations ?? 0,
+      icon: <MessageSquare size={20} className="text-orange-500" />,
+      bg: dark ? "bg-orange-500/10" : "bg-orange-50",
     },
     {
-      title: "Community",
-      desc: "Connect with other agencies, share knowledge and grow together.",
-      status: "INCLUDED",
-      statusColor: "text-blue-600 bg-blue-50",
-      icon: <Users2 size={22} className="text-pink-500" />,
-      href: "/agency/help",
+      title: "Messages Sent (30 Days)",
+      value: stats?.messages_sent_30d ?? 0,
+      icon: <TrendingUp size={20} className="text-pink-500" />,
+      bg: dark ? "bg-pink-500/10" : "bg-pink-50",
     },
     {
-      title: "Agency Settings",
-      desc: "Manage your agency profile, branding, and account preferences.",
-      status: "ACTIVE",
-      statusColor: "text-emerald-600 bg-emerald-50",
-      icon: <Settings size={22} className="text-slate-500" />,
-      href: "/agency/settings/general",
+      title: "New Workspaces (30 Days)",
+      value: stats?.new_workspaces_30d ?? 0,
+      icon: <PlusCircle size={20} className="text-teal-500" />,
+      bg: dark ? "bg-teal-500/10" : "bg-teal-50",
+    },
+    {
+      title: "Average Response Time",
+      value: formatResponseTime(stats?.avg_response_time_minutes),
+      icon: <Timer size={20} className="text-amber-500" />,
+      bg: dark ? "bg-amber-500/10" : "bg-amber-50",
     },
   ];
 
@@ -166,33 +168,25 @@ const AgencyDashboard = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        {/* Left: Features */}
+        {/* Left: Agency Metrics */}
         <div className="xl:col-span-2 space-y-6">
-          <h2 className="text-base font-semibold">Agency Features</h2>
+          <h2 className="text-base font-semibold">Agency Metrics</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {featureCards.map((f, i) => (
+            {metricCards.map((m, i) => (
               <div
                 key={i}
-                onClick={() => setLocation(f.href)}
                 className={cn(
-                  "rounded-xl p-5 border cursor-pointer transition-all hover:shadow-md hover:border-blue-200 group",
+                  "rounded-xl p-5 border transition-all hover:shadow-md",
                   dark ? "bg-[#1e293b] border-slate-800" : "bg-white border-slate-200"
                 )}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", dark ? "bg-slate-800" : "bg-slate-50")}>
-                    {f.icon}
-                  </div>
-                  <span className={cn("text-[10px] font-bold px-2 py-1 rounded-full", f.statusColor)}>
-                    {f.status}
-                  </span>
+                <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center mb-3", m.bg)}>
+                  {m.icon}
                 </div>
-                <h3 className={cn("font-semibold text-[14px] mb-1 group-hover:text-blue-500 transition-colors", dark ? "text-white" : "text-slate-800")}>
-                  {f.title}
-                </h3>
-                <p className={cn("text-[12px] leading-relaxed line-clamp-2", dark ? "text-slate-400" : "text-slate-500")}>
-                  {f.desc}
+                <p className={cn("text-[12px] font-medium mb-1", dark ? "text-slate-400" : "text-slate-500")}>{m.title}</p>
+                <p className={cn("text-2xl font-bold", dark ? "text-white" : "text-slate-900")}>
+                  {isLoading ? <span className="text-slate-300 text-base">Loading...</span> : m.value}
                 </p>
               </div>
             ))}

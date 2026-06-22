@@ -172,7 +172,7 @@ const AgencyNotificationsSettings = () => {
                   <SelectContent className={cn("border shadow-2xl rounded-xl overflow-hidden", 
                     dark ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900")}>
                     {LANGUAGES.map(lang => (
-                      <SelectItem key={lang.code} value={lang.code} className="text-[13px] font-bold focus:bg-primary/10 focus:text-primary">
+                      <SelectItem key={lang.code} value={lang.code} className="text-[13px] font-bold focus:bg-primary focus:text-primary-foreground">
                         <div className="flex items-center gap-2">
                           <img src={`https://flagcdn.com/w20/${lang.flag}.png`} width="20" alt={lang.flag} className="rounded-sm" />
                           <span>{lang.label}</span>

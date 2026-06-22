@@ -5,6 +5,9 @@ import {
   MessageSquare, Send, Monitor, Layers, ChevronLeft,
   Building2, Settings2, Check,
 } from 'lucide-react';
+import { FaWhatsapp, FaInstagram, FaFacebookMessenger, FaTelegramPlane } from "react-icons/fa";
+import { SiTwilio } from "react-icons/si";
+import { BsChatDotsFill } from "react-icons/bs";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -56,29 +59,13 @@ const TIMEZONES = [
 ];
 
 const CHANNELS = [
-  { id: 'whatsapp_api', name: 'WhatsApp Business API', color: '#25D366', icon: <MessageCircle className="w-4 h-4 text-white fill-white" />, price: '$10' },
-  { id: 'instagram', name: 'Instagram', gradient: 'from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]', price: '$10',
-    icon: (
-      <div className="w-4 h-4 border-2 border-white rounded-[3px] flex items-center justify-center relative">
-        <div className="w-1.5 h-1.5 border-2 border-white rounded-full" />
-        <div className="absolute top-0.5 right-0.5 w-0.5 h-0.5 bg-white rounded-full" />
-      </div>
-    )
-  },
-  { id: 'messenger', name: 'Facebook Messenger', color: '#00B2FF', icon: <MessageSquare className="w-4 h-4 text-white fill-white" />, price: '$10' },
-  { id: 'telegram', name: 'Telegram', color: '#229ED9', icon: <Send className="w-4 h-4 text-white fill-white -translate-x-0.5" />, price: '$10' },
-  { id: 'whatsapp_qr', name: 'WhatsApp QR (Z-API)', color: '#25D366', icon: <MessageCircle className="w-4 h-4 text-white fill-white" />, price: '$24' },
-  { id: 'twilio', name: 'Twilio SMS', color: '#F22F46', price: '$10',
-    icon: (
-      <div className="grid grid-cols-2 gap-0.5">
-        <div className="w-1 h-1 bg-white rounded-full" />
-        <div className="w-1 h-1 bg-white rounded-full" />
-        <div className="w-1 h-1 bg-white rounded-full" />
-        <div className="w-1 h-1 bg-white rounded-full" />
-      </div>
-    )
-  },
-  { id: 'webchat', name: 'Web Chat', color: '#8E24AA', icon: <MessageSquare className="w-3.5 h-3.5 text-white fill-white" />, price: '$10' },
+  { id: 'whatsapp_api', name: 'WhatsApp Business API', color: '#25D366', icon: <FaWhatsapp className="w-5 h-5 text-white" />, price: '$10' },
+  { id: 'instagram', name: 'Instagram', gradient: 'from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]', icon: <FaInstagram className="w-5 h-5 text-white" />, price: '$10' },
+  { id: 'messenger', name: 'Facebook Messenger', color: '#00B2FF', icon: <FaFacebookMessenger className="w-5 h-5 text-white" />, price: '$10' },
+  { id: 'telegram', name: 'Telegram', color: '#229ED9', icon: <FaTelegramPlane className="w-[18px] h-[18px] text-white -translate-x-[1px]" />, price: '$10' },
+  { id: 'whatsapp_qr', name: 'WhatsApp QR (Z-API)', color: '#25D366', icon: <FaWhatsapp className="w-5 h-5 text-white" />, price: '$24' },
+  { id: 'twilio', name: 'Twilio SMS', color: '#F22F46', icon: <SiTwilio className="w-[18px] h-[18px] text-white" />, price: '$10' },
+  { id: 'webchat', name: 'Web Chat', color: '#8E24AA', icon: <BsChatDotsFill className="w-[17px] h-[17px] text-white" />, price: '$10' },
 ];
 
 const AVATAR_COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-orange-500', 'bg-pink-500', 'bg-teal-500'];
@@ -357,12 +344,15 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
                     members.map((m: any, i: number) => {
                       const fullName = `${m.first_name || ''} ${m.last_name || ''}`.trim();
                       return (
-                        <SelectItem key={m.id} value={String(m.id)} className="pr-3">
+                        <SelectItem key={m.id} value={String(m.id)} className="group pr-3">
                           <div className="flex items-center gap-2.5">
                             <MemberAvatar name={fullName} index={i} size="sm" />
                             <div>
-                              <p className={cn("text-sm font-medium", dark ? "text-white" : "text-slate-800")}>{fullName}</p>
-                              {m.email && <p className="text-xs text-slate-400">{m.email}</p>}
+                              <p className={cn(
+                                "text-sm font-medium group-data-[highlighted]:text-white",
+                                dark ? "text-white" : "text-slate-800"
+                              )}>{fullName}</p>
+                              {m.email && <p className="text-xs text-slate-400 group-data-[highlighted]:text-white/90">{m.email}</p>}
                             </div>
                           </div>
                         </SelectItem>
@@ -422,8 +412,12 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
                 {form.limitContacts && (
                   <Input
                     type="number"
+                    min={0}
                     value={form.contactLimit}
-                    onChange={(e) => set('contactLimit', parseInt(e.target.value) || 0)}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/^0+(?=\d)/, '');
+                      set('contactLimit', Math.max(0, parseInt(cleaned) || 0));
+                    }}
                     className={cn("w-20 h-8 text-xs text-center", dark ? "bg-slate-900 border-slate-700 text-white" : "border-slate-200")}
                   />
                 )}
@@ -442,8 +436,12 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
               <div className="flex items-center gap-2 shrink-0">
                 <Input
                   type="number"
+                  min={0}
                   value={form.agentLimit}
-                  onChange={(e) => set('agentLimit', parseInt(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/^0+(?=\d)/, '');
+                    set('agentLimit', Math.max(0, parseInt(cleaned) || 0));
+                  }}
                   className={cn("w-20 h-8 text-xs text-center", dark ? "bg-slate-900 border-slate-700 text-white" : "border-slate-200")}
                 />
                 <Switch checked={form.limitAgents} onCheckedChange={(v) => set('limitAgents', v)} className={switchCls} />

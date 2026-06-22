@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { getUserInfo } from "@/lib/auth";
-import { Users, Plus, Search, Pencil, Trash2, Crown, UserX, UserCheck } from "lucide-react";
+import { Users, Plus, Search, Pencil, Trash2, Crown, UserX, UserCheck, ChevronDown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import AddAgentForm from "./AddAgentForm";
 import { useTranslation } from 'react-i18next';
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 const AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500',
@@ -30,7 +32,10 @@ const AgencyTeam = () => {
   const [editingMember, setEditingMember] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [statusTarget, setStatusTarget] = useState<{ member: any; action: 'suspend' | 'activate' } | null>(null);
   const [search, setSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [showInactive, setShowInactive] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -116,6 +121,8 @@ const AgencyTeam = () => {
         role_slug: m.role_slug || '',
         status: m.status?.toUpperCase() || 'ACTIVE',
         is_owner: m.is_owner,
+        // Timestamp for sort (newest/oldest). Fall back to created_at if updated_at missing.
+        _ts: m.created_at ? new Date(m.created_at).getTime() : (m.updated_at ? new Date(m.updated_at).getTime() : 0),
         // Carry contact numbers through so the edit form can pre-fill them.
         phone: m.phone || '',
         phone_country: m.phone_country || '',
@@ -123,9 +130,13 @@ const AgencyTeam = () => {
         whatsapp_country: m.whatsapp_country || '',
       }))
       .filter((m: any) =>
-        !q || m.email.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
+        (!q || m.email.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)) &&
+        (showInactive ? m.status !== 'ACTIVE' : m.status === 'ACTIVE')
+      )
+      .sort((a: any, b: any) =>
+        sortOrder === 'newest' ? b._ts - a._ts : a._ts - b._ts
       );
-  }, [rawMembers, search]);
+  }, [rawMembers, search, showInactive, sortOrder]);
 
   if (viewMode === 'ADD' || viewMode === 'EDIT') {
     return (
@@ -169,9 +180,9 @@ const AgencyTeam = () => {
         </button>
       </div>
 
-      {/* ── Search bar ── */}
-      <div className={cn('px-8 py-3 border-b', card, border)}>
-        <div className="relative max-w-xs">
+      {/* ── Search + filters bar ── */}
+      <div className={cn('px-8 py-3 border-b flex items-center justify-between gap-4', card, border)}>
+        <div className="relative max-w-xs flex-1">
           <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5', sub)} />
           <input
             value={search}
@@ -184,6 +195,30 @@ const AgencyTeam = () => {
                 : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-300'
             )}
           />
+        </div>
+
+        <div className="flex items-center gap-4 shrink-0">
+          <label className={cn('flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest cursor-pointer transition-opacity', dark ? 'text-slate-400' : 'text-slate-600')}>
+            <Checkbox
+              checked={showInactive}
+              onCheckedChange={(v) => setShowInactive(v === true)}
+              className="border-slate-300 w-3.5 h-3.5 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+            />
+            Show Inactive
+          </label>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className={cn(
+              'flex items-center gap-1.5 px-3 h-8 rounded-lg border text-[11px] font-bold uppercase tracking-widest transition-colors',
+              dark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            )}>
+              {sortOrder === 'newest' ? 'Newest first' : 'Oldest first'} <ChevronDown size={12} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className={cn(dark ? 'bg-[#0f1829] border-slate-800' : 'bg-white border-slate-200')}>
+              <DropdownMenuItem onClick={() => setSortOrder('newest')} className="rounded-lg py-2 font-bold text-[11px] cursor-pointer">Newest first</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder('oldest')} className="rounded-lg py-2 font-bold text-[11px] cursor-pointer">Oldest first</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -324,7 +359,7 @@ const AgencyTeam = () => {
                         {member.status === 'ACTIVE' ? (
                           <button
                             disabled={suspendMutation.isPending}
-                            onClick={() => suspendMutation.mutate(member.id)}
+                            onClick={() => setStatusTarget({ member, action: 'suspend' })}
                             title="Suspend member"
                             className={cn(
                               'p-1.5 rounded-lg border transition-all shadow-sm',
@@ -338,7 +373,7 @@ const AgencyTeam = () => {
                         ) : (
                           <button
                             disabled={activateMutation.isPending}
-                            onClick={() => activateMutation.mutate(member.id)}
+                            onClick={() => setStatusTarget({ member, action: 'activate' })}
                             title="Activate member"
                             className={cn(
                               'p-1.5 rounded-lg border transition-all shadow-sm',
@@ -458,6 +493,90 @@ const AgencyTeam = () => {
           </div>
         </div>
       )}
+
+      {/* ── Suspend / Activate confirmation modal ── */}
+      {statusTarget && (() => {
+        const isSuspend = statusTarget.action === 'suspend';
+        const mutation = isSuspend ? suspendMutation : activateMutation;
+        const verb = isSuspend ? 'Suspend' : 'Activate';
+        const verbIng = isSuspend ? 'Suspending' : 'Activating';
+        const desc = isSuspend
+          ? 'This user will lose access immediately and can no longer sign in to the platform until reactivated.'
+          : 'This user will regain full access to the platform and can sign in again.';
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className={cn(
+              'w-full max-w-[460px] rounded-2xl shadow-2xl overflow-hidden',
+              dark ? 'bg-[#0f1829] border border-slate-800' : 'bg-white border border-slate-200'
+            )}>
+              <div className={cn('h-1', isSuspend ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-400' : 'bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-400')} />
+
+              <div className="p-7">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className={cn(
+                    'w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-[13px] shrink-0',
+                    nameColor(statusTarget.member.name || statusTarget.member.first_name || 'U')
+                  )}>
+                    {(statusTarget.member.name || statusTarget.member.first_name || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className={cn('text-[13px] font-bold truncate', text)}>{statusTarget.member.name || `${statusTarget.member.first_name || ''} ${statusTarget.member.last_name || ''}`.trim() || 'User'}</p>
+                    <p className={cn('text-[11px] truncate', sub)}>{statusTarget.member.email}</p>
+                  </div>
+                  <div className="ml-auto shrink-0">
+                    <span className={cn(
+                      'text-[10px] font-bold px-2 py-1 rounded-md border',
+                      isSuspend
+                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 border-amber-200 dark:border-amber-500/20'
+                        : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                    )}>
+                      {verbIng}
+                    </span>
+                  </div>
+                </div>
+
+                <div className={cn(
+                  'rounded-xl border p-3.5 mb-5 text-[12px] leading-relaxed',
+                  isSuspend
+                    ? (dark ? 'bg-amber-500/5 border-amber-500/20 text-amber-300' : 'bg-amber-50 border-amber-100 text-amber-800')
+                    : (dark ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300' : 'bg-emerald-50 border-emerald-100 text-emerald-800')
+                )}>
+                  Are you sure you want to <strong>{verb.toLowerCase()}</strong> this user? {desc}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setStatusTarget(null)}
+                    disabled={mutation.isPending}
+                    className={cn(
+                      'flex-1 h-9 rounded-lg text-[12px] font-semibold border transition-colors',
+                      dark ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    )}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={mutation.isPending}
+                    onClick={() => {
+                      mutation.mutate(statusTarget.member.id, {
+                        onSuccess: () => setStatusTarget(null),
+                      });
+                    }}
+                    className={cn(
+                      'flex-1 h-9 rounded-lg text-[12px] font-semibold text-white transition-colors',
+                      mutation.isPending
+                        ? (isSuspend ? 'bg-amber-400 cursor-not-allowed' : 'bg-emerald-400 cursor-not-allowed')
+                        : (isSuspend ? 'bg-amber-500 hover:bg-amber-600' : 'bg-emerald-500 hover:bg-emerald-600')
+                    )}
+                  >
+                    {mutation.isPending ? `${verbIng}…` : `${verb} User`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

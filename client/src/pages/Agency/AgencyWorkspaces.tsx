@@ -121,7 +121,7 @@ const AgencyWorkspaces = () => {
   const filteredWorkspaces = displayWorkspaces
     .filter((ws: any) =>
       ws.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      (showInactive || ws.status === 'Active')
+      (showInactive ? ws.status !== 'Active' : ws.status === 'Active')
     )
     .sort((a: any, b: any) =>
       sortOrder === 'newest' ? b._ts - a._ts : a._ts - b._ts

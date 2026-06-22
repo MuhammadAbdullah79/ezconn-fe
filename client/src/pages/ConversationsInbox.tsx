@@ -77,13 +77,15 @@ const WA_SIZE_LIMITS: Record<string, number> = {
 };
 const WA_DOC_LIMIT = 100 * 1024 * 1024; // 100 MB for documents
 
-// Chat-thread message-mode filter (replyagent header dropdown). Only the modes
-// backed by the `communication_mode` column are offered (NOTE / OLD_DATA need
-// separate data sources EZCONN doesn't surface in the thread).
+// Chat-thread message-mode filter (replyagent header dropdown — 5 modes).
+// ALL/AUTOMATION/INBOX map to communication_mode; NOTE shows note_action/note
+// rows; OLD_DATA shows messages older than 3 months (replyagent archive view).
 const CHAT_MODES = [
   { value: "ALL", label: "Smart flow & Inbox" },
   { value: "AUTOMATION", label: "Smart flow messages" },
   { value: "INBOX", label: "Inbox messages" },
+  { value: "NOTE", label: "Note messages" },
+  { value: "OLD_DATA", label: "Older than 3 months" },
 ] as const;
 
 // Target languages for the AI translate picker (replyagent language list).
@@ -743,7 +745,7 @@ export default function ConversationsInbox() {
     queryFn: async () => {
       if (!selectedConversation) return null;
       try {
-        const res = await apiRequest("POST", `/api/inbox/messages/${selectedConversation}`, { communication_mode: chatMode }, { silentStatuses: [404] });
+        const res = await apiRequest("POST", `/api/inbox/messages/${selectedConversation}`, { communication_mode: chatMode, old_data: chatMode === "OLD_DATA" }, { silentStatuses: [404] });
         return res.json();
       } catch (e: any) {
         // The selected conversation was deleted (e.g. its contact was deleted).

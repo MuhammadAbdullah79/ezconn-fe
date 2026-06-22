@@ -36,7 +36,9 @@ import {
     RefreshCw,
     PauseCircle,
     StopCircle,
-    Plus
+    Plus,
+    ExternalLink,
+    Zap
 } from "lucide-react";
 import {
     Tooltip,
@@ -213,6 +215,26 @@ export default function ContactProfileSidebar({
         return () => clearInterval(interval);
     }, [isFlowPaused, flowPauseTimer]);
 
+    // Restore the paused state from the backend (contacts.automations_paused_till)
+    // so reopening / refreshing the conversation shows the live countdown — not a
+    // reset 15-min timer (replyagent drives the CountDownCircle off this field).
+    useEffect(() => {
+        const till = (profileData as any)?.automations_paused_till;
+        if (till) {
+            const ms = new Date(till).getTime() - Date.now();
+            if (ms > 0) {
+                const secs = Math.ceil(ms / 1000);
+                setIsFlowPaused(true);
+                setFlowPauseTimer(secs);
+                setMaxTime(Math.max(secs, 900));
+                return;
+            }
+        }
+        setIsFlowPaused(false);
+        setFlowPauseTimer(900);
+        setMaxTime(900);
+    }, [(profileData as any)?.automations_paused_till]);
+
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -335,6 +357,9 @@ export default function ContactProfileSidebar({
         onSuccess: () => {
             setIsAddOpportunityModalOpen(false);
             setNewOpportunity({ pipeline: "", stage: "", title: "", value: "", currency: "USD", closingDate: "", confidence: "5", agent: "", contact: "", tags: [], note: "" });
+            // Refetch so the new opportunity appears in the tab immediately
+            // (replyagent re-pulls the profile after opportunityUpdated).
+            onRefreshProfile?.();
         },
     });
 
@@ -346,6 +371,9 @@ export default function ContactProfileSidebar({
             pl_step_id: newOpportunity.stage,
             contact_id: contactId,
             value: newOpportunity.value || 0,
+            currency: newOpportunity.currency || "USD",
+            // form stores 1–10 "confidence"; opportunity probability is a percentage.
+            probability: newOpportunity.confidence ? Number(newOpportunity.confidence) * 10 : undefined,
             closing_date: newOpportunity.closingDate || undefined,
         });
     };
@@ -370,6 +398,18 @@ export default function ContactProfileSidebar({
             const res = await apiRequest("POST", `/api/inbox/profile-action/${conversation.id}`, { action, minutes });
             return res.json();
         },
+        // Refetch so the paused state stays driven by the backend paused_till.
+        onSuccess: () => onRefreshProfile?.(),
+    });
+
+    // Remove the contact from a queued smart-flow / pending chat-input
+    // (replyagent contactProfileAction automation_queue / chat_inputs).
+    const removeAutomationMutation = useMutation({
+        mutationFn: async (vars: { action: string; action_table_id: string }) => {
+            const res = await apiRequest("POST", `/api/inbox/profile-action/${conversation.id}`, vars);
+            return res.json();
+        },
+        onSuccess: () => onRefreshProfile?.(),
     });
 
     // Mutation: create task
@@ -410,109 +450,105 @@ export default function ContactProfileSidebar({
 
     return (
         <>
-            <Card className="w-96 border-l-0 rounded-l-none" data-testid="contact-panel">
-                <CardContent className="space-y-6 pt-8">
-                    <div className="flex flex-col items-center gap-3">
-                        <button
-                            className={`flex flex-col items-center gap-3 focus:outline-none ${canViewProfile ? "hover:opacity-80 transition-opacity cursor-pointer" : "cursor-default"}`}
-                            disabled={!canViewProfile}
-                            onClick={() => {
-                                if (!canViewProfile) return;
-                                if ((profileData as any)?.contact?.id) setIsDetailsModalOpen(true);
-                            }}
-                        >
-                            <Avatar className="h-20 w-20">
-                                <AvatarFallback className={`text-2xl ${getAvatarColor(displayName)}`}>{initials}</AvatarFallback>
-                            </Avatar>
-                            <div className="text-center">
-                                <h3 className={`font-semibold text-lg ${canViewProfile ? "hover:underline" : ""}`}>{displayName}</h3>
-                                {canSeeChannels && (
-                                  <p className="text-sm text-muted-foreground">{conversation?.phoneNumber}</p>
-                                )}
-                            </div>
-                        </button>
+            <Card className="w-[28rem] border-l-0 rounded-l-none" data-testid="contact-panel">
+                <CardContent className="space-y-3 pt-5">
+                    {/* Header — replyagent: rounded-square avatar, name, handle,
+                        then a bordered "Profile" button (opens the full contact modal). */}
+                    <div className="flex flex-col items-center gap-1.5">
+                        <div className={`h-16 w-16 rounded-lg flex items-center justify-center text-xl font-semibold text-white ${getAvatarColor(displayName)}`}>
+                            {initials}
+                        </div>
+                        <div className="text-center">
+                            <h3 className="font-semibold text-lg">{displayName}</h3>
+                            {canSeeChannels && (
+                                <p className="text-sm text-muted-foreground">{conversation?.phoneNumber}</p>
+                            )}
+                        </div>
+                        {canViewProfile && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1.5 mt-1 btn-outline-primary font-normal"
+                                onClick={() => { if ((profileData as any)?.contact?.id) setIsDetailsModalOpen(true); }}
+                                data-testid="button-open-profile"
+                            >
+                                <ExternalLink size={13} /> Profile
+                            </Button>
+                        )}
                     </div>
 
                     <div className="space-y-4">
-                        {/* Tabs */}
-                        <div className="flex justify-center w-full">
-                            <div className="bg-slate-200/75 dark:bg-slate-800 rounded-lg p-1 flex gap-1 items-center justify-between w-full">
-                                {[
-                                    { id: "details", icon: User, label: "Details" },
-                                    { id: "media", icon: ImageIcon, label: "Media" },
-                                    { id: "custom-fields", icon: NotebookPen, label: "Custom Fields" },
-                                    { id: "opportunities", icon: BarChart3, label: "Opportunities" },
-                                    { id: "tags", icon: Tag, label: "Assigned Tags" },
-                                    { id: "tasks", icon: ClipboardList, label: "Create Task" },
-                                ].map((tab) => (
-                                    <TooltipProvider key={tab.id}>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <button
-                                                    onClick={() => {
-                                                        setActiveTab(tab.id);
-                                                    }}
-                                                    className={`p-2 rounded-md transition-all flex items-center justify-center flex-1 ${activeTab === tab.id
-                                                        ? "bg-background text-foreground shadow-sm"
-                                                        : "text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-slate-200"
-                                                        }`}
-                                                >
-                                                    <tab.icon size={18} />
-                                                </button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>{tab.label}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                ))}
-                            </div>
+                        {/* Tabs — replyagent: plain icon row (no container box),
+                            active icon coloured. */}
+                        <div className="flex items-center justify-around w-full border-b pb-2">
+                            {[
+                                { id: "details", icon: User, label: "Details" },
+                                { id: "media", icon: ImageIcon, label: "Media" },
+                                { id: "custom-fields", icon: NotebookPen, label: "Custom Fields" },
+                                { id: "opportunities", icon: BarChart3, label: "Opportunities" },
+                                { id: "tags", icon: Tag, label: "Assigned Tags" },
+                                { id: "tasks", icon: ClipboardList, label: "Create Task" },
+                            ].map((tab) => (
+                                <TooltipProvider key={tab.id}>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                onClick={() => setActiveTab(tab.id)}
+                                                className={`p-1.5 transition-colors ${activeTab === tab.id
+                                                    ? "text-primary"
+                                                    : "text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-slate-200"
+                                                    }`}
+                                            >
+                                                <tab.icon size={18} />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>{tab.label}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            ))}
                         </div>
 
                         {/* Chat Assignment Section - Only visible in "details" tab */}
                         {activeTab === "details" && (
                             <>
+                                {/* Assigned to — replyagent: label + "Assign to myself"
+                                    on the right, then agent avatar + name + picker. */}
                                 <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h4 className="font-semibold text-sm">Chat Assignment</h4>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        {/* Currently assigned agent label */}
-                                        {assignedAgent && (
-                                            <p className="text-xs text-muted-foreground">
-                                                Assigned to:{" "}
-                                                <span className="font-semibold text-foreground">
-                                                    {assignedAgent === "self"
-                                                        ? "You"
-                                                        : (agentOptions.find((a: any) => a.id === assignedAgent)?.name || assignedAgent)}
-                                                </span>
-                                            </p>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="text-sm font-semibold">Assigned to</label>
+                                        {canAssignConversations && (!assignedAgent || assignedAgent !== "self") && (
+                                            <button
+                                                onClick={() => onAssignAgent("self")}
+                                                className="text-xs text-primary flex items-center gap-1 hover:underline"
+                                                data-testid="button-assign-self"
+                                            >
+                                                <Zap size={12} /> Assign to myself
+                                            </button>
                                         )}
-                                        {canAssignConversations && (
-                                        <div className="flex items-center gap-1">
-                                            {(!assignedAgent || assignedAgent !== "self") ? (
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="flex-1 h-8 text-xs btn-outline-primary font-normal"
-                                                    onClick={() => onAssignAgent("self")}
-                                                >
-                                                    {assignedAgent ? "Reassign to Me" : "Assign to Me"}
-                                                </Button>
-                                            ) : (
-                                                <div className="flex-1 text-xs text-muted-foreground p-2 bg-muted rounded text-center h-8 flex items-center justify-center">
-                                                    Assigned to You
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {(() => {
+                                            const assignedName = !assignedAgent
+                                                ? "Unassigned"
+                                                : (assignedAgent === "self" ? "You" : (agentOptions.find((a: any) => a.id === assignedAgent)?.name || assignedAgent));
+                                            return (
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    {assignedAgent && (
+                                                        <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white flex-shrink-0 ${getAvatarColor(assignedName)}`}>
+                                                            {getInitials(assignedName)}
+                                                        </div>
+                                                    )}
+                                                    <span className={`text-sm truncate ${assignedAgent ? "font-medium" : "text-muted-foreground"}`}>{assignedName}</span>
                                                 </div>
-                                            )}
-
+                                            );
+                                        })()}
+                                        {canAssignConversations && (
                                             <CustomDropdown
                                                 options={agentOptions}
                                                 selected={assignedAgent && assignedAgent !== "self" ? [assignedAgent] : []}
-                                                onChange={(selected) => {
-                                                    if (selected.length > 0) {
-                                                        onAssignAgent(selected[0]);
-                                                    }
-                                                }}
+                                                onChange={(selected) => { if (selected.length > 0) onAssignAgent(selected[0]); }}
                                                 placeholder=""
                                                 width="auto"
                                                 className="h-8 w-8 px-[0.5rem] justify-center btn-outline-primary border-primary text-primary hover:bg-primary hover:text-white dark:border-primary dark:text-primary dark:hover:bg-primary dark:hover:text-white"
@@ -520,12 +556,11 @@ export default function ContactProfileSidebar({
                                                 popoutWidth="220px"
                                                 popoutAlign="right"
                                             />
-                                        </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <Separator className="my-4" />
+                                <Separator className="my-2" />
 
                                 {/* Support Number — real value from backend. The
                                     hardcoded "0123-123" was placeholder and is
@@ -538,7 +573,7 @@ export default function ContactProfileSidebar({
                                     </div>
                                 </div>
 
-                                <Separator className="my-4" />
+                                <Separator className="my-2" />
 
                                 {/* Chatting with channel (replyagent shows this
                                     next to the Smart Flow section). */}
@@ -555,7 +590,7 @@ export default function ContactProfileSidebar({
                                             )}
                                         </div>
                                     </div>
-                                    <Separator className="my-4" />
+                                    <Separator className="my-2" />
                                   </>
                                 )}
 
@@ -569,16 +604,50 @@ export default function ContactProfileSidebar({
                                             <RefreshCw size={14} />
                                         </Button>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">
-                                        {profileData?.smart_flow?.name
-                                          ? (profileData.smart_flow.paused
-                                              ? `${profileData.smart_flow.name} (paused)`
-                                              : profileData.smart_flow.name)
-                                          : "This contact is not currently part of any Smart Flow."}
-                                    </p>
+                                    {(() => {
+                                        const contactAutos: any[] = (profileData as any)?.contact_automations ?? [];
+                                        const inputAutos: any[] = (profileData as any)?.input_automations ?? [];
+                                        if (contactAutos.length === 0 && inputAutos.length === 0) {
+                                            return (
+                                                <p className="text-sm text-muted-foreground">
+                                                    This contact is not currently part of any Smart Flow.
+                                                </p>
+                                            );
+                                        }
+                                        return (
+                                            <div className="space-y-2">
+                                                {contactAutos.map((a: any) => (
+                                                    <div key={`q${a.id}`} className="flex items-center justify-between gap-2 text-sm">
+                                                        <span className="truncate">{a.name}</span>
+                                                        <button
+                                                            className="text-xs text-red-600 hover:underline flex-shrink-0"
+                                                            onClick={() => removeAutomationMutation.mutate({ action: "automation_queue", action_table_id: String(a.id) })}
+                                                            data-testid={`remove-automation-${a.id}`}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                {inputAutos.map((a: any) => (
+                                                    <div key={`i${a.id}`} className="flex items-center justify-between gap-2 text-sm">
+                                                        <span className="truncate">
+                                                            {a.name} <span className="text-[10px] text-muted-foreground">(input)</span>
+                                                        </span>
+                                                        <button
+                                                            className="text-xs text-red-600 hover:underline flex-shrink-0"
+                                                            onClick={() => removeAutomationMutation.mutate({ action: "chat_inputs", action_table_id: String(a.id) })}
+                                                            data-testid={`remove-input-${a.id}`}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
-                                <Separator className="my-4" />
+                                <Separator className="my-2" />
 
                                 {/* Pause Automated Messages */}
                                 <div>
@@ -659,27 +728,49 @@ export default function ContactProfileSidebar({
                         {activeTab === "media" && (
                             <div className="space-y-4">
                                 {(() => {
-                                    // Aggregate all media
-                                    const mediaItems: any[] = [];
+                                    // Prefer the backend's full media history (replyagent
+                                    // profile.media_items) — covers media older than the
+                                    // loaded thread page + includes audio. Falls back to
+                                    // aggregating the loaded messages when not yet available.
+                                    const backendMedia: any[] = (profileData as any)?.media ?? [];
+                                    let mediaItems: any[] = [];
 
-                                    messages.forEach(msg => {
-                                        if (msg.images && msg.images.length > 0) {
-                                            msg.images.forEach((img: any) => {
-                                                mediaItems.push({ ...img, type: 'image', time: msg.time, from: msg.from, messageId: msg.id });
-                                            });
-                                        }
-                                        if (msg.video) {
-                                            mediaItems.push({ ...msg.video, type: 'video', time: msg.time, from: msg.from, messageId: msg.id });
-                                        }
-                                        if (msg.attachments && msg.attachments.length > 0) {
-                                            msg.attachments.forEach((att: any) => {
-                                                mediaItems.push({ ...att, type: 'document', time: msg.time, from: msg.from, messageId: msg.id });
-                                            });
-                                        }
-                                    });
-
-                                    // Reverse to show newest first
-                                    mediaItems.reverse();
+                                    if (backendMedia.length > 0) {
+                                        mediaItems = backendMedia.map((m: any) => {
+                                            const mt = String(m.media_type || "").toLowerCase();
+                                            return {
+                                                url: m.url,
+                                                thumbnail: m.thumb,
+                                                name: m.name,
+                                                size: 0,
+                                                type: mt === "video" ? "video" : mt === "audio" ? "audio" : mt === "image" ? "image" : "document",
+                                                time: m.created_at,
+                                                from: m.direction === "OUTGOING" ? "agent" : "user",
+                                                messageId: Number(m.message_id),
+                                            };
+                                        });
+                                    } else {
+                                        messages.forEach(msg => {
+                                            if (msg.images && msg.images.length > 0) {
+                                                msg.images.forEach((img: any) => {
+                                                    mediaItems.push({ ...img, type: 'image', time: msg.time, from: msg.from, messageId: msg.id });
+                                                });
+                                            }
+                                            if (msg.video) {
+                                                mediaItems.push({ ...msg.video, type: 'video', time: msg.time, from: msg.from, messageId: msg.id });
+                                            }
+                                            if ((msg as any).audio) {
+                                                mediaItems.push({ ...(msg as any).audio, type: 'audio', time: msg.time, from: msg.from, messageId: msg.id });
+                                            }
+                                            if (msg.attachments && msg.attachments.length > 0) {
+                                                msg.attachments.forEach((att: any) => {
+                                                    mediaItems.push({ ...att, type: 'document', time: msg.time, from: msg.from, messageId: msg.id });
+                                                });
+                                            }
+                                        });
+                                        // Reverse to show newest first
+                                        mediaItems.reverse();
+                                    }
 
                                     if (mediaItems.length === 0) {
                                         return (
@@ -1675,14 +1766,6 @@ export default function ContactProfileSidebar({
                                     })}
                                 </SelectContent>
                             </Select>
-                        </div>
-                        <div>
-                            <label className="text-sm font-medium">Contact</label>
-                            <Input
-                                placeholder="Enter contact..."
-                                value={newTask.contact}
-                                onChange={(e) => setNewTask({ ...newTask, contact: e.target.value })}
-                            />
                         </div>
                     </div>
                     <div className="flex justify-end gap-2">

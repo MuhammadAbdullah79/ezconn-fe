@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Search, RefreshCw, Eye, EyeOff, Download, Send, Phone, Mail, Plus, Filter, ArrowUp, X, Image, Mic, MicOff, Paperclip, XCircle, Smile, Trash2 } from "react-feather";
-import { GripVertical, MoreVertical, ChevronDown, User, ListFilter, CheckCircle, AlertOctagon, UserX, Check, CheckCheck, Clock, CornerUpLeft } from "lucide-react";
+import { GripVertical, MoreVertical, ChevronDown, User, ListFilter, CheckCircle, AlertOctagon, UserX, Check, CheckCheck, Clock, CornerUpLeft, Folder as FolderIcon, Bot, FileText, MapPin, Type as TypeIcon, Bold, Italic, Strikethrough, Code } from "lucide-react";
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +65,8 @@ interface Conversation {
   assignedAgent: string | null;
   assignedAgentName: string | null;
   channel: string;
+  isAssigned?: boolean;
+  folderId?: string | null;
 }
 
 // WhatsApp Cloud API file-size limits (bytes)
@@ -74,6 +76,22 @@ const WA_SIZE_LIMITS: Record<string, number> = {
   audio: 16 * 1024 * 1024,  // 16 MB
 };
 const WA_DOC_LIMIT = 100 * 1024 * 1024; // 100 MB for documents
+
+// Chat-thread message-mode filter (replyagent header dropdown). Only the modes
+// backed by the `communication_mode` column are offered (NOTE / OLD_DATA need
+// separate data sources EZCONN doesn't surface in the thread).
+const CHAT_MODES = [
+  { value: "ALL", label: "Smart flow & Inbox" },
+  { value: "AUTOMATION", label: "Smart flow messages" },
+  { value: "INBOX", label: "Inbox messages" },
+] as const;
+
+// Target languages for the AI translate picker (replyagent language list).
+const AI_LANGUAGES = [
+  "English", "Spanish", "Arabic", "Urdu", "Hindi", "French", "German",
+  "Portuguese", "Italian", "Turkish", "Russian", "Chinese", "Japanese",
+  "Korean", "Indonesian", "Dutch", "Bengali", "Punjabi",
+];
 
 function getWaLimit(file: File): number {
   const category = file.type.split('/')[0];
@@ -103,6 +121,19 @@ interface Message {
   attachments?: Array<{ url: string; name: string; size: number }>;
   video?: { url: string; name: string; size: number; thumbnail?: string };
   audio?: { url: string; name: string; size: number };
+  // System messages (replyagent note_action pills): ticket banner, closed, etc.
+  kind?: 'system';
+  tone?: string;
+  // Outgoing sender info — drives the per-bubble agent avatar vs bot icon.
+  communicationMode?: string;
+  senderName?: string | null;
+  // Failed-send error detail (replyagent error tooltip).
+  errorData?: string | null;
+  // WhatsApp template message → rendered as a preview card.
+  template?: { name: string; components: any[]; params: any[] } | null;
+  // Tier-3 rich types.
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string } | null;
+  vcards?: any[] | null;
 }
 
 interface Agent {
@@ -132,6 +163,8 @@ interface BackendConversation {
   status?: string;
   users?: { id?: number | string; name?: string; full_name?: string; first_name?: string; last_name?: string };
   modelable_type?: string;
+  is_assigned?: number | boolean;
+  folder_id?: number | string | null;
 }
 
 interface BackendMessage {
@@ -199,6 +232,50 @@ const getDisplayName = (conversation?: Conversation | null): string => {
   return conversation.displayName?.trim() || conversation.phoneNumber || conversation.name || "Unknown";
 };
 
+// Two-letter initials for the per-bubble sender/contact avatars.
+const getInitials = (name?: string | null): string => {
+  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+// Compact WhatsApp-template preview card for template messages in the thread
+// (replyagent TemplatePreview). Parses Meta components (HEADER/BODY/FOOTER/
+// BUTTONS) and substitutes the sent {{n}} body variables.
+const TemplateMessageCard: React.FC<{ template: { name: string; components: any[]; params: any[] } }> = ({ template }) => {
+  const components = Array.isArray(template.components) ? template.components : [];
+  const header = components.find((c: any) => c.type === "HEADER");
+  const body = components.find((c: any) => c.type === "BODY");
+  const footer = components.find((c: any) => c.type === "FOOTER");
+  const buttons = components.find((c: any) => c.type === "BUTTONS");
+
+  const bodyParams =
+    (template.params || []).find((c: any) => String(c.type || "").toLowerCase() === "body")?.parameters ?? [];
+  const bodyText = String(body?.text ?? "").replace(/\{\{(\d+)\}\}/g, (_m: string, n: string) => {
+    const p = bodyParams[Number(n) - 1];
+    return (p && (p.text ?? p.image?.link ?? "")) || `{{${n}}}`;
+  });
+
+  return (
+    <div className="rounded-md border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/20 overflow-hidden min-w-[12rem] max-w-[20rem]">
+      <div className="px-2 py-1 bg-black/5 dark:bg-white/5 text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+        <FileText size={11} /> Template{template.name ? ` · ${template.name}` : ""}
+      </div>
+      {header?.text && <div className="px-3 pt-2 text-sm font-semibold">{header.text}</div>}
+      {bodyText && <div className="px-3 py-2 text-sm whitespace-pre-wrap">{bodyText}</div>}
+      {footer?.text && <div className="px-3 pb-2 text-xs text-muted-foreground">{footer.text}</div>}
+      {Array.isArray(buttons?.buttons) && buttons.buttons.length > 0 && (
+        <div className="border-t border-black/10 dark:border-white/10 divide-y divide-black/10 dark:divide-white/10">
+          {buttons.buttons.map((b: any, i: number) => (
+            <div key={i} className="px-3 py-1.5 text-xs text-center text-blue-600 dark:text-blue-400">{b.text}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // WhatsApp-style delivery tick mark for outgoing messages.
 //   pending   -> clock
 //   sent      -> single grey ✓
@@ -231,6 +308,9 @@ export default function ConversationsInbox() {
 
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  // Chat thread message-mode filter (replyagent header dropdown).
+  // ALL = Smart flow & Inbox · AUTOMATION = Smart flow · INBOX = Inbox messages.
+  const [chatMode, setChatMode] = useState<string>("ALL");
   const [selectedConversation, setSelectedConversation] = useState<number | null>(() => {
     try {
       const saved = sessionStorage.getItem("inbox_selected_conv");
@@ -411,6 +491,49 @@ export default function ConversationsInbox() {
   // initialization" on first render.
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  // Header "Agents" dropdown (replyagent UserFilter). Declared here — before the
+  // list/count queries that read it — to avoid the same TDZ trap as above.
+  const [selectedFilterAgents, setSelectedFilterAgents] = useState<string[]>([]);
+  // Sort menu (replyagent sort_list). Declared early — the list query reads it.
+  const SORT_OPTIONS = [
+    { column: "last_updated", order: "desc", text: "Latest message ↓" },
+    { column: "last_updated", order: "asc", text: "Latest message ↑" },
+    { column: "queued_at", order: "asc", text: "Queue order" },
+  ] as const;
+  const [sortBy, setSortBy] = useState<{ column: string; order: string; text: string }>({
+    ...SORT_OPTIONS[0],
+  });
+  // Search-box type selector (replyagent listItems). Default = broad name match
+  // so the plain box keeps working. The list query sends `search_type`.
+  const SEARCH_TYPES = [
+    { slug: "full_name", name: "Full name" },
+    { slug: "first_name", name: "First name" },
+    { slug: "last_name", name: "Last name" },
+    { slug: "phone", name: "Phone" },
+    { slug: "email", name: "Email" },
+    { slug: "whatsapp", name: "WhatsApp number" },
+    { slug: "instagram", name: "Instagram handle" },
+    { slug: "telegram", name: "Telegram handle" },
+    { slug: "messenger", name: "Messenger handle" },
+    { slug: "support-ticket", name: "Support ticket" },
+    { slug: "id", name: "Contact ID" },
+  ] as const;
+  const [searchType, setSearchType] = useState<string>("full_name");
+  const searchMinChars = searchType === "whatsapp" ? 4 : 3;
+  // Pagination — grows by a page each "Load more" (replyagent next_page). Reset
+  // to one page whenever the visible set changes.
+  const [listLimit, setListLimit] = useState(20);
+  // Advanced filter rows (filter-popover). Declared early — the list query sends
+  // them as `advanced_filters` so filtering runs server-side over the full set.
+  const [filters, setFilters] = useState<Filter[]>([]);
+  // Only complete rows are sent (value present unless an empty/not-empty op).
+  const appliedFilters = useMemo(
+    () =>
+      filters
+        .filter((f) => ["is empty", "is not empty"].includes(f.operator) || (f.value ?? "").trim() !== "")
+        .map((f) => ({ column: f.column, operator: f.operator, value: f.value })),
+    [filters],
+  );
 
   // Global tab counts — must come from a SEPARATE call (`/inbox/count`) so
   // they stay correct regardless of which tab is active. Otherwise the counts
@@ -418,11 +541,12 @@ export default function ConversationsInbox() {
   // switch to that tab because they were computed from the page's filtered
   // result set instead of the workspace-wide totals.
   const { data: countsResponse } = useQuery<any>({
-    queryKey: ["/api/inbox/count", { activeFolderId, selectedChannels }],
+    queryKey: ["/api/inbox/count", { activeFolderId, selectedChannels, selectedFilterAgents }],
     queryFn: async () => {
       const res = await apiRequest("POST", "/api/inbox/count", {
         folder_id: activeFolderId ? activeFolderId : undefined,
         channel_types: selectedChannels.length ? selectedChannels : undefined,
+        users: selectedFilterAgents.length ? selectedFilterAgents : undefined,
       });
       return res.json();
     },
@@ -441,12 +565,21 @@ export default function ConversationsInbox() {
     };
   }, [countsResponse]);
 
+  // Per-folder chat counts (replyagent folder badge). Keyed by folder id.
+  const folderCountMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const fc of (countsResponse?.folder_counts ?? [])) {
+      m[String(fc.folder_id)] = fc.chat_count ?? 0;
+    }
+    return m;
+  }, [countsResponse]);
+
   // Fetch inbox list. The backend list endpoint accepts the lowercase tab
   // names and maps them internally to the schema enum (ACTIVE / COMPLETED /
   // UNASSIGNED). "my_chats" is purely client-side filtering (we ask the
   // backend for "all" and then filter to assignedAgent === me).
   const { data: inboxResponse, isLoading: isLoadingInbox } = useQuery({
-    queryKey: ["/api/inbox/list", { activeTab, searchQuery, activeFolderId, selectedChannels }],
+    queryKey: ["/api/inbox/list", { activeTab, searchQuery, searchType, activeFolderId, selectedChannels, selectedFilterAgents, sortBy, listLimit, appliedFilters }],
     queryFn: async () => {
       // Map the replyagent tab vocab onto the backend filter params.
       // - Read / Unread → `is_read` (1 / 0)
@@ -467,9 +600,16 @@ export default function ConversationsInbox() {
         status,
         is_read,
         is_upcoming,
-        search: searchQuery,
+        // Only send the term once it clears the min-char threshold (replyagent:
+        // WhatsApp=4, others=3) so single keystrokes don't fire wide queries.
+        search: searchQuery.trim().length >= searchMinChars ? searchQuery : "",
+        search_type: searchType,
         folder_id: activeFolderId ? activeFolderId : undefined,
         channel_types: selectedChannels.length ? selectedChannels : undefined,
+        users: selectedFilterAgents.length ? selectedFilterAgents : undefined,
+        sort: { column: sortBy.column, order: sortBy.order },
+        limit: listLimit,
+        advanced_filters: appliedFilters.length ? appliedFilters : undefined,
       });
       return res.json();
     },
@@ -527,6 +667,8 @@ export default function ConversationsInbox() {
         ? (item.users.full_name || `${item.users.first_name || ''} ${item.users.last_name || ''}`.trim() || item.users.name || null)
         : null,
       channel: detectChannel(item.modelable_type),
+      isAssigned: !!item.is_assigned,
+      folderId: item.folder_id != null ? String(item.folder_id) : null,
     };
   });
 
@@ -551,38 +693,57 @@ export default function ConversationsInbox() {
 
   const [showContactPanel, setShowContactPanel] = useState(false);
   const [agentStatus, setAgentStatus] = useState<"available" | "away">("available");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [sidebarWidth, setSidebarWidth] = useState(384);
   const [isDragging, setIsDragging] = useState(false);
   const [assignedAgent, setAssignedAgent] = useState<string | null>(null);
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  // Filter State
+  // ─── Bulk select + actions (replyagent select-all + actions menu) ───
+  // IDs of conversations ticked in the list. Drives the select-all checkbox,
+  // the "N selected" toolbar, and the bulk actions menu.
+  const [selectedInboxIds, setSelectedInboxIds] = useState<number[]>([]);
+  const [bulkSnoozeOpen, setBulkSnoozeOpen] = useState(false);
+  const [bulkSnoozeUntil, setBulkSnoozeUntil] = useState("");
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkAssignAgent, setBulkAssignAgent] = useState<string>("");
+
+  // Filter State (`filters` is declared earlier with the query-driving state.)
   const [showFilter, setShowFilter] = useState(false);
-  const [filters, setFilters] = useState<Filter[]>([]);
   const [draggedFilterId, setDraggedFilterId] = useState<string | null>(null);
   const [openFilterColumnDropdown, setOpenFilterColumnDropdown] = useState<string | null>(null);
   const [openFilterOperatorDropdown, setOpenFilterOperatorDropdown] = useState<string | null>(null);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
 
-  // New Header Dropdowns State
-  const [selectedFilterAgents, setSelectedFilterAgents] = useState<string[]>([]);
-  const [selectedFilterChannels, setSelectedFilterChannels] = useState<string[]>([]);
+  // (selectedFilterAgents is declared above with the other query-driving filter
+  // state. The header "Channels" dropdown binds directly to `selectedChannels`,
+  // so there's no separate selectedFilterChannels state anymore.)
 
+  // Full channel set (replyagent supports all of these). The header Channels
+  // dropdown drives `selectedChannels`, which is wired into the list/count API.
+  const channelImg = (src: string, alt: string) =>
+    React.createElement("img", { src, alt, className: "w-3.5 h-3.5" });
   const channelOptions = [
-    { id: "whatsapp", name: "Whatsapp", icon: React.createElement("img", { src: "/images/automations/whatsapp.svg", alt: "WhatsApp", className: "w-3.5 h-3.5" }) },
-    { id: "instagram", name: "Instagram", icon: React.createElement("img", { src: "/images/automations/instagram.svg", alt: "Instagram", className: "w-3.5 h-3.5" }) },
-    { id: "messenger", name: "Messenger", icon: React.createElement("img", { src: "/images/automations/messenger.svg", alt: "Messenger", className: "w-3.5 h-3.5" }) },
+    { id: "whatsapp", name: "WhatsApp", icon: channelImg("/images/automations/whatsapp.svg", "WhatsApp") },
+    { id: "instagram", name: "Instagram", icon: channelImg("/images/automations/instagram.svg", "Instagram") },
+    { id: "messenger", name: "Messenger", icon: channelImg("/images/automations/messenger.svg", "Messenger") },
+    { id: "telegram", name: "Telegram", icon: channelImg("/images/automations/telegram.svg", "Telegram") },
+    { id: "sms", name: "SMS", icon: channelImg("/images/automations/sms.svg", "SMS") },
+    { id: "zapi", name: "Z-API", icon: channelImg("/images/automations/whatsapp.svg", "Z-API") },
+    { id: "webchat", name: "Webchat", icon: React.createElement(Mail, { size: 14 }) },
   ];
 
   // Fetch messages for selected conversation
   const { data: messagesResponse, isLoading: isLoadingMessages } = useQuery({
+    // NB: chatMode is intentionally NOT in the queryKey — the socket handlers and
+    // optimistic mutations patch this cache via the 2-element key, so changing the
+    // key per mode would silently break live updates. Mode switches force a
+    // refetch through an explicit invalidate effect below instead.
     queryKey: ["/api/inbox/messages", selectedConversation],
     queryFn: async () => {
       if (!selectedConversation) return null;
       try {
-        const res = await apiRequest("POST", `/api/inbox/messages/${selectedConversation}`, {}, { silentStatuses: [404] });
+        const res = await apiRequest("POST", `/api/inbox/messages/${selectedConversation}`, { communication_mode: chatMode }, { silentStatuses: [404] });
         return res.json();
       } catch (e: any) {
         // The selected conversation was deleted (e.g. its contact was deleted).
@@ -606,7 +767,18 @@ export default function ConversationsInbox() {
   useEffect(() => {
     shouldScrollToBottomRef.current = true;
     setIsChatVisible(false);
+    setChatMode("ALL"); // reset thread mode-filter on conversation switch
   }, [selectedConversation]);
+
+  // Mode-filter changes the same cache entry (key stays 2-element), so force a
+  // refetch when the agent switches modes. staleTime:0 means the new mode's
+  // payload is sent on the refetch.
+  useEffect(() => {
+    if (selectedConversation) {
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatMode]);
 
   useEffect(() => {
     const convLoaded = conversations.some((c: any) => c.id === selectedConversation);
@@ -629,8 +801,22 @@ export default function ConversationsInbox() {
     return undefined;
   };
 
-  const messages: Message[] = (messagesResponse?.messages || []).map((m: BackendMessage) => {
+  const messages: Message[] = (messagesResponse?.messages || []).map((m: BackendMessage, index: number) => {
     const raw = m as any;
+
+    // System messages (replyagent note_action pills) — rendered as centered
+    // dividers, not bubbles. Negative synthetic id keeps Message.id numeric.
+    if (raw.kind === 'system') {
+      return {
+        id: -(index + 1),
+        from: 'user',
+        kind: 'system',
+        tone: raw.tone,
+        text: raw.text || '',
+        time: raw.created_at || new Date().toISOString(),
+      } as Message;
+    }
+
     // Separate image vs non-image uploads from parsed_files
     const parsedFiles: Array<{ url: string; name: string; size: number; mime: string }> = raw.parsed_files || [];
     const imageFiles = parsedFiles.filter((f) => f.mime?.startsWith('image/'));
@@ -643,8 +829,34 @@ export default function ConversationsInbox() {
       !f.name?.toLowerCase().startsWith('voice-message')
     );
 
-    const rawText = (m.text ?? m.message_text ?? '').toString().trim();
+    let rawText = (m.text ?? m.message_text ?? '').toString().trim();
     const msgType = ((m as any).type ?? '').toLowerCase();
+
+    // Interactive replies (button/list) are stored as the raw interactive JSON
+    // in `text` — extract the human-readable title the customer picked instead
+    // of dumping the JSON into the bubble.
+    if (msgType === 'interactive' && rawText.startsWith('{')) {
+      try {
+        const inter = JSON.parse(rawText);
+        rawText = inter?.button_reply?.title ?? inter?.list_reply?.title
+          ?? inter?.list_reply?.description ?? inter?.nfm_reply?.name ?? '';
+      } catch { rawText = ''; }
+    }
+
+    // Location → parsed from `media` (EZCONN stores it there, not `data`).
+    let location: Message['location'] = null;
+    if (msgType === 'location') {
+      try { location = JSON.parse((m as any).media ?? (m as any).data ?? '{}'); } catch {}
+    }
+    // Contacts (vCard) → array under `data`.
+    let vcards: any[] | null = null;
+    if (msgType === 'contacts') {
+      try {
+        const parsed = JSON.parse((m as any).data ?? (m as any).text ?? '[]');
+        vcards = Array.isArray(parsed) ? parsed : null;
+      } catch {}
+    }
+
     const hasMediaContent = imageFiles.length > 0 || audioFiles.length > 0 || otherFiles.length > 0;
     const displayText = rawText ? rawText : (!hasMediaContent ? (
       msgType === 'audio' || msgType === 'voice' ? '🎤 Voice message' :
@@ -659,13 +871,19 @@ export default function ConversationsInbox() {
     return {
       id: m.id,
       from: m.direction === 'OUTGOING' ? 'agent' : 'user',
-      text: displayText,
+      text: raw.template ? '' : displayText,
       time: m.created_at || new Date().toISOString(),
       status: normalizeStatus(m.status),
       images: imageFiles.length > 0 ? imageFiles : undefined,
       attachments: otherFiles.length > 0 ? otherFiles : undefined,
       audio: audioFiles.length > 0 ? { url: audioFiles[0].url, name: audioFiles[0].name, size: audioFiles[0].size } : undefined,
       reactions: Array.isArray(raw.reactions) ? raw.reactions : [],
+      communicationMode: raw.communication_mode,
+      senderName: raw.sender_name ?? null,
+      errorData: raw.error_data ?? raw.error_code ?? null,
+      template: raw.template ?? null,
+      location: location && (location.latitude || location.longitude) ? location : null,
+      vcards: vcards && vcards.length ? vcards : null,
     };
   });
 
@@ -696,6 +914,13 @@ export default function ConversationsInbox() {
   // Reply / Note tab toggle for the compose area (replyagent has a Note tab
   // for internal annotations that aren't sent to the customer).
   const [composeMode, setComposeMode] = useState<"reply" | "note">("reply");
+  // Agent @mentions collected in a Note (replyagent). Sent with the note so the
+  // backend can notify the mentioned agents.
+  const [mentions, setMentions] = useState<string[]>([]);
+  // Composer "+" menu dialogs (replyagent: media gallery + start automation).
+  const [galleryDialogOpen, setGalleryDialogOpen] = useState(false);
+  const [automationDialogOpen, setAutomationDialogOpen] = useState(false);
+  const [stickerDialogOpen, setStickerDialogOpen] = useState(false);
 
   // AI transform popover state. Selects translate/correct/expand/shorten.
   const [aiTransformOpen, setAiTransformOpen] = useState(false);
@@ -837,8 +1062,91 @@ export default function ConversationsInbox() {
     },
   });
 
+  // Automations for the composer "+" → Start automation (replyagent).
+  const { data: automationsData } = useQuery<any>({
+    queryKey: ["/api/automations", "inbox-composer"],
+    queryFn: async () => (await apiRequest("GET", "/api/automations")).json(),
+    enabled: automationDialogOpen,
+  });
+  const composerAutomations = useMemo(() => {
+    const rows: any[] = automationsData?.automations ?? [];
+    return rows.map((a) => ({ id: String(a.id), name: a.name ?? "Untitled", status: a.status }));
+  }, [automationsData]);
+
+  const automateMutation = useMutation({
+    mutationFn: async (automationId: string) => {
+      const res = await apiRequest("POST", "/api/inbox/automate", {
+        inbox_id: selectedConversation,
+        automation_id: automationId,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setAutomationDialogOpen(false);
+      toast({ title: "Automation dispatched" });
+      if (selectedConversation) {
+        queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
+      }
+    },
+    onError: (err: Error) => toast({ title: "Couldn't run automation", description: err.message, variant: "destructive" }),
+  });
+
+  // Media gallery for the composer "+" → Media gallery (replyagent Gallery).
+  const { data: galleryListingData } = useQuery<any>({
+    queryKey: ["/api/gallery/listings", "inbox-composer"],
+    queryFn: async () => (await apiRequest("GET", "/api/gallery/listings?limit=60")).json(),
+    enabled: galleryDialogOpen || stickerDialogOpen,
+  });
+  const galleryFiles = useMemo(() => {
+    const data: any[] = galleryListingData?.file_folders?.data ?? [];
+    return data.map((f) => ({
+      id: String(f.id),
+      file_url: f.file_url,
+      thumb: f.thumb_200 || f.file_url,
+      name: f.object_name || "media",
+      media_type: f.media_type,
+      mime_type: f.mime_type,
+      extension: f.extension,
+    }));
+  }, [galleryListingData]);
+
+  // Stickers are webp images in the gallery (replyagent is_sticker + webp).
+  const stickerFiles = useMemo(
+    () => galleryFiles.filter((f) => f.extension === "webp" || f.mime_type === "image/webp"),
+    [galleryFiles],
+  );
+
+  // Send a picked sticker straight out (fetch webp → File → send as sticker).
+  const sendSticker = async (f: any) => {
+    if (!f?.file_url) return;
+    try {
+      const res = await fetch(f.file_url);
+      const blob = await res.blob();
+      const file = new File([blob], f.name || "sticker.webp", { type: "image/webp" });
+      sendMessageMutation.mutate({ text: "", files: [file], is_sticker: true } as any);
+      setStickerDialogOpen(false);
+    } catch {
+      toast({ title: "Couldn't send sticker", variant: "destructive" });
+    }
+  };
+
+  // Attach a gallery file into the composer (fetch its signed URL → File).
+  const attachGalleryFile = async (f: any) => {
+    if (!f?.file_url) return;
+    try {
+      const res = await fetch(f.file_url);
+      const blob = await res.blob();
+      const ext = f.extension ? `.${f.extension}` : "";
+      const name = f.name || `gallery-media${ext}`;
+      setAttachedFiles((prev) => [...prev, new File([blob], name, { type: f.mime_type || blob.type || "application/octet-stream" })]);
+      setGalleryDialogOpen(false);
+    } catch {
+      toast({ title: "Couldn't attach", description: "Media could not be loaded.", variant: "destructive" });
+    }
+  };
+
   const transformAiMutation = useMutation({
-    mutationFn: async (vars: { text: string; mode: string }) => {
+    mutationFn: async (vars: { text: string; mode: string; language?: string }) => {
       const res = await apiRequest("POST", "/api/inbox/transform-ai", vars);
       return res.json();
     },
@@ -1028,7 +1336,7 @@ export default function ConversationsInbox() {
   }, [inboxResponse, isLoadingInbox, selectedConversation]);
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (input: string | { text: string; compose_mode?: string; reply_to_message_id?: number | null; files?: File[]; audio?: Blob | null }) => {
+    mutationFn: async (input: string | { text: string; compose_mode?: string; reply_to_message_id?: number | null; files?: File[]; audio?: Blob | null; mentions?: string[]; is_sticker?: boolean }) => {
       const hasFiles = typeof input !== "string" && ((input.files && input.files.length > 0) || input.audio);
 
       if (hasFiles && typeof input !== "string") {
@@ -1037,6 +1345,8 @@ export default function ConversationsInbox() {
         form.append("message_text", input.text || "");
         form.append("compose_mode", input.compose_mode ?? "reply");
         if (input.reply_to_message_id != null) form.append("reply_to_message_id", String(input.reply_to_message_id));
+        if (input.mentions && input.mentions.length) form.append("mentions", input.mentions.join(","));
+        if (input.is_sticker) form.append("is_sticker", "true");
         if (input.files) {
           for (const f of input.files) form.append("files", f);
         }
@@ -1059,6 +1369,7 @@ export default function ConversationsInbox() {
               message_text: input.text,
               compose_mode: input.compose_mode ?? "reply",
               reply_to_message_id: input.reply_to_message_id ?? null,
+              mentions: input.mentions && input.mentions.length ? input.mentions : undefined,
             };
       const res = await apiRequest("POST", `/api/inbox/send-message/${selectedConversation}`, payload);
       return res.json();
@@ -1147,12 +1458,134 @@ export default function ConversationsInbox() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      // Surface the new assigned/unassigned system pill in the thread at once.
+      if (selectedConversation) {
+        queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
+      }
       toast({
         title: "Agent assigned",
         description: "The conversation has been assigned successfully.",
       });
     }
   });
+
+  // ─── Bulk action mutations (list select-all + actions menu) ───
+  // All clear the selection + refresh list/counts on success so the toolbar
+  // collapses and the badges re-sync.
+  const bulkStatusMutation = useMutation({
+    mutationFn: async (vars: { ids: number[]; action: string }) => {
+      const res = await apiRequest("POST", "/api/inbox/update-status-bulk", {
+        inbox_ids: vars.ids,
+        action: vars.action,
+      });
+      return res.json();
+    },
+    onSuccess: (_d, vars) => {
+      setSelectedInboxIds([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      toast({ title: "Done", description: `${vars.ids.length} conversation(s) updated.` });
+    },
+    onError: (err: Error) => toast({ title: "Action failed", description: err.message, variant: "destructive" }),
+  });
+
+  const bulkSnoozeMutation = useMutation({
+    mutationFn: async (vars: { ids: number[]; until: string }) => {
+      const res = await apiRequest("POST", "/api/inbox/snooze-bulk", {
+        inbox_ids: vars.ids,
+        until: vars.until,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setSelectedInboxIds([]);
+      setBulkSnoozeOpen(false);
+      setBulkSnoozeUntil("");
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      toast({ title: "Snoozed" });
+    },
+    onError: (err: Error) => toast({ title: "Snooze failed", description: err.message, variant: "destructive" }),
+  });
+
+  const bulkAssignMutation = useMutation({
+    mutationFn: async (vars: { ids: number[]; assignedTo: string | null }) => {
+      const res = await apiRequest("POST", "/api/inbox/assign-conversation-bulk", {
+        inbox_ids: vars.ids,
+        assigned_to: vars.assignedTo,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setSelectedInboxIds([]);
+      setBulkAssignOpen(false);
+      setBulkAssignAgent("");
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      if (selectedConversation) {
+        queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
+      }
+      toast({ title: "Assigned" });
+    },
+    onError: (err: Error) => toast({ title: "Assign failed", description: err.message, variant: "destructive" }),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const res = await apiRequest("DELETE", "/api/inbox/chats", { inbox_ids: ids });
+      return res.json();
+    },
+    onSuccess: (_d, ids) => {
+      // Drop the open thread if it was among the deleted set.
+      if (selectedConversation && ids.includes(selectedConversation)) setSelectedConversation(null);
+      setSelectedInboxIds([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      toast({ title: "Deleted", description: `${ids.length} conversation(s) deleted.` });
+    },
+    onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
+  });
+
+  // Clear any ticked rows when the visible set changes (tab / folder / channel /
+  // search) so a bulk action never hits conversations the agent can no longer see.
+  useEffect(() => {
+    setSelectedInboxIds([]);
+    setListLimit(20); // collapse back to one page when the visible set changes
+  }, [activeTab, activeFolderId, selectedChannels, selectedFilterAgents, searchQuery, searchType, sortBy, appliedFilters]);
+
+  // "Queue order" sort only makes sense on the Queue tab — reset to the default
+  // (Latest message ↓) when navigating away so other tabs aren't sorted by queued_at.
+  useEffect(() => {
+    if (activeTab !== "queue" && sortBy.column === "queued_at") {
+      setSortBy({ ...SORT_OPTIONS[0] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Move the open conversation into / out of a folder (replyagent header
+  // "Folder" dropdown → folderUpdated). folderId null clears the folder.
+  const moveToFolderMutation = useMutation({
+    mutationFn: async (vars: { id: number; folderId: string | null }) => {
+      const res = await apiRequest("POST", "/api/inbox/move-to-folder", {
+        inbox_ids: [vars.id],
+        folder_id: vars.folderId,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
+      toast({ title: "Folder updated" });
+    },
+    onError: (err: Error) => toast({ title: "Couldn't move", description: err.message, variant: "destructive" }),
+  });
+
+  // Toggle a single row's checkbox without opening the conversation.
+  const toggleInboxSelection = (id: number) => {
+    setSelectedInboxIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
 
   // Filter Handlers
   const addFilter = () => {
@@ -1312,63 +1745,17 @@ export default function ConversationsInbox() {
     // subset for each tab (read/unread/queue/upcoming/completed). Local filtering
     // here was incorrectly matching conv.status === "read" etc. which never worked.
 
-    // Filter by search query — name, phone, email, first/last name
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((conv: Conversation) =>
-        getDisplayName(conv).toLowerCase().includes(q) ||
-        (conv.phoneNumber || '').toLowerCase().includes(q) ||
-        (conv.email || '').toLowerCase().includes(q) ||
-        (conv.firstName || '').toLowerCase().includes(q) ||
-        (conv.lastName || '').toLowerCase().includes(q)
-      );
-    }
+    // Search is server-side + type-aware now (the list API receives `search` +
+    // `search_type`), so no client-side text filter — doing one here would drop
+    // valid rows whose match is on a field not present in the list item (e.g. a
+    // WhatsApp wa_id or support-ticket number).
 
-    // Filter by Select Agents Dropdown
-    if (selectedFilterAgents.length > 0) {
-      filtered = filtered.filter((conv: Conversation) => selectedFilterAgents.includes(conv.assignedAgent || ""));
-    }
+    // Agents + Channels filtering is now server-side (the list/count API receive
+    // `users` + `channel_types`), so no client-side pass is needed here.
 
-    // Filter by Select Channels Dropdown
-    if (selectedFilterChannels.length > 0) {
-      filtered = filtered.filter((conv: Conversation) => selectedFilterChannels.includes(conv.channel || ""));
-    }
-
-    // Advanced Filters
-    if (filters.length > 0) {
-      filtered = filtered.filter((conv: Conversation) => {
-        return filters.every((filter: Filter) => {
-          let itemValue = "";
-          if (filter.column === "name") {
-            itemValue = getDisplayName(conv);
-          } else if (filter.column === "firstName") {
-            itemValue = conv.firstName || "";
-          } else if (filter.column === "lastName") {
-            itemValue = conv.lastName || "";
-          } else if (filter.column === "phoneNumber") {
-            itemValue = conv.phoneNumber || "";
-          } else if (filter.column === "email") {
-            itemValue = conv.email || "";
-          } else if (filter.column === "tags") {
-            const tags = tagsByConv[conv.id] || [];
-            itemValue = tags.join(" ");
-          }
-
-          const filterValue = (filter.value || "").toLowerCase();
-          const checkValue = itemValue.toLowerCase();
-
-          switch (filter.operator) {
-            case "contains": return checkValue.includes(filterValue);
-            case "does not contain": return !checkValue.includes(filterValue);
-            case "is": return checkValue === filterValue;
-            case "is not": return checkValue !== filterValue;
-            case "is empty": return !itemValue || itemValue.trim() === "";
-            case "is not empty": return itemValue && itemValue.trim() !== "";
-            default: return true;
-          }
-        });
-      });
-    }
+    // Advanced filters run server-side now (the list API receives
+    // `advanced_filters`), resolved across all contacts — not just the loaded
+    // page — so there's no client-side pass here.
 
     // Filter by teams (Legacy/Existing)
     if (filterTeams.length > 0) {
@@ -1385,22 +1772,8 @@ export default function ConversationsInbox() {
       });
     }
 
-    // Sort by time
-      filtered.sort((a: Conversation, b: Conversation) => {
-      // Get dynamic time from messages if available, relative to NOW.
-      // Note: We use the *latest* message time.
-      const getLastTime = (con: Conversation) => {
-        return con.time;
-      };
-
-      const timeA = getLastTime(a);
-      const timeB = getLastTime(b);
-
-      return sortOrder === "desc"
-        ? new Date(timeB).getTime() - new Date(timeA).getTime()
-        : new Date(timeA).getTime() - new Date(timeB).getTime();
-    });
-
+    // Sorting is server-side now (the list API receives `sort`), so the backend
+    // already returns rows in the chosen order — no client re-sort needed.
     return filtered;
   };
 
@@ -1558,6 +1931,45 @@ export default function ConversationsInbox() {
     });
   }, [templatesData]);
 
+  // Canned / quick responses (replyagent "/" canned). Real data from
+  // GET /quick-response — replaces the old hardcoded chips.
+  const { data: quickResponsesData } = useQuery<any>({
+    queryKey: ["/api/quick-response"],
+    queryFn: async () => (await apiRequest("GET", "/api/quick-response")).json(),
+  });
+  const cannedMessages = useMemo(() => {
+    const rows: any[] = quickResponsesData?.responses ?? [];
+    return rows
+      .filter((r) => r.parent_id != null && (r.text || r.title || (r.mediaList?.length ?? 0) > 0))
+      .map((r) => ({
+        id: String(r.id),
+        title: r.title ?? "",
+        text: r.text ?? "",
+        media: Array.isArray(r.mediaList) ? r.mediaList.map((m: any) => m.media).filter(Boolean) : [],
+      }));
+  }, [quickResponsesData]);
+
+  // Apply a canned reply (replyagent messageSelected): set the text + attach any
+  // media (fetched from its gallery URL into a File so the normal multipart send
+  // handles it). Clears the "/" trigger when the canned has no text.
+  const applyCanned = async (c: { text: string; media?: any[] }) => {
+    setMessageText(c.text || "");
+    const medias = c.media ?? [];
+    if (!medias.length) return;
+    const files: File[] = [];
+    for (const m of medias) {
+      if (!m?.file_url) continue;
+      try {
+        const res = await fetch(m.file_url);
+        const blob = await res.blob();
+        const ext = m.extension ? `.${m.extension}` : "";
+        const name = m.object_name || `canned-media${ext}`;
+        files.push(new File([blob], name, { type: m.mime_type || blob.type || "application/octet-stream" }));
+      } catch { /* skip unreachable media */ }
+    }
+    if (files.length) setAttachedFiles((prev) => [...prev, ...files]);
+  };
+
   // Notes state per conversation
   const [notesByConv, setNotesByConv] = useState<Record<number, string[]>>({});
 
@@ -1703,6 +2115,20 @@ export default function ConversationsInbox() {
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // WhatsApp-markdown text styling (replyagent addBodyStyle): wrap the selected
+  // text in the composer with the formatting marker.
+  const applyTextStyle = (marker: string) => {
+    const ta = composerTextareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    const sel = messageText.slice(start, end).trim();
+    if (!sel) return;
+    const next = messageText.slice(0, start) + marker + sel + marker + messageText.slice(end);
+    setMessageText(next);
+  };
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -1844,8 +2270,21 @@ export default function ConversationsInbox() {
       reply_to_message_id: replyingTo?.id ?? null,
       files: attachedFiles.length > 0 ? attachedFiles : undefined,
       audio: recordedAudio ?? undefined,
+      mentions: composeMode === "note" && mentions.length > 0 ? mentions : undefined,
     } as any);
     setReplyingTo(null);
+    setMentions([]);
+  };
+
+  // Insert the picked agent's name at the active "@" token + track the mention.
+  const insertMention = (a: AgentOption) => {
+    const at = messageText.lastIndexOf("@");
+    if (at === -1) return;
+    const after = messageText.slice(at + 1);
+    const word = after.split(/\s/)[0];
+    const name = a.name.replace(/\s+/g, "_");
+    setMessageText(messageText.slice(0, at + 1) + name + " " + messageText.slice(at + 1 + word.length));
+    setMentions((prev) => (prev.includes(a.id) ? prev : [...prev, a.id]));
   };
 
   // Remove attached file
@@ -2112,12 +2551,6 @@ export default function ConversationsInbox() {
     }
   };
 
-  const [quickReplies, setQuickReplies] = useState([
-    "Hi, how can I help you?",
-    "What is your order number?",
-    "Can I assist you with anything else?",
-    "Thank you for contacting us.",
-  ]);
 
   return (
     <div className="h-full flex flex-col font-sans" data-testid="conversations-inbox">
@@ -2160,16 +2593,50 @@ export default function ConversationsInbox() {
 
               {/* Search and Action Buttons */}
               <div className="flex gap-1 items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                  <Input
-                    placeholder="Search"
-                    className="pl-10 border-input h-9 text-xs"
-                    data-testid="input-search"
-                    onFocus={() => setIsSearchFocused(true)}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+                <div className="relative flex-1 flex items-center gap-1">
+                  {/* Search-type selector (replyagent's in-search Listbox). Shown
+                      while the box is focused; picks which field to search. */}
+                  {isSearchFocused && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 px-2 text-xs shrink-0 border border-input dark:border-slate-700 bg-white dark:bg-background hover:bg-accent dark:hover:bg-slate-700"
+                          data-testid="search-type-trigger"
+                        >
+                          {SEARCH_TYPES.find((t) => t.slug === searchType)?.name ?? "Full name"}
+                          <ChevronDown size={12} className="ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="bg-white dark:bg-background max-h-72 overflow-auto">
+                        {SEARCH_TYPES.map((t) => (
+                          <DropdownMenuItem
+                            key={t.slug}
+                            className={searchType === t.slug ? "font-semibold text-primary" : ""}
+                            onClick={() => setSearchType(t.slug)}
+                          >
+                            {t.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <Input
+                      placeholder={
+                        isSearchFocused
+                          ? `Search by ${(SEARCH_TYPES.find((t) => t.slug === searchType)?.name ?? "name").toLowerCase()} (min ${searchMinChars})`
+                          : "Search"
+                      }
+                      className="pl-10 border-input h-9 text-xs"
+                      data-testid="input-search"
+                      onFocus={() => setIsSearchFocused(true)}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
                 </div>
 
                 {!isSearchFocused && (
@@ -2193,8 +2660,8 @@ export default function ConversationsInbox() {
                     <div className="relative">
                       <CustomDropdown
                         options={channelOptions}
-                        selected={selectedFilterChannels}
-                        onChange={setSelectedFilterChannels}
+                        selected={selectedChannels}
+                        onChange={setSelectedChannels}
                         placeholder="Channels"
                         width="auto"
                         className="h-9 w-9 px-[0.5rem] justify-center bg-white dark:bg-background border border-input dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-700"
@@ -2226,41 +2693,6 @@ export default function ConversationsInbox() {
                           minWidth: '320px',
                           marginLeft: '-140px' // Center align somewhat or adjust to keep on screen
                         }}>
-                          {/* Channels chip section (replyagent's "6 Canais"). */}
-                          <div className="mb-3 pb-3 border-b border-border/60">
-                            <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1.5">Channels</p>
-                            <div className="flex flex-wrap gap-1">
-                              {(["whatsapp","zapi","telegram","messenger","instagram","sms","webchat"] as const).map((ch) => {
-                                const isOn = selectedChannels.includes(ch);
-                                return (
-                                  <button
-                                    key={ch}
-                                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                                      isOn
-                                        ? "bg-primary/10 border-primary/30 text-primary"
-                                        : "border-slate-200 dark:border-slate-700 text-muted-foreground hover:border-primary/30"
-                                    }`}
-                                    onClick={() =>
-                                      setSelectedChannels((prev) =>
-                                        isOn ? prev.filter((c) => c !== ch) : [...prev, ch],
-                                      )
-                                    }
-                                  >
-                                    {ch}
-                                  </button>
-                                );
-                              })}
-                              {selectedChannels.length > 0 && (
-                                <button
-                                  className="text-[10px] text-muted-foreground hover:text-red-500 ml-1"
-                                  onClick={() => setSelectedChannels([])}
-                                >
-                                  clear
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
                           {/* Folders chip section. "+" creates; right-click renames/deletes. */}
                           <div className="mb-3 pb-3 border-b border-border/60">
                             <div className="flex items-center justify-between mb-1.5">
@@ -2306,6 +2738,7 @@ export default function ConversationsInbox() {
                                   title={`${f.name} — right-click to rename/delete`}
                                 >
                                   {f.name}
+                                  <span className="ml-1 opacity-60">({folderCountMap[String(f.id)] ?? 0})</span>
                                 </button>
                               ))}
                             </div>
@@ -2423,19 +2856,42 @@ export default function ConversationsInbox() {
                         </div>
                       )}
                     </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 bg-white dark:bg-background border border-input dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-700"
-                          onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-                        >
-                          <ArrowUp size={16} style={{ transform: sortOrder === "asc" ? "rotate(0deg)" : "rotate(180deg)" }} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Sort by time</TooltipContent>
-                    </Tooltip>
+                    {/* Sort menu (replyagent sort_list): Latest message ↓/↑ +
+                        Queue order (only on the Queue tab). Server-side sort. */}
+                    <DropdownMenu>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 bg-white dark:bg-background border border-input dark:border-slate-700 hover:bg-accent dark:hover:bg-slate-700"
+                              data-testid="sort-trigger"
+                            >
+                              <ArrowUp size={16} style={{ transform: sortBy.order === "asc" ? "rotate(0deg)" : "rotate(180deg)" }} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>{sortBy.text}</TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent align="end" className="bg-white dark:bg-background">
+                        {SORT_OPTIONS.filter(
+                          (o) => o.column !== "queued_at" || activeTab === "queue",
+                        ).map((o) => (
+                          <DropdownMenuItem
+                            key={`${o.column}-${o.order}`}
+                            className={
+                              sortBy.column === o.column && sortBy.order === o.order
+                                ? "font-semibold text-primary"
+                                : ""
+                            }
+                            onClick={() => setSortBy({ ...o })}
+                          >
+                            {o.text}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </>
                 )}
 
@@ -2487,6 +2943,104 @@ export default function ConversationsInbox() {
               </div>
             </CardHeader>
 
+            {/* Select-all + bulk actions toolbar (replyagent select-all + actions
+                menu). Only shown when the list has rows. */}
+            {getFilteredConversations().length > 0 && (
+              <div className="flex items-center gap-2 px-4 py-1.5 border-b flex-shrink-0">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input text-primary cursor-pointer"
+                  aria-label="Select all conversations"
+                  checked={
+                    selectedInboxIds.length > 0 &&
+                    selectedInboxIds.length === getFilteredConversations().length
+                  }
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        selectedInboxIds.length > 0 &&
+                        selectedInboxIds.length < getFilteredConversations().length;
+                  }}
+                  onChange={(e) => {
+                    if (e.target.checked)
+                      setSelectedInboxIds(getFilteredConversations().map((c) => c.id));
+                    else setSelectedInboxIds([]);
+                  }}
+                  data-testid="select-all-conversations"
+                />
+                {selectedInboxIds.length > 0 ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedInboxIds.length} selected
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs ml-auto" data-testid="bulk-actions-trigger">
+                          <ListFilter size={12} className="mr-1" /> Actions
+                          <ChevronDown size={12} className="ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="bg-white dark:bg-background">
+                        {(activeTab === "all" || activeTab === "queue" || activeTab === "upcoming") && (
+                          <DropdownMenuItem
+                            onClick={() => bulkStatusMutation.mutate({ ids: selectedInboxIds, action: "COMPLETED" })}
+                          >
+                            <CheckCircle size={14} className="mr-2" /> Mark as done
+                          </DropdownMenuItem>
+                        )}
+                        {(activeTab === "all" || activeTab === "upcoming") && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setBulkSnoozeUntil("");
+                              setBulkSnoozeOpen(true);
+                            }}
+                          >
+                            <Clock size={14} className="mr-2" /> Snooze
+                          </DropdownMenuItem>
+                        )}
+                        {canAssignConversations && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setBulkAssignAgent("");
+                              setBulkAssignOpen(true);
+                            }}
+                          >
+                            <User size={14} className="mr-2" /> Assign conversations
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => bulkStatusMutation.mutate({ ids: selectedInboxIds, action: "READ" })}
+                        >
+                          <Eye size={14} className="mr-2" /> Mark read
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => bulkStatusMutation.mutate({ ids: selectedInboxIds, action: "UNREAD" })}
+                        >
+                          <EyeOff size={14} className="mr-2" /> Mark unread
+                        </DropdownMenuItem>
+                        {!blockDeletingChats && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={() => {
+                                if (window.confirm(`Delete ${selectedInboxIds.length} conversation(s)?`))
+                                  bulkDeleteMutation.mutate(selectedInboxIds);
+                              }}
+                            >
+                              <Trash2 size={14} className="mr-2" /> Delete chat
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Select all</span>
+                )}
+              </div>
+            )}
+
             <ScrollArea className="flex-1 overflow-auto">
               <div className="space-y-1 px-2 pb-4">
                 {getFilteredConversations().length === 0 ? (
@@ -2498,12 +3052,27 @@ export default function ConversationsInbox() {
                   getFilteredConversations().map((conv: Conversation) => (
                     <div
                       key={conv.id}
-                      className={`p-3 rounded-md cursor-pointer transition-colors ${selectedConversation === conv.id ? "bg-accent" : "hover:bg-muted/50"
+                      className={`group p-3 rounded-md cursor-pointer transition-colors ${selectedConversation === conv.id ? "bg-accent" : "hover:bg-muted/50"
                         }`}
                       onClick={() => handleSelectConversation(conv.id)}
                       data-testid={`conversation-${conv.id}`}
                     >
                       <div className="flex items-start gap-4">
+                        {/* Bulk-select checkbox — visible on hover, or always once
+                            selection mode is active (replyagent per-item checkbox). */}
+                        <div className="self-center" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className={`h-4 w-4 rounded border-input text-primary cursor-pointer transition-opacity ${
+                              selectedInboxIds.length > 0 || selectedInboxIds.includes(conv.id)
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100"
+                            }`}
+                            checked={selectedInboxIds.includes(conv.id)}
+                            onChange={() => toggleInboxSelection(conv.id)}
+                            data-testid={`select-conversation-${conv.id}`}
+                          />
+                        </div>
                         <div className="w-10 h-10 relative">
                           <Avatar className="absolute">
                             <AvatarFallback className={getAvatarColor(getDisplayName(conv))}>
@@ -2549,13 +3118,44 @@ export default function ConversationsInbox() {
                             <span className="text-xs text-muted-foreground flex-shrink-0">{formatConversationTime(conv.time)}</span>
                           </div>
                           <p className="text-sm truncate mb-1 font-normal text-muted-foreground" style={{ maxWidth: `${sidebarWidth - 96}px` }}>{conv.lastMessage}</p>
-                          {conv.assignedAgent && (
-                            <p className="text-xs text-muted-foreground">Assigned to: <span className="font-medium">{conv.assignedAgentName || getAgentName(conv.assignedAgent)}</span></p>
-                          )}
+                          {/* Footer row (replyagent): assignee on the left
+                              ("Waiting for assistance" when unassigned) + a
+                              New/Transferred badge on the right. */}
+                          <div className="flex items-center justify-between gap-2">
+                            {conv.assignedAgent ? (
+                              <p className="text-xs text-muted-foreground truncate">
+                                Assigned to: <span className="font-medium">{conv.assignedAgentName || getAgentName(conv.assignedAgent)}</span>
+                              </p>
+                            ) : (
+                              <span className="flex items-center gap-1 text-xs text-red-600">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-600" />
+                                Waiting for assistance
+                              </span>
+                            )}
+                            {conv.unread > 0 ? (
+                              <span className="flex items-center gap-1 text-[11px] text-red-600 flex-shrink-0">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-600" /> New
+                              </span>
+                            ) : conv.isAssigned ? (
+                              <span className="text-[11px] text-amber-600 flex-shrink-0">Transferred</span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
                   ))
+                )}
+
+                {/* Load more (replyagent next_page) — grows the page size while
+                    the workspace total exceeds what we've fetched. */}
+                {(inboxResponse?.total ?? 0) > listLimit && (
+                  <button
+                    onClick={() => setListLimit((l) => l + 20)}
+                    className="w-full py-2 text-center text-xs text-muted-foreground hover:text-foreground hover:underline"
+                    data-testid="load-more-conversations"
+                  >
+                    {isLoadingInbox ? "Loading…" : "Load more"}
+                  </button>
                 )}
               </div>
             </ScrollArea>
@@ -2604,29 +3204,79 @@ export default function ConversationsInbox() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="hover-elevate"
-                        data-testid="button-refresh"
-                        onClick={() => {
-                          // Refresh BOTH the chat thread + the list + the tab
-                          // counts so anything written by another agent shows
-                          // up immediately without a full page reload.
-                          if (selectedConversation) {
-                            queryClient.invalidateQueries({ queryKey: ["/api/inbox/messages", selectedConversation] });
-                          }
-                          queryClient.invalidateQueries({ queryKey: ["/api/inbox/list"] });
-                          queryClient.invalidateQueries({ queryKey: ["/api/inbox/count"] });
-                        }}
+                  {/* Folder ▾ — move THIS conversation into / out of a folder
+                      (replyagent header Folder dropdown). */}
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="hover-elevate gap-1.5" data-testid="button-folder">
+                            <FolderIcon size={16} />
+                            <span className="text-xs font-medium">Folder</span>
+                            <ChevronDown size={12} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>Move to folder</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="bg-white dark:bg-background max-h-72 overflow-auto">
+                      <DropdownMenuItem
+                        className={!selectedConvObj?.folderId ? "font-semibold text-primary" : ""}
+                        onClick={() =>
+                          selectedConversation &&
+                          moveToFolderMutation.mutate({ id: selectedConversation, folderId: null })
+                        }
                       >
-                        <RefreshCw size={18} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Refresh chat</TooltipContent>
-                  </Tooltip>
+                        No folder
+                      </DropdownMenuItem>
+                      {folders.length === 0 ? (
+                        <DropdownMenuItem disabled>No folders yet</DropdownMenuItem>
+                      ) : (
+                        folders.map((f: any) => (
+                          <DropdownMenuItem
+                            key={String(f.id)}
+                            className={selectedConvObj?.folderId === String(f.id) ? "font-semibold text-primary" : ""}
+                            onClick={() =>
+                              selectedConversation &&
+                              moveToFolderMutation.mutate({ id: selectedConversation, folderId: String(f.id) })
+                            }
+                          >
+                            {f.name}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {/* Message-mode filter ▾ (replyagent): Smart flow & Inbox /
+                      Smart flow messages / Inbox messages. */}
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="hover-elevate gap-1.5" data-testid="button-chat-mode">
+                            <ListFilter size={16} />
+                            <span className="text-xs font-medium">
+                              {CHAT_MODES.find((m) => m.value === chatMode)?.label ?? CHAT_MODES[0].label}
+                            </span>
+                            <ChevronDown size={12} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>Filter messages</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="bg-white dark:bg-background">
+                      {CHAT_MODES.map((m) => (
+                        <DropdownMenuItem
+                          key={m.value}
+                          className={chatMode === m.value ? "font-semibold text-primary" : ""}
+                          onClick={() => setChatMode(m.value)}
+                        >
+                          {m.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="ghost" size="icon" className="hover-elevate" onClick={handleToggleContactPanel} data-testid="button-view-contact">
@@ -2635,28 +3285,17 @@ export default function ConversationsInbox() {
                     </TooltipTrigger>
                     <TooltipContent>{showContactPanel ? "Hide" : "Show"} contact profile</TooltipContent>
                   </Tooltip>
-                  <DropdownMenu>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="hover-elevate" data-testid="button-export">
-                            <Download size={18} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Export</TooltipContent>
-                    </Tooltip>
-                    <DropdownMenuContent align="end" className="bg-white dark:bg-background">
-                      <DropdownMenuItem onClick={handleExportConversations}>Export as CSV</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
                   {/* Mark as Done / Move to Inbox toggle — mirrors replyagent behaviour:
                       active/unassigned → "Mark as done" (COMPLETED)
                       completed         → "Move to Inbox" (ACTIVE)         */}
                   {selectedConversation && (() => {
                     const conv = conversations.find((c: Conversation) => c.id === selectedConversation);
                     const isDone = conv?.status === "completed";
+                    const hasAgent = !!conv?.assignedAgent;
+                    // replyagent reopen: done + agent → back to Inbox (ACTIVE);
+                    // done + no agent → back to the unassigned queue.
+                    const reopenStatus = hasAgent ? "active" : "unassigned";
+                    const reopenLabel = hasAgent ? "Move to Inbox" : "Move to unassigned";
                     return (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -2669,7 +3308,7 @@ export default function ConversationsInbox() {
                             disabled={updateStatusMutation.isPending}
                             onClick={() => {
                               if (isDone) {
-                                updateStatusMutation.mutate({ id: selectedConversation, status: "active" });
+                                updateStatusMutation.mutate({ id: selectedConversation, status: reopenStatus });
                               } else {
                                 updateStatusMutation.mutate({ id: selectedConversation, status: "completed" });
                                 setAssignedAgent(null);
@@ -2678,7 +3317,7 @@ export default function ConversationsInbox() {
                             data-testid="button-mark-done"
                           >
                             {isDone ? <CornerUpLeft size={16} /> : <CheckCircle size={16} />}
-                            <span className="text-xs font-medium">{isDone ? "Move to Inbox" : "Mark as done"}</span>
+                            <span className="text-xs font-medium">{isDone ? reopenLabel : "Mark as done"}</span>
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>{isDone ? "Reopen this conversation" : "Close this conversation"}</TooltipContent>
@@ -2765,6 +3404,21 @@ export default function ConversationsInbox() {
               <div ref={messagesEndRef} className={`flex-1 min-h-0 p-4 overflow-y-auto transition-opacity duration-150 ${isChatVisible ? "opacity-100" : "opacity-0"}`}>
                 <div className="space-y-4">
                   {(messages || []).map((msg: Message, index: number, allMessages: Message[]) => {
+                    // System message (replyagent note_action): centered divider pill.
+                    if (msg.kind === "system") {
+                      const toneClass =
+                        msg.tone === "red" ? "text-red-600"
+                        : msg.tone === "orange" ? "text-orange-500"
+                        : msg.tone === "success" ? "text-emerald-600"
+                        : "text-blue-600";
+                      return (
+                        <div key={msg.id} className="flex items-center gap-3 my-4" data-testid={`system-message-${msg.id}`}>
+                          <div className="flex-1 border-t border-border" />
+                          <span className={`px-1 text-xs text-center ${toneClass}`}>{msg.text}</span>
+                          <div className="flex-1 border-t border-border" />
+                        </div>
+                      );
+                    }
                     const showDateDivider = index === 0 || formatMessageDate(msg.time) !== formatMessageDate(allMessages[index - 1].time);
                     return (
                       <React.Fragment key={msg.id}>
@@ -2774,6 +3428,14 @@ export default function ConversationsInbox() {
                           </div>
                         )}
                         <div className={`group/msg flex items-center gap-2 ${msg.from === "agent" ? "justify-end" : "justify-start"}`}>
+                          {/* Incoming: contact avatar on the LEFT (replyagent). */}
+                          {msg.from === "user" && (
+                            <div className="self-end mb-5 flex-shrink-0">
+                              <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-semibold text-white ${getAvatarColor(getDisplayName(selectedConvObj))}`} title={getDisplayName(selectedConvObj)}>
+                                {getInitials(getDisplayName(selectedConvObj))}
+                              </div>
+                            </div>
+                          )}
                           {/* Action icons (reply arrow + emoji react) — appear
                               OUTSIDE the bubble on hover, on the side opposite
                               to the bubble (left of agent, right of user) so
@@ -2852,6 +3514,51 @@ export default function ConversationsInbox() {
                           )}
 
                           <div id={`message-${msg.id}`} className={`relative max-w-[70%] rounded-lg p-3 ${msg.from === "user" ? "bg-blue-100 dark:bg-blue-900/30 dark:text-blue-100" : "bg-gray-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"}`} data-testid={`message-${msg.id}`}>
+                            {/* WhatsApp template preview card */}
+                            {msg.template && <TemplateMessageCard template={msg.template} />}
+
+                            {/* Location → Google Maps link card */}
+                            {msg.location && (
+                              <a
+                                href={
+                                  msg.location.name || msg.location.address
+                                    ? `https://maps.google.com/maps/search/${encodeURIComponent([msg.location.name, msg.location.address].filter(Boolean).join(", "))}/@${msg.location.latitude},${msg.location.longitude},17z`
+                                    : `https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}`
+                                }
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-start gap-2 text-sm rounded-md border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/20 p-2 hover:bg-black/5 dark:hover:bg-white/5 min-w-[12rem] max-w-[18rem]"
+                              >
+                                <MapPin size={16} className="mt-0.5 text-red-500 flex-shrink-0" />
+                                <span className="min-w-0">
+                                  <span className="font-medium block truncate">{msg.location.name || "Shared location"}</span>
+                                  {msg.location.address && <span className="text-xs text-muted-foreground block truncate">{msg.location.address}</span>}
+                                  <span className="text-xs text-blue-600 dark:text-blue-400">Open in Maps</span>
+                                </span>
+                              </a>
+                            )}
+
+                            {/* Contacts (vCard) card(s) */}
+                            {msg.vcards && (
+                              <div className="space-y-2 min-w-[12rem] max-w-[18rem]">
+                                {msg.vcards.map((c: any, ci: number) => (
+                                  <div key={ci} className="rounded-md border border-black/10 dark:border-white/10 bg-white/60 dark:bg-black/20 p-2 text-sm">
+                                    <div className="font-semibold flex items-center gap-2">
+                                      <User size={14} />
+                                      {c.name?.formatted_name ?? c.name?.first_name ?? "Contact"}
+                                    </div>
+                                    {(c.phones || []).map((p: any, pi: number) => p?.phone && (
+                                      <div key={pi} className="text-xs flex items-center gap-2 mt-1"><Phone size={11} />{p.phone}</div>
+                                    ))}
+                                    {(c.emails || []).map((e: any, ei: number) => e?.email && (
+                                      <div key={ei} className="text-xs flex items-center gap-2 mt-1"><Mail size={11} />{e.email}</div>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
                             {msg.text && <p className="text-sm">{msg.text}</p>}
 
                             {/* Images */}
@@ -2962,7 +3669,26 @@ export default function ConversationsInbox() {
                             <p className={`text-xs mt-1 flex items-center gap-1 flex-wrap ${msg.from === "agent" ? "justify-end text-gray-700 dark:text-slate-400" : "justify-end text-gray-600 dark:text-slate-500"}`}>
                               <span>{formatMessageTime(msg.time)}</span>
                               {msg.from === "agent" && msg.status && (
-                                <MessageStatusTick status={msg.status} />
+                                msg.status === "failed" ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a
+                                        href="https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MessageStatusTick status={msg.status} />
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs break-words">
+                                      {msg.errorData || "Failed to send"}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : (
+                                  <MessageStatusTick status={msg.status} />
+                                )
                               )}
                               {Array.isArray((msg as any).reactions) && (msg as any).reactions.map((r: any, ri: number) => (
                                 <span key={ri} className="text-base leading-none">{r.reaction ?? r.emoji ?? ''}</span>
@@ -3043,6 +3769,22 @@ export default function ConversationsInbox() {
                               )}
                             </div>
                           )}
+
+                          {/* Outgoing: agent avatar (INBOX) or bot icon
+                              (automation) on the RIGHT (replyagent). */}
+                          {msg.from === "agent" && (
+                            <div className="self-end mb-5 flex-shrink-0">
+                              {msg.communicationMode && msg.communicationMode !== "INBOX" ? (
+                                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center" title="Sent by automation">
+                                  <Bot size={14} className="text-primary" />
+                                </div>
+                              ) : (
+                                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-semibold text-white ${getAvatarColor(msg.senderName || "Agent")}`} title={msg.senderName || "Agent"}>
+                                  {getInitials(msg.senderName || "Agent")}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </React.Fragment>
                     );
@@ -3053,7 +3795,16 @@ export default function ConversationsInbox() {
 
               {/* Message Input or Assignment Prompt — gated by reply permission
                   (replyagent: isAssigned || canMessageUnassignedConversations) */}
-              {canReply ? (
+              {profileData?.has_opted_in === false ? (
+                /* Opted-out state (replyagent inbox.contact_opted_out) — the
+                   contact has no channel_opts row, so no free-form messaging. */
+                <div className="p-6 flex-shrink-0 bg-muted/30 flex flex-col items-center justify-center gap-3">
+                  <AlertCircle className="w-6 h-6 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground text-center max-w-md">
+                    This contact has opted out — you can't send messages on this channel.
+                  </p>
+                </div>
+              ) : canReply ? (
                 <div className="p-4 flex-shrink-0 relative">
                   {/* Attached files preview */}
                   {(attachedFiles.length > 0 || recordedAudio) && (
@@ -3091,22 +3842,38 @@ export default function ConversationsInbox() {
                     </div>
                   )}
 
-                  {/* Quick Replies */}
-                  {selectedConversation && (
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {quickReplies.map((reply, index) => (
-                        <Button
-                          key={index}
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full text-xs h-7 bg-slate-200/75 dark:bg-slate-800"
-                          onClick={() => setMessageText(reply)}
-                        >
-                          {reply}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
+                  {/* Canned / quick responses (replyagent): no chips row — type
+                      "/" to search all canned replies (popup below). */}
+
+                  {/* "/" command popup — type "/" to search all canned replies. */}
+                  {composeMode === "reply" && messageText.startsWith("/") && (() => {
+                    const q = messageText.slice(1).toLowerCase();
+                    const matches = cannedMessages.filter(
+                      (c) => c.title.toLowerCase().includes(q) || c.text.toLowerCase().includes(q),
+                    );
+                    if (matches.length === 0) return null;
+                    return (
+                      <div className="absolute bottom-[5.5rem] left-4 right-4 z-40 max-h-60 overflow-auto rounded-md border bg-white dark:bg-slate-900 shadow-lg divide-y">
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground sticky top-0 bg-white dark:bg-slate-900">
+                          Canned responses
+                        </div>
+                        {matches.map((c) => (
+                          <button
+                            key={c.id}
+                            className="w-full text-left px-3 py-2 hover:bg-muted"
+                            onClick={() => applyCanned(c)}
+                            data-testid={`canned-option-${c.id}`}
+                          >
+                            <div className="text-sm font-medium truncate flex items-center gap-1">
+                              {c.title || "Untitled"}
+                              {c.media.length > 0 && <Paperclip size={11} className="opacity-60" />}
+                            </div>
+                            {c.text && <div className="text-xs text-muted-foreground truncate">{c.text}</div>}
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* WhatsApp 24h-window CTA. Meta only allows free-form
                       replies within 24h of the last INCOMING message; outside
@@ -3191,13 +3958,59 @@ export default function ConversationsInbox() {
                     )}
                   </div>
 
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      placeholder={composeMode === "note" ? "Write an internal note..." : "Type a message..."}
-                      className={`flex-1 ${composeMode === "note" ? "bg-amber-50 dark:bg-amber-900/10" : ""}`}
+                  {/* @mention popup — Note mode only. Shows while typing an
+                      "@token" (no trailing space yet); picking inserts @Name. */}
+                  {composeMode === "note" && (() => {
+                    const at = messageText.lastIndexOf("@");
+                    if (at === -1) return null;
+                    const seg = messageText.slice(at + 1);
+                    if (/\s/.test(seg)) return null; // token finished
+                    const q = seg.toLowerCase();
+                    const matches = agentOptions.filter((a) => a.name.toLowerCase().includes(q));
+                    if (!matches.length) return null;
+                    return (
+                      <div className="absolute bottom-[3.5rem] left-4 z-40 w-64 max-h-48 overflow-auto rounded-md border bg-white dark:bg-slate-900 shadow-lg divide-y">
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground sticky top-0 bg-white dark:bg-slate-900">
+                          Mention an agent
+                        </div>
+                        {matches.slice(0, 8).map((a) => (
+                          <button
+                            key={a.id}
+                            className="w-full text-left px-3 py-2 hover:bg-muted flex items-center gap-2"
+                            onClick={() => insertMention(a)}
+                            data-testid={`mention-option-${a.id}`}
+                          >
+                            {a.icon}
+                            <span className="text-sm">{a.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+
+                  <div className="flex gap-2 items-end">
+                    <Textarea
+                      ref={composerTextareaRef}
+                      placeholder={composeMode === "note" ? "Write an internal note… (@ to mention)" : "Type a message…"}
+                      rows={1}
+                      className={`flex-1 min-h-[2.5rem] max-h-40 resize-none ${composeMode === "note" ? "bg-amber-50 dark:bg-amber-900/10" : ""}`}
                       data-testid="input-message"
                       value={messageText}
                       onChange={(e) => setMessageText(e.target.value)}
+                      onPaste={(e) => {
+                        const files = Array.from(e.clipboardData?.files ?? []);
+                        if (files.length) {
+                          e.preventDefault();
+                          setAttachedFiles((prev) => [...prev, ...files]);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        const files = Array.from(e.dataTransfer?.files ?? []);
+                        if (files.length) {
+                          e.preventDefault();
+                          setAttachedFiles((prev) => [...prev, ...files]);
+                        }
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
@@ -3205,6 +4018,44 @@ export default function ConversationsInbox() {
                         }
                       }}
                     />
+
+                    {/* Text styling — wraps the selected text in WhatsApp
+                        markdown (replyagent addBodyStyle). */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 [border-color:hsl(var(--input))]" title="Format text" data-testid="composer-format">
+                          <TypeIcon size={18} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="bg-white dark:bg-background">
+                        <DropdownMenuItem onClick={() => applyTextStyle("*")}><Bold size={14} className="mr-2" /> Bold</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => applyTextStyle("_")}><Italic size={14} className="mr-2" /> Italic</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => applyTextStyle("~")}><Strikethrough size={14} className="mr-2" /> Strikethrough</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => applyTextStyle("```")}><Code size={14} className="mr-2" /> Monospace</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* "+" menu — Media gallery + Start automation (replyagent). */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 [border-color:hsl(var(--input))]" title="More" data-testid="composer-plus">
+                          <Plus size={18} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="bg-white dark:bg-background">
+                        <DropdownMenuItem onClick={() => setGalleryDialogOpen(true)}>
+                          <Image size={14} className="mr-2" /> Media gallery
+                        </DropdownMenuItem>
+                        {selectedConvObj?.channel === "whatsapp" && (
+                          <DropdownMenuItem onClick={() => setStickerDialogOpen(true)}>
+                            <Smile size={14} className="mr-2" /> Sticker
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => setAutomationDialogOpen(true)}>
+                          <Bot size={14} className="mr-2" /> Start automation
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
 
                     {/* AI Transform — translate / correct / expand / shorten */}
                     <div className="relative">
@@ -3223,8 +4074,8 @@ export default function ConversationsInbox() {
                         )}
                       </Button>
                       {aiTransformOpen && (
-                        <div className="absolute bottom-12 right-0 z-50 bg-white dark:bg-slate-900 border rounded-md shadow-lg p-1 w-40">
-                          {["correct", "translate", "expand", "shorten"].map((m) => (
+                        <div className="absolute bottom-12 right-0 z-50 bg-white dark:bg-slate-900 border rounded-md shadow-lg p-1 w-48">
+                          {["correct", "expand", "shorten"].map((m) => (
                             <button
                               key={m}
                               onClick={() => transformAiMutation.mutate({ text: messageText, mode: m })}
@@ -3233,6 +4084,20 @@ export default function ConversationsInbox() {
                               {m.charAt(0).toUpperCase() + m.slice(1)}
                             </button>
                           ))}
+                          <div className="border-t my-1" />
+                          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">Translate to</div>
+                          <div className="max-h-44 overflow-auto">
+                            {AI_LANGUAGES.map((lang) => (
+                              <button
+                                key={lang}
+                                onClick={() => transformAiMutation.mutate({ text: messageText, mode: "translate", language: lang })}
+                                className="w-full text-left text-xs px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
+                                data-testid={`ai-translate-${lang}`}
+                              >
+                                {lang}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -3324,15 +4189,37 @@ export default function ConversationsInbox() {
                     </Button>
                   </div>
                 </div>
-              ) : (
-                <div className="p-6 flex-shrink-0 bg-muted/30 flex flex-col items-center justify-center gap-3">
-                  <AlertCircle className="w-6 h-6 text-muted-foreground" />
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-foreground">To send messages, please assign this chat to an agent.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Use the assignment options in the contact profile to get started</p>
+              ) : (() => {
+                // Locked state (replyagent): chat is held by ANOTHER agent and
+                // we lack the unassigned-message permission → show who locked it.
+                const lockedByOther =
+                  !!selectedConvObj?.assignedAgent &&
+                  !!currentUser.id &&
+                  selectedConvObj.assignedAgent !== currentUser.id;
+                const lockName = selectedConvObj?.assignedAgentName || getAgentName(selectedConvObj?.assignedAgent ?? null);
+                return (
+                  <div className="p-6 flex-shrink-0 bg-muted/30 flex flex-col items-center justify-center gap-3">
+                    <AlertCircle className="w-6 h-6 text-muted-foreground" />
+                    <div className="text-center">
+                      {lockedByOther ? (
+                        <>
+                          <p className="text-sm font-medium text-foreground">
+                            This conversation is assigned to {lockName}.
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Only the assigned agent can reply. Reassign it to yourself to take over.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-foreground">To send messages, please assign this chat to an agent.</p>
+                          <p className="text-xs text-muted-foreground mt-1">Use the assignment options in the contact profile to get started</p>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </Card>
             )
           ) : (
@@ -3977,6 +4864,176 @@ export default function ConversationsInbox() {
               disabled={!snoozeUntil || snoozeMutation.isPending}
             >
               {snoozeMutation.isPending ? "Snoozing…" : "Snooze"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Composer "+" → Start automation (replyagent select_automation_popup). */}
+      <Dialog open={automationDialogOpen} onOpenChange={setAutomationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Start an automation</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-80 overflow-auto divide-y">
+            {composerAutomations.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No automations found.</p>
+            ) : (
+              composerAutomations.map((a) => (
+                <button
+                  key={a.id}
+                  className="w-full text-left px-2 py-2.5 hover:bg-muted flex items-center justify-between gap-2 disabled:opacity-50"
+                  onClick={() => automateMutation.mutate(a.id)}
+                  disabled={automateMutation.isPending}
+                  data-testid={`automation-option-${a.id}`}
+                >
+                  <span className="text-sm truncate flex items-center gap-2"><Bot size={14} />{a.name}</span>
+                  {a.status && a.status !== "active" && (
+                    <span className="text-[10px] uppercase text-muted-foreground flex-shrink-0">{a.status}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Composer "+" → Media gallery picker (replyagent Gallery). */}
+      <Dialog open={galleryDialogOpen} onOpenChange={setGalleryDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Media gallery</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-auto">
+            {galleryFiles.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">No media in the gallery yet.</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {galleryFiles.map((f) => (
+                  <button
+                    key={f.id}
+                    className="group relative aspect-square rounded-md overflow-hidden border hover:ring-2 hover:ring-primary"
+                    onClick={() => attachGalleryFile(f)}
+                    title={f.name}
+                    data-testid={`gallery-item-${f.id}`}
+                  >
+                    {f.media_type === "IMAGE" ? (
+                      <img src={f.thumb} alt={f.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-muted text-muted-foreground p-1">
+                        <FileText size={20} />
+                        <span className="text-[9px] truncate w-full text-center mt-1">{f.name}</span>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Composer "+" → Sticker picker (replyagent sticker gallery — webp). */}
+      <Dialog open={stickerDialogOpen} onOpenChange={setStickerDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send a sticker</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[55vh] overflow-auto">
+            {stickerFiles.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">
+                No stickers in the gallery. Upload .webp images to the gallery to use them as stickers.
+              </p>
+            ) : (
+              <div className="grid grid-cols-5 gap-2">
+                {stickerFiles.map((f) => (
+                  <button
+                    key={f.id}
+                    className="aspect-square rounded-md overflow-hidden border hover:ring-2 hover:ring-primary p-1"
+                    onClick={() => sendSticker(f)}
+                    title={f.name}
+                    data-testid={`sticker-item-${f.id}`}
+                  >
+                    <img src={f.thumb} alt={f.name} className="w-full h-full object-contain" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk snooze dialog (select-all → Actions → Snooze). */}
+      <Dialog open={bulkSnoozeOpen} onOpenChange={setBulkSnoozeOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Snooze {selectedInboxIds.length} conversation(s)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Pick a future time. The selected conversations will move out of the inbox and reappear at the chosen moment.
+            </p>
+            <Input
+              type="datetime-local"
+              value={bulkSnoozeUntil}
+              onChange={(e) => setBulkSnoozeUntil(e.target.value)}
+              data-testid="input-bulk-snooze-until"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkSnoozeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                bulkSnoozeMutation.mutate({
+                  ids: selectedInboxIds,
+                  until: new Date(bulkSnoozeUntil).toISOString(),
+                })
+              }
+              disabled={!bulkSnoozeUntil || bulkSnoozeMutation.isPending}
+            >
+              {bulkSnoozeMutation.isPending ? "Snoozing…" : "Snooze"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk assign dialog (select-all → Actions → Assign conversations). */}
+      <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign {selectedInboxIds.length} conversation(s)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Select value={bulkAssignAgent} onValueChange={setBulkAssignAgent}>
+              <SelectTrigger data-testid="select-bulk-assign-agent">
+                <SelectValue placeholder="Choose an agent…" />
+              </SelectTrigger>
+              <SelectContent className="bg-white dark:bg-background">
+                <SelectItem value="null">Unassign (move to queue)</SelectItem>
+                {agentOptions.map((a: AgentOption) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAssignOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                bulkAssignMutation.mutate({
+                  ids: selectedInboxIds,
+                  assignedTo: bulkAssignAgent === "null" ? null : bulkAssignAgent,
+                })
+              }
+              disabled={!bulkAssignAgent || bulkAssignMutation.isPending}
+            >
+              {bulkAssignMutation.isPending ? "Assigning…" : "Assign"}
             </Button>
           </DialogFooter>
         </DialogContent>

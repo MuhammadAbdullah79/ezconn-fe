@@ -254,7 +254,7 @@ const AgencySidebar = () => {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all group relative",
                   active
-                    ? "bg-primary/10 text-primary"
+                    ? (dark ? "bg-primary/10 text-white" : "bg-primary/10 text-primary")
                     : (dark ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"),
                   isCollapsed && "justify-center"
                 )}
@@ -297,7 +297,7 @@ const AgencySidebar = () => {
                       <div className={cn(
                         "flex items-center justify-between px-2 py-1.5 rounded-md text-[12px] font-medium cursor-pointer transition-all",
                         isActive(sub.href)
-                          ? "text-primary bg-primary/5"
+                          ? (dark ? "text-white bg-primary/10" : "text-primary bg-primary/5")
                           : (dark ? "text-slate-500 hover:text-white" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50")
                       )}>
                         <div className="flex items-center gap-2">
@@ -325,7 +325,7 @@ const AgencySidebar = () => {
                 <div className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all group relative",
                   active
-                    ? "bg-primary/10 text-primary"
+                    ? (dark ? "bg-primary/10 text-white" : "bg-primary/10 text-primary")
                     : (dark ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"),
                   isCollapsed && "justify-center"
                 )}>

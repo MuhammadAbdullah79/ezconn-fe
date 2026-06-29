@@ -391,7 +391,7 @@ export default function AppSidebar() {
                       className={cn(
                         "flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 text-[13px]",
                         isActive(item.href)
-                          ? "bg-primary/10 text-primary font-bold"
+                          ? (theme === "dark" ? "bg-primary/10 text-white font-bold" : "bg-primary/10 text-primary font-bold")
                           : theme === "dark" ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-50 hover:text-primary"
                       )}
                     >
@@ -410,7 +410,7 @@ export default function AppSidebar() {
                       className={cn(
                         "flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 text-[13px]",
                         isActive(item.href)
-                          ? "bg-primary/10 text-primary font-bold"
+                          ? (theme === "dark" ? "bg-primary/10 text-white font-bold" : "bg-primary/10 text-primary font-bold")
                           : theme === "dark" ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-50 hover:text-primary"
                       )}
                     >

@@ -383,14 +383,16 @@ export default function WhatsAppSection() {
     // kicks in at build time (a dynamic `(import.meta as any).env` lookup is
     // skipped by the transformer and yields undefined at runtime).
     const appId: string | undefined = import.meta.env.VITE_META_APP_ID as string | undefined;
-    const configId: string | undefined = import.meta.env.VITE_META_COEX_CONFIG_ID as string | undefined;
+    // Single Embedded Signup config shared by both onboarding flows (Coex 'aka'
+    // + Business API 'api') — only the `_s` source below differs per flow.
+    const configId: string | undefined = import.meta.env.VITE_META_ES_CONFIG_ID as string | undefined;
     const graphVersion: string = (import.meta.env.VITE_META_GRAPH_VERSION as string | undefined) ?? "v22.0";
 
     if (!appId || !configId) {
       toast({
         title: "Embedded Signup not configured",
         description:
-          "VITE_META_APP_ID and VITE_META_COEX_CONFIG_ID must be set in the frontend .env to launch Meta Embedded Signup.",
+          "VITE_META_APP_ID and VITE_META_ES_CONFIG_ID must be set in the frontend .env to launch Meta Embedded Signup.",
         variant: "destructive",
       });
       return;

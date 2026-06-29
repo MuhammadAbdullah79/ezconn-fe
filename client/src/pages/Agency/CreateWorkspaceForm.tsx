@@ -416,6 +416,10 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
                     value={form.contactLimit}
                     onChange={(e) => {
                       const cleaned = e.target.value.replace(/^0+(?=\d)/, '');
+                      // Force-sync DOM when cleaning changes the string but the parsed
+                      // number stays equal to state — React skips re-render in that
+                      // case and the leading zero would persist in the input.
+                      if (cleaned !== e.target.value) e.target.value = cleaned;
                       set('contactLimit', Math.max(0, parseInt(cleaned) || 0));
                     }}
                     className={cn("w-20 h-8 text-xs text-center", dark ? "bg-slate-900 border-slate-700 text-white" : "border-slate-200")}
@@ -440,6 +444,7 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
                   value={form.agentLimit}
                   onChange={(e) => {
                     const cleaned = e.target.value.replace(/^0+(?=\d)/, '');
+                    if (cleaned !== e.target.value) e.target.value = cleaned;
                     set('agentLimit', Math.max(0, parseInt(cleaned) || 0));
                   }}
                   className={cn("w-20 h-8 text-xs text-center", dark ? "bg-slate-900 border-slate-700 text-white" : "border-slate-200")}
@@ -479,7 +484,11 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
                 type="number"
                 min={0}
                 value={form.aiLimit}
-                onChange={(e) => set('aiLimit', parseInt(e.target.value) || 0)}
+                onChange={(e) => {
+                  const cleaned = e.target.value.replace(/^0+(?=\d)/, '');
+                  if (cleaned !== e.target.value) e.target.value = cleaned;
+                  set('aiLimit', Math.max(0, parseInt(cleaned) || 0));
+                }}
                 className={cn("w-16 h-8 text-xs text-center", dark ? "bg-[#0f172a] border-slate-700 text-white" : "border-slate-200 bg-white")}
               />
             </div>
@@ -515,7 +524,11 @@ const CreateWorkspaceForm: React.FC<Props> = ({ onCancel, initialData }) => {
                     type="number"
                     min={0}
                     value={(form.channels as any)[ch.id]}
-                    onChange={(e) => setChannel(ch.id, parseInt(e.target.value) || 0)}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/^0+(?=\d)/, '');
+                      if (cleaned !== e.target.value) e.target.value = cleaned;
+                      setChannel(ch.id, Math.max(0, parseInt(cleaned) || 0));
+                    }}
                     className={cn("w-16 h-8 text-xs text-center", dark ? "bg-[#0f172a] border-slate-700 text-white" : "border-slate-200 bg-white")}
                   />
                 </div>

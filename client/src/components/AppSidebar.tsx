@@ -395,7 +395,7 @@ export default function AppSidebar() {
                           : theme === "dark" ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-50 hover:text-primary"
                       )}
                     >
-                      <item.icon size={15} className={isActive(item.href) ? "text-primary" : "text-gray-400"} />
+                      <item.icon size={15} className={isActive(item.href) ? (theme === "dark" ? "text-white" : "text-primary") : "text-gray-400"} />
                       <span>{item.label}</span>
                     </Link>
                   </DropdownMenuItem>
@@ -414,7 +414,7 @@ export default function AppSidebar() {
                           : theme === "dark" ? "hover:bg-slate-800 hover:text-white" : "hover:bg-slate-50 hover:text-primary"
                       )}
                     >
-                      <item.icon size={15} className={isActive(item.href) ? "text-primary" : "text-gray-400"} />
+                      <item.icon size={15} className={isActive(item.href) ? (theme === "dark" ? "text-white" : "text-primary") : "text-gray-400"} />
                       <span>{item.label}</span>
                     </Link>
                   </DropdownMenuItem>

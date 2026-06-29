@@ -259,7 +259,7 @@ const AgencySidebar = () => {
                   isCollapsed && "justify-center"
                 )}
               >
-                <span className={cn("shrink-0", active ? "text-primary" : "")}>
+                <span className={cn("shrink-0", active ? (dark ? "text-white" : "text-primary") : "")}>
                   {item.icon}
                 </span>
 
@@ -329,7 +329,7 @@ const AgencySidebar = () => {
                     : (dark ? "text-slate-400 hover:bg-slate-800 hover:text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"),
                   isCollapsed && "justify-center"
                 )}>
-                  <span className={cn("shrink-0", active ? "text-primary" : "")}>
+                  <span className={cn("shrink-0", active ? (dark ? "text-white" : "text-primary") : "")}>
                     {item.icon}
                   </span>
                   {!isCollapsed && <span className="text-[13px] font-medium">{item.label}</span>}

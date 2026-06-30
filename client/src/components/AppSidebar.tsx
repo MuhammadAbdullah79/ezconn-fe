@@ -302,7 +302,7 @@ export default function AppSidebar() {
   const allMenuItems: Array<{ label: string; href: string; icon: any; permissions?: string[] }> = [
     { label: "Insights", href: "/insights", icon: BarChart2 },
     { label: "Smart Flows", href: "/automations", icon: GitMerge },
-    { label: "Campaign Manager", href: "/campaigns", icon: Send, permissions: ["workspace.broadcast.view"] },
+    { label: "Broadcasts", href: "/campaigns", icon: Send, permissions: ["workspace.broadcast.view"] },
     { label: "Contacts", href: "/contacts", icon: Users, permissions: ["workspace.company.view"] },
     { label: "Inbox", href: "/conversations/inbox", icon: Mail, permissions: ["workspace.inbox.access"] },
     { label: "Conversation Logs", href: "/conversations/conversation-logs", icon: FileText },

@@ -17,9 +17,17 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CHANNEL_LABELS } from "./channel-schemas";
 import { getTriggerSchema } from "./trigger-schemas";
 import { ACTION_SCHEMAS } from "./action-schemas";
+import { useSmartFlowMenu } from "../SmartFlowBuilderPage";
 import {
   Zap,
   MessageSquare,
@@ -36,9 +44,231 @@ import {
   ListChecks,
   Brain,
   HelpCircle,
+  Phone,
+  Globe,
+  Copy,
+  Trash2,
 } from "lucide-react";
+import {
+  FaWhatsapp,
+  FaInstagram,
+  FaFacebookMessenger,
+  FaTelegramPlane,
+} from "react-icons/fa";
+import { SiTwilio } from "react-icons/si";
+import { BsChatDotsFill } from "react-icons/bs";
 
-const NODE_WIDTH = 240;
+// Brand icons rendered inside the channel dropdown items, matching the
+// real product logos rather than a generic message bubble.
+// ─── NodeHoverActions ─────────────────────────────────────────────────
+// Replyagent-parity floating Copy + Delete buttons that appear above a
+// node when the user hovers. Wired through `useSmartFlowMenu` so the
+// node renderer doesn't need to know about the page-level store. The
+// parent node must have the Tailwind `group` class for the buttons to
+// reveal on hover.
+function NodeHoverActions({ nodeId }: { nodeId: string }) {
+  const { duplicateNode, removeNode } = useSmartFlowMenu();
+  return (
+    <div
+      className="absolute -top-7 left-0 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        title="Duplicate"
+        className="h-6 w-6 rounded border bg-white shadow-sm flex items-center justify-center text-slate-600 hover:bg-slate-100"
+        onClick={(e) => {
+          e.stopPropagation();
+          duplicateNode(nodeId);
+        }}
+      >
+        <Copy className="h-3 w-3" />
+      </button>
+      <button
+        type="button"
+        title="Delete"
+        className="h-6 w-6 rounded border border-rose-200 bg-rose-50 shadow-sm flex items-center justify-center text-rose-600 hover:bg-rose-100"
+        onClick={(e) => {
+          e.stopPropagation();
+          removeNode(nodeId);
+        }}
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
+const CHANNEL_DROPDOWN_ICONS: Record<string, React.ReactNode> = {
+  whatsapp: <FaWhatsapp className="h-3.5 w-3.5 text-emerald-600" />,
+  telegram: <FaTelegramPlane className="h-3.5 w-3.5 text-sky-600" />,
+  messenger: <FaFacebookMessenger className="h-3.5 w-3.5 text-blue-600" />,
+  instagram: <FaInstagram className="h-3.5 w-3.5 text-fuchsia-600" />,
+  webchat: <BsChatDotsFill className="h-3.5 w-3.5 text-orange-500" />,
+  twilio_sms: <SiTwilio className="h-3.5 w-3.5 text-rose-600" />,
+  twilio_call: <Phone className="h-3.5 w-3.5 text-rose-600" />,
+  zapi: <FaWhatsapp className="h-3.5 w-3.5 text-emerald-700" />,
+  evolution: <FaWhatsapp className="h-3.5 w-3.5 text-emerald-500" />,
+};
+
+// ─── AddStepDropdown ───────────────────────────────────────────────────
+// Reusable "click ↓ to add next step" dropdown that lives at the bottom
+// of each node. Reads the connected-channel filter + the addStepBelow
+// callback from `SmartFlowMenuContext` so individual nodes don't have to
+// carry callbacks in their data. Channels are shown only when at least
+// one account of that type is connected; features (Randomizer / Delay /
+// Condition / Action / Splitter) are always available. Cancel just closes
+// the menu — Radix handles outside-click close already.
+
+interface AddStepDropdownProps {
+  nodeId: string;
+  /** Tailwind colour token for the dot border (e.g. "border-emerald-500"). */
+  dotColor?: string;
+  /** Optional ReactFlow handle id when this dropdown represents one of N
+   *  branches (Randomizer / Splitter / Condition). Falls back to default
+   *  Bottom handle when omitted. */
+  handleId?: string;
+  /**
+   * Wrapper positioning. By default the dot dangles off the bottom-right
+   * corner of the parent node. For multi-branch nodes the caller positions
+   * the dot inline next to each branch row via inline styles.
+   */
+  style?: React.CSSProperties;
+}
+
+/**
+ * Replyagent-parity "add next step" dropdown — a small hollow circle that
+ * IS the React Flow source handle. Clicking it opens the channel/feature
+ * picker; dragging from it creates an edge to another node. The Radix
+ * dropdown trigger is layered above an invisible Handle so we keep
+ * drag-to-connect behaviour while still capturing clicks.
+ *
+ * Layout: a 10px hollow circle pinned to a position the caller controls
+ * via `style` (default: bottom-right corner of the parent card).
+ *
+ * Channels list is strictly filtered by `useConnectedAccounts` — only
+ * actually connected channel types are listed. Features (Randomizer,
+ * Delay, Condition, Action, Splitter) and Cancel are always shown.
+ */
+function AddStepDropdown({
+  nodeId,
+  dotColor = "border-emerald-500",
+  handleId,
+  style,
+}: AddStepDropdownProps) {
+  const { connectedChannelTypes, addStepBelow } = useSmartFlowMenu();
+
+  // WhatsApp is always visible (even when not yet connected) so the user
+  // can lay out a flow before wiring up the account. All other channels
+  // appear only when their account is actually connected — matches the
+  // user's request: "abhi WhatsApp add kr do, baki connect karne par show".
+  const ALWAYS_VISIBLE = new Set(["whatsapp"]);
+  const channels: Array<{ type: string; label: string }> = [
+    { type: "whatsapp", label: "WhatsApp" },
+    { type: "telegram", label: "Telegram" },
+    { type: "messenger", label: "Messenger" },
+    { type: "instagram", label: "Instagram" },
+    { type: "webchat", label: "Webchat" },
+    { type: "twilio_sms", label: "SMS" },
+    { type: "twilio_call", label: "Call" },
+    { type: "zapi", label: "Z-API" },
+    { type: "evolution", label: "Evolution" },
+  ].filter(
+    (it) => ALWAYS_VISIBLE.has(it.type) || connectedChannelTypes.has(it.type),
+  );
+
+  const features: Array<{ type: string; label: string }> = [
+    { type: "randomizer", label: "Randomizer" },
+    { type: "delay", label: "Delay" },
+    { type: "condition", label: "Condition" },
+    { type: "action", label: "Action" },
+    { type: "splitter", label: "Splitter" },
+  ];
+
+  const wrapperStyle: React.CSSProperties = style ?? { right: -5, bottom: -5 };
+
+  return (
+    <div className="absolute z-10" style={wrapperStyle}>
+      {/* Invisible React Flow source handle sits exactly where the dot is —
+          edges originate from the dot's centre, matching replyagent. */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={handleId}
+        style={{
+          position: "absolute",
+          left: 5,
+          top: 5,
+          width: 1,
+          height: 1,
+          minWidth: 0,
+          minHeight: 0,
+          background: "transparent",
+          border: "none",
+        }}
+      />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`relative block h-2.5 w-2.5 rounded-full border-2 bg-white shadow transition-transform hover:scale-125 ${dotColor}`}
+            title="Add next step"
+            aria-label="Add next step"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side="right"
+          align="start"
+          sideOffset={6}
+          className="min-w-[180px] max-h-[60vh] overflow-auto p-0"
+        >
+          {channels.map((it) => (
+            <DropdownMenuItem
+              key={it.type}
+              onClick={() => addStepBelow(nodeId, it.type, handleId)}
+              className="text-xs py-1.5"
+            >
+              <span className="mr-2 flex-shrink-0">
+                {CHANNEL_DROPDOWN_ICONS[it.type] ?? (
+                  <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                )}
+              </span>
+              {it.label}
+            </DropdownMenuItem>
+          ))}
+          {channels.length > 0 && <DropdownMenuSeparator className="my-0" />}
+          {features.map((it) => (
+            <DropdownMenuItem
+              key={it.type}
+              onClick={() => addStepBelow(nodeId, it.type, handleId)}
+              className="text-xs py-1.5"
+            >
+              <span className="text-slate-500 mr-2 text-xs">→</span>
+              {it.label}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator className="my-0" />
+          {/* Cancel — closes the dropdown without firing any add action.
+              Radix closes the menu automatically when an item's click is
+              not prevented; we just stop the synthetic event from
+              bubbling up to the parent node so it doesn't also open the
+              right-side trigger panel. Left-aligned with the other rows
+              so the list reads as a coherent column. */}
+          <DropdownMenuItem
+            onClick={(e) => e.stopPropagation()}
+            className="text-muted-foreground text-xs py-1.5"
+          >
+            <span className="text-slate-500 mr-2 text-xs">→</span>
+            Cancel
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+const NODE_WIDTH = 200;
 
 // ─── Trigger node ──────────────────────────────────────────────────────
 
@@ -63,7 +293,7 @@ const NODE_WIDTH = 240;
  *   └────────────────────────────┘
  *           Start ↓
  */
-export const TriggerNode = memo(({ data }: NodeProps<any>) => {
+export const TriggerNode = memo(({ id, data }: NodeProps<any>) => {
   const activities: any[] = data?.activities ?? [];
   const items = activities.length
     ? activities
@@ -100,8 +330,8 @@ export const TriggerNode = memo(({ data }: NodeProps<any>) => {
 
   return (
     <div
-      className="rounded bg-white shadow-sm border-2 border-emerald-300"
-      style={{ width: 260 }}
+      className="relative rounded bg-white shadow-sm border-2 border-emerald-300"
+      style={{ width: 200 }}
     >
       <div className="px-3 py-2 flex items-center gap-2 border-b border-emerald-200">
         <span className="h-4 w-4 rounded-full border-2 border-emerald-500 flex items-center justify-center">
@@ -121,10 +351,7 @@ export const TriggerNode = memo(({ data }: NodeProps<any>) => {
           </div>
         ))}
       </div>
-      <div className="px-3 py-1 text-[10px] text-emerald-700 flex items-center gap-1">
-        Start <span>↓</span>
-      </div>
-      <Handle type="source" position={Position.Bottom} />
+      <AddStepDropdown nodeId={id} />
     </div>
   );
 });
@@ -134,15 +361,30 @@ TriggerNode.displayName = "TriggerNode";
 
 function makeChannelNode(channel: string) {
   const meta = CHANNEL_LABELS[channel] ?? { label: channel, icon: "fa-comment", color: "text-muted-foreground" };
-  const Component = memo(({ data }: NodeProps<any>) => {
-    const value = data?.value ?? {};
-    const summary = channelSummary(channel, value);
+  const Component = memo(({ id, data }: NodeProps<any>) => {
+    // Channel nodes carry a list of activities (Text / Image / Audio / etc.)
+    // under `data.activities`. The legacy `data.value` shape is a fallback so
+    // older saved flows still render. We list every activity as its own row
+    // so the user can see all configured steps directly on the canvas.
+    const activities: any[] = data?.activities ?? [];
+    const legacyValue = data?.value ?? {};
+    const legacySummary = channelSummary(channel, legacyValue);
     return (
       <div
-        className="rounded-md border-2 bg-white shadow-sm"
+        className="group relative rounded-md border-2 bg-white shadow-sm"
         style={{ width: NODE_WIDTH, borderColor: borderForChannel(channel) }}
       >
-        <Handle type="target" position={Position.Top} />
+        <NodeHoverActions nodeId={id} />
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{
+            width: 10,
+            height: 10,
+            background: "white",
+            border: "2px solid #94a3b8",
+          }}
+        />
         <div
           className={`border-b px-3 py-2 flex items-center gap-2 rounded-t-md ${bgForChannel(channel)}`}
         >
@@ -151,21 +393,138 @@ function makeChannelNode(channel: string) {
             {meta.label}
           </span>
         </div>
-        <div className="px-3 py-2 text-sm">
-          <p className="font-medium truncate">
-            {data?.label ?? "Configure message"}
-          </p>
-          <p className="text-[10px] text-muted-foreground truncate" title={summary}>
-            {summary || "—"}
-          </p>
-        </div>
+        {activities.length > 0 ? (
+          <div className="bg-white">
+            {activities.map((act, idx) => (
+              <div
+                key={idx}
+                className="border-b last:border-b-0"
+                style={{ borderColor: borderForChannel(channel) }}
+              >
+                {renderActivityRow(act)}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="px-3 py-2 text-sm">
+            <p className="font-medium truncate">
+              {data?.label ?? "Configure message"}
+            </p>
+            <p
+              className="text-[10px] text-muted-foreground truncate"
+              title={legacySummary}
+            >
+              {legacySummary || "—"}
+            </p>
+          </div>
+        )}
         <StatsOverlay data={data} />
-        <Handle type="source" position={Position.Bottom} />
+        <AddStepDropdown nodeId={id} />
       </div>
     );
   });
   Component.displayName = `${meta.label}Node`;
   return Component;
+}
+
+// Render a single activity row in the channel node card. Mirrors
+// `activitySummary` in activity-editors.tsx so adding a text activity with
+// "hello" instantly previews "hello" on the canvas instead of the empty
+// dash that the value-only renderer fell back to. For image / audio /
+// video activities we render the actual media inline — replyagent's
+// canvas does the same and it's how the user can spot at a glance which
+// asset each WhatsApp node is configured to send.
+function renderActivityRow(act: any): React.ReactNode {
+  const p = act?.properties ?? {};
+  const t = p?.type ?? act?.type ?? "";
+
+  // Image — inline thumbnail. Picked media is stored under
+  //   properties.gallery_media_id = { id, url, object_name }
+  // for the gallery flow; the custom_field flow uses properties.custom_field_id
+  // (no preview possible because it resolves at runtime).
+  if (t === "image" || t === "image_url") {
+    const url = mediaUrlFromActivity(p);
+    if (url) {
+      return (
+        <img
+          src={url}
+          alt={p.gallery_media_id?.object_name ?? "image"}
+          className="w-full max-h-32 object-contain bg-white"
+        />
+      );
+    }
+    return (
+      <div className="px-3 py-1.5 text-[11px] truncate">No image selected</div>
+    );
+  }
+
+  // Video — inline player thumbnail
+  if (t === "video") {
+    const url = mediaUrlFromActivity(p);
+    if (url) {
+      return (
+        <video
+          src={url}
+          className="w-full max-h-32 bg-black"
+          muted
+          preload="metadata"
+        />
+      );
+    }
+    return <div className="px-3 py-1.5 text-[11px] truncate">No video</div>;
+  }
+
+  // Audio — small player
+  if (t === "audio") {
+    const url = mediaUrlFromActivity(p);
+    if (url) {
+      return (
+        <audio src={url} controls className="w-full h-8" preload="none" />
+      );
+    }
+    return <div className="px-3 py-1.5 text-[11px] truncate">No audio</div>;
+  }
+
+  // Everything else is a single-line text summary
+  return (
+    <div
+      className="px-3 py-1.5 text-[11px] truncate"
+      title={activityTextSummary(act)}
+    >
+      {activityTextSummary(act)}
+    </div>
+  );
+}
+
+// Pull a previewable URL out of an activity's properties payload. Channel
+// activities store picked gallery media under `gallery_media_id` (object
+// with id / url / object_name); older saved flows may have a flat `url`
+// or wrap it under `media`/`value`.
+function mediaUrlFromActivity(p: any): string | undefined {
+  return (
+    p?.gallery_media_id?.url ??
+    p?.url ??
+    p?.image_url ??
+    p?.media?.url ??
+    p?.value?.url ??
+    undefined
+  );
+}
+
+function activityTextSummary(act: any): string {
+  const p = act?.properties ?? {};
+  const t = p?.type ?? act?.type ?? "";
+  if (t === "text") return (p.message ?? p.text ?? "").slice(0, 60) || "Empty text";
+  if (t === "input") return `Ask: ${(p.message ?? "").slice(0, 50) || "Empty"}`;
+  if (t === "button") return `Buttons: ${(p.choices ?? []).length}`;
+  if (t === "document") return p.filename ?? "Document";
+  if (t === "delay") return `Wait ${p.amount ?? "?"} ${p.unit ?? "min"}`;
+  if (t === "message_list") return `List: ${p.button ?? "(button)"}`;
+  if (t === "message_template") return p.template?.name ?? "Template";
+  if (t === "chatgpt_question") return `AI: ${(p.question ?? "").slice(0, 40)}`;
+  if (t === "dify_question") return `Dify: ${(p.question ?? "").slice(0, 40)}`;
+  if (t === "cta_button") return `CTA: ${p.button_text ?? "?"}`;
+  return t || "Activity";
 }
 
 /**
@@ -213,21 +572,21 @@ function ChannelIcon({ channel }: { channel: string }) {
     case "whatsapp":
     case "zapi":
     case "evolution":
-      return <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />;
+      return <FaWhatsapp className="h-4 w-4 text-emerald-600" />;
     case "telegram":
-      return <MessageSquare className="h-3.5 w-3.5 text-sky-600" />;
+      return <FaTelegramPlane className="h-4 w-4 text-sky-600" />;
     case "messenger":
-      return <MessageSquare className="h-3.5 w-3.5 text-blue-600" />;
+      return <FaFacebookMessenger className="h-4 w-4 text-blue-600" />;
     case "instagram":
-      return <MessageSquare className="h-3.5 w-3.5 text-fuchsia-600" />;
+      return <FaInstagram className="h-4 w-4 text-fuchsia-600" />;
     case "webchat":
-      return <MessageSquare className="h-3.5 w-3.5 text-orange-600" />;
+      return <BsChatDotsFill className="h-4 w-4 text-orange-500" />;
     case "twilio_sms":
-      return <MessageSquare className="h-3.5 w-3.5 text-amber-600" />;
+      return <SiTwilio className="h-4 w-4 text-rose-600" />;
     case "twilio_call":
-      return <MessageSquare className="h-3.5 w-3.5 text-rose-600" />;
+      return <Phone className="h-4 w-4 text-rose-600" />;
     default:
-      return <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />;
+      return <MessageSquare className="h-4 w-4 text-muted-foreground" />;
   }
 }
 
@@ -290,7 +649,7 @@ export const EvolutionNode = makeChannelNode("evolution");
 
 // ─── DelayNode ────────────────────────────────────────────────────────
 
-export const DelayNode = memo(({ data }: NodeProps<any>) => {
+export const DelayNode = memo(({ id, data }: NodeProps<any>) => {
   const v = data?.value ?? {};
   const summary =
     v.mode === "date"
@@ -298,10 +657,20 @@ export const DelayNode = memo(({ data }: NodeProps<any>) => {
       : `${v.amount ?? "?"} ${v.unit ?? "minutes"}`;
   return (
     <div
-      className="rounded-md border-2 border-amber-200 bg-white shadow-sm"
+      className="group relative rounded-md border-2 border-amber-200 bg-white shadow-sm"
       style={{ width: NODE_WIDTH }}
     >
-      <Handle type="target" position={Position.Top} />
+      <NodeHoverActions nodeId={id} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 10,
+          height: 10,
+          background: "white",
+          border: "2px solid #94a3b8",
+        }}
+      />
       <div className="bg-amber-50 border-b border-amber-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
         <Clock className="h-3.5 w-3.5 text-amber-600" />
         <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">
@@ -316,7 +685,7 @@ export const DelayNode = memo(({ data }: NodeProps<any>) => {
           </p>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      <AddStepDropdown nodeId={id} dotColor="border-amber-500" />
     </div>
   );
 });
@@ -324,53 +693,136 @@ DelayNode.displayName = "DelayNode";
 
 // ─── RandomizerNode ───────────────────────────────────────────────────
 
-export const RandomizerNode = memo(({ data }: NodeProps<any>) => {
+export const RandomizerNode = memo(({ id, data }: NodeProps<any>) => {
   const weights: number[] = data?.value?.weights ?? [50, 50];
   return (
     <div
-      className="rounded-md border-2 border-indigo-200 bg-white shadow-sm"
+      className="group relative rounded-md border-2 border-indigo-200 bg-white shadow-sm"
       style={{ width: NODE_WIDTH }}
     >
-      <Handle type="target" position={Position.Top} />
+      <NodeHoverActions nodeId={id} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 10,
+          height: 10,
+          background: "white",
+          border: "2px solid #94a3b8",
+        }}
+      />
       <div className="bg-indigo-50 border-b border-indigo-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
         <Shuffle className="h-3.5 w-3.5 text-indigo-600" />
         <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">
           Randomizer
         </span>
       </div>
-      <div className="px-3 py-2 text-xs flex flex-wrap gap-1">
-        {weights.map((w, i) => (
-          <Badge key={i} variant="outline" className="text-[10px]">
-            {String.fromCharCode(65 + i)} {w}%
-          </Badge>
-        ))}
-      </div>
-      {/* One source handle per branch */}
-      {weights.map((_, i) => (
-        <Handle
-          key={i}
-          type="source"
-          position={Position.Bottom}
-          id={`branch-${i}`}
-          style={{ left: `${((i + 1) * 100) / (weights.length + 1)}%` }}
-        />
-      ))}
+      {/* One row per branch — each row carries its own clickable dot on the
+          right edge, so the edge originates from that exact branch. */}
+      {weights.map((w, i) => {
+        const ROW_HEIGHT = 28;
+        return (
+          <div
+            key={i}
+            className="relative px-3 py-1.5 text-xs border-t border-indigo-100 first:border-t-0"
+            style={{ minHeight: ROW_HEIGHT }}
+          >
+            <Badge variant="outline" className="text-[10px]">
+              {String.fromCharCode(65 + i)} {w}%
+            </Badge>
+            <AddStepDropdown
+              nodeId={id}
+              handleId={`branch-${i}`}
+              dotColor="border-indigo-500"
+              style={{ right: -5, top: "50%", transform: "translateY(-50%)" }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 });
 RandomizerNode.displayName = "RandomizerNode";
 
+// ─── SplitterNode ─────────────────────────────────────────────────────
+// Functionally identical to Randomizer (one input, N weighted outputs) —
+// kept as a separate node type so we can label it correctly on canvas
+// and so the dropdown picker can offer it as a distinct choice.
+
+export const SplitterNode = memo(({ id, data }: NodeProps<any>) => {
+  const paths: any[] = data?.value?.paths ?? data?.value?.weights ?? [
+    { label: "Path A" },
+    { label: "Path B" },
+  ];
+  return (
+    <div
+      className="group relative rounded-md border-2 border-rose-200 bg-white shadow-sm"
+      style={{ width: NODE_WIDTH }}
+    >
+      <NodeHoverActions nodeId={id} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 10,
+          height: 10,
+          background: "white",
+          border: "2px solid #94a3b8",
+        }}
+      />
+      <div className="bg-rose-50 border-b border-rose-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
+        <Shuffle className="h-3.5 w-3.5 text-rose-600" />
+        <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider">
+          Splitter
+        </span>
+      </div>
+      {paths.map((p, i) => {
+        const label =
+          typeof p === "number"
+            ? `Path ${String.fromCharCode(65 + i)}`
+            : p?.label ?? `Path ${String.fromCharCode(65 + i)}`;
+        return (
+          <div
+            key={i}
+            className="relative px-3 py-1.5 text-xs border-t border-rose-100 first:border-t-0"
+            style={{ minHeight: 28 }}
+          >
+            <span>{label}</span>
+            <AddStepDropdown
+              nodeId={id}
+              handleId={`branch-${i}`}
+              dotColor="border-rose-500"
+              style={{ right: -5, top: "50%", transform: "translateY(-50%)" }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+});
+SplitterNode.displayName = "SplitterNode";
+
 // ─── ConditionNode ────────────────────────────────────────────────────
 
-export const ConditionNode = memo(({ data }: NodeProps<any>) => {
+export const ConditionNode = memo(({ id, data }: NodeProps<any>) => {
   const conditions = data?.value?.conditions ?? [];
   const mode = data?.value?.match_mode ?? "all";
   return (
     <div
-      className="rounded-md border-2 border-teal-200 bg-white shadow-sm"
+      className="group relative rounded-md border-2 border-teal-200 bg-white shadow-sm"
       style={{ width: NODE_WIDTH }}
     >
-      <Handle type="target" position={Position.Top} />
+      <NodeHoverActions nodeId={id} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 10,
+          height: 10,
+          background: "white",
+          border: "2px solid #94a3b8",
+        }}
+      />
       <div className="bg-teal-50 border-b border-teal-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
         <GitBranch className="h-3.5 w-3.5 text-teal-600" />
         <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">
@@ -384,9 +836,7 @@ export const ConditionNode = memo(({ data }: NodeProps<any>) => {
             : `${conditions.length} condition${conditions.length === 1 ? "" : "s"} (${mode})`}
         </p>
       </div>
-      {/* Yes / No branches */}
-      <Handle type="source" position={Position.Bottom} id="yes" style={{ left: "30%" }} />
-      <Handle type="source" position={Position.Bottom} id="no" style={{ left: "70%" }} />
+      <AddStepDropdown nodeId={id} dotColor="border-teal-500" />
     </div>
   );
 });
@@ -394,15 +844,25 @@ ConditionNode.displayName = "ConditionNode";
 
 // ─── ActionNode (50+ action types) ────────────────────────────────────
 
-export const ActionNode = memo(({ data }: NodeProps<any>) => {
+export const ActionNode = memo(({ id, data }: NodeProps<any>) => {
   const slug = data?.value?.slug ?? data?.actionSlug ?? "";
   const schema = ACTION_SCHEMAS[slug];
   return (
     <div
-      className="rounded-md border-2 border-slate-300 bg-white shadow-sm"
+      className="group relative rounded-md border-2 border-slate-300 bg-white shadow-sm"
       style={{ width: NODE_WIDTH }}
     >
-      <Handle type="target" position={Position.Top} />
+      <NodeHoverActions nodeId={id} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: 10,
+          height: 10,
+          background: "white",
+          border: "2px solid #94a3b8",
+        }}
+      />
       <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
         <Cog className="h-3.5 w-3.5 text-slate-600" />
         <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
@@ -415,7 +875,7 @@ export const ActionNode = memo(({ data }: NodeProps<any>) => {
           {schema?.group ?? slug}
         </p>
       </div>
-      <Handle type="source" position={Position.Bottom} />
+      <AddStepDropdown nodeId={id} dotColor="border-slate-500" />
     </div>
   );
 });
@@ -436,6 +896,7 @@ export const AUTOMATION_NODE_TYPES = {
   evolution: EvolutionNode,
   delay: DelayNode,
   randomizer: RandomizerNode,
+  splitter: SplitterNode,
   condition: ConditionNode,
   action: ActionNode,
 } as const;

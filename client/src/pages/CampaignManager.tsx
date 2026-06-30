@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { Plus, BarChart2, Edit2, Copy, Trash2, Send, Zap, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Archive, Calendar, FileText, X, Download, Paperclip } from "react-feather";
+import {
+  FaWhatsapp,
+  FaTelegramPlane,
+  FaFacebookMessenger,
+  FaInstagram,
+} from "react-icons/fa";
+import { SiTwilio } from "react-icons/si";
+import { BsChatDotsFill } from "react-icons/bs";
 import { ChartContainer } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +63,33 @@ interface SortEntry {
   direction: "asc" | "desc";
 }
 
+// True when `date` falls inside the rolling window identified by `token`.
+// Tokens are kept short and human-readable so the dropdown stays compact —
+// matches replyagent's broadcast list page quick filters.
+function dateRangeMatches(date: Date | undefined, token: string): boolean {
+  if (!date) return false;
+  const now = new Date();
+  const start = new Date(now);
+  switch (token) {
+    case "today":
+      start.setHours(0, 0, 0, 0);
+      return date >= start;
+    case "last7":
+      start.setDate(start.getDate() - 7);
+      return date >= start;
+    case "last30":
+      start.setDate(start.getDate() - 30);
+      return date >= start;
+    case "thisMonth":
+      return (
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth()
+      );
+    default:
+      return true;
+  }
+}
+
 interface Campaign {
   id: number;
   name: string;
@@ -62,6 +97,16 @@ interface Campaign {
   messageType: string;
   sent: number;
   delivered: number;
+  /** Total audience size for the broadcast (used in stat cards + table). */
+  audience?: number;
+  /** Failed delivery count (used in row + stats). */
+  failed?: number;
+  /** Channel slug — whatsapp / telegram / messenger / instagram / etc. */
+  channelType?: string;
+  /** Display name of the connected channel account (e.g. WhatsApp number name). */
+  channelName?: string;
+  /** ISO created-at date (used in CREATED AT column). */
+  createdAt?: Date;
   status: string;
   // New fields for API Triggered
   startDate?: Date;
@@ -120,6 +165,11 @@ export default function CampaignManager() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
+  // Broadcast-page parity filters (added alongside the legacy
+  // selectedCampaignTypes / selectedMessageTypes which are retained for
+  // backwards-compat with any saved views).
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [dateRangeFilter, setDateRangeFilter] = useState<string[]>([]);
   const [activeDetailsTab, setActiveDetailsTab] = useState("details");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCampaignTypes, setSelectedCampaignTypes] = useState<string[]>([]);
@@ -129,6 +179,11 @@ export default function CampaignManager() {
   const [sort, setSort] = useState<SortEntry | null>(null);
   const [csvSort, setCsvSort] = useState<{ column: string; direction: "asc" | "desc" } | null>(null);
   const [campaignCreationStep, setCampaignCreationStep] = useState<"selectType" | "apiTriggeredForm" | "broadcastForm">("selectType");
+  // Replyagent-style Step-1 form: pick a name + a connected channel before
+  // diving into the full broadcast composer. These two fields live here
+  // (not in the broadcast/api form state) because they're the only things
+  // the user enters in the new "Create a Broadcast" modal.
+  const [newBroadcastChannelKey, setNewBroadcastChannelKey] = useState<string>("");
   const [editingCampaignId, setEditingCampaignId] = useState<number | null>(null);
   const [campaignName, setCampaignName] = useState("");
   const [campaignStartDate, setCampaignStartDate] = useState<Date | undefined>(undefined);
@@ -324,6 +379,34 @@ export default function CampaignManager() {
         b.metadata?.messageType ?? b.metadata?.message_type ?? (b.scheduled_at ? "Scheduled" : "Immediate");
       const templateRow = b.wa_template_id ? templateById.get(Number(b.wa_template_id)) : null;
 
+      // Be defensive about date field names — Prisma serialises snake_case
+      // by default but custom transformers (or older saved metadata) may
+      // expose camelCase variants. Reject obvious garbage (Invalid Date).
+      const parseDate = (v: any): Date | undefined => {
+        if (!v) return undefined;
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? undefined : d;
+      };
+      // Existing rows in the Laravel-era schema may have `created_at = NULL`
+      // because the column had no `@default(now())` before today. Fall back
+      // to `updated_at` and finally the metadata stamps so the column shows
+      // something meaningful even for pre-migration data.
+      const createdRaw =
+        b.created_at ??
+        b.createdAt ??
+        b.metadata?.created_at ??
+        b.metadata?.createdAt ??
+        b.updated_at ??
+        b.updatedAt ??
+        b.metadata?.startDate;
+      const scheduledRaw =
+        b.scheduled_at ??
+        b.scheduledAt ??
+        b.metadata?.scheduled_at ??
+        b.metadata?.scheduledAt ??
+        b.metadata?.schedules?.[0]?.date ??
+        b.metadata?.recurringStartDate;
+
       return {
         id: Number(b.id),
         name: b.name,
@@ -331,10 +414,15 @@ export default function CampaignManager() {
         messageType: metaMessageType,
         sent: b.total_sent || 0,
         delivered: b.total_sent || 0, // Per-recipient delivery tracking not wired yet; falls back to total_sent
+        audience: b.total_audience || 0,
+        failed: b.total_failed || 0,
+        channelType: b.channel_type || "whatsapp",
+        channelName: b.channel?.name ?? b.channelable?.name ?? b.channel_name ?? "",
+        createdAt: parseDate(createdRaw),
         status: uiStatus,
         whatsAppTemplateName: templateRow?.name ?? (b.metadata?.whatsAppTemplateName ?? ""),
-        startDate: b.created_at ? new Date(b.created_at) : undefined,
-        scheduledAt: b.scheduled_at ? new Date(b.scheduled_at) : undefined,
+        startDate: parseDate(createdRaw),
+        scheduledAt: parseDate(scheduledRaw),
         repeatFrequency: b.repeat_frequency || "",
         dailyRepeatInterval: b.daily_repeat_interval || "1",
         weeklyRepeatDays: Array.isArray(b.weekly_repeat_days) ? b.weekly_repeat_days : [],
@@ -575,14 +663,20 @@ export default function CampaignManager() {
       );
     }
 
-    // Filter by campaign type
-    if (selectedCampaignTypes.length > 0) {
-      filtered = filtered.filter(c => selectedCampaignTypes.includes(c.type));
+    // Filter by channel (whatsapp / telegram / messenger / etc.)
+    if (selectedChannels.length > 0) {
+      filtered = filtered.filter(
+        (c) => c.channelType && selectedChannels.includes(c.channelType),
+      );
     }
 
-    // Filter by message type
-    if (selectedMessageTypes.length > 0) {
-      filtered = filtered.filter(c => selectedMessageTypes.includes(c.messageType));
+    // Filter by date range. Values are tokens recognised by
+    // dateRangeContains() — "today", "last7", "last30", "thisMonth".
+    if (dateRangeFilter.length > 0) {
+      const token = dateRangeFilter[0];
+      filtered = filtered.filter((c) =>
+        dateRangeMatches(c.createdAt ?? c.startDate, token),
+      );
     }
 
     return getSortedCampaigns().filter(c => filtered.includes(c));
@@ -756,6 +850,7 @@ export default function CampaignManager() {
   const resetCreateCampaignForm = () => {
     setCampaignCreationStep("selectType");
     setCampaignName("");
+    setNewBroadcastChannelKey("");
     setCampaignStartDate(undefined);
     setCampaignEndDate(undefined);
     setSelectedWhatsAppTemplate(null);
@@ -986,10 +1081,10 @@ export default function CampaignManager() {
                     </div>
                     <div className="space-y-0.5">
                         <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-                            Campaign Manager
+                            Broadcasts
                         </h1>
                         <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                            Create, manage and monitor your outbound messaging campaigns
+                            Reach your contacts in minutes with our high-performance Broadcast service
                         </p>
                     </div>
                 </div>
@@ -1002,18 +1097,21 @@ export default function CampaignManager() {
                         data-testid="button-create-campaign"
                     >
                         <Plus size={14} strokeWidth={2.5} />
-                        <span>Create Campaign</span>
+                        <span>New Broadcast</span>
                     </Button>
                     )}
                 </div>
             </div>
+
+            {/* 2. Stat Cards Row — replyagent broadcast parity */}
+            <BroadcastStatsRow campaigns={campaigns} />
 
             {/* 3. Filter Row Section */}
             <div className="px-3 py-1.5 border-b border-slate-200 dark:border-slate-800/80 bg-white dark:bg-transparent flex items-center gap-2 flex-wrap">
                 <div className="relative group flex-1 min-w-[280px] max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-primary transition-colors" />
                     <Input
-                        placeholder="Search campaigns..."
+                        placeholder="Search broadcasts..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-9 h-8.5 bg-slate-50/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 rounded-lg text-[12px] font-medium focus:bg-white dark:focus:bg-slate-900 transition-all placeholder:text-slate-400"
@@ -1026,7 +1124,8 @@ export default function CampaignManager() {
                         options={[
                             { id: "draft", name: "Draft" },
                             { id: "scheduled", name: "Scheduled" },
-                            { id: "delivered", name: "Delivered" },
+                            { id: "sent", name: "Sent" },
+                            { id: "failed", name: "Failed" },
                             { id: "archived", name: "Archived" },
                         ]}
                         selected={selectedStatus}
@@ -1042,9 +1141,7 @@ export default function CampaignManager() {
                                     <span className={cn("truncate text-[12px]", selectedStatus.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
                                         {selectedStatus.length === 0
                                             ? "Status"
-                                            : (["draft","scheduled","delivered","archived"].find(id => id === selectedStatus[0])
-                                                ? selectedStatus[0].charAt(0).toUpperCase() + selectedStatus[0].slice(1)
-                                                : selectedStatus[0])}
+                                            : selectedStatus[0].charAt(0).toUpperCase() + selectedStatus[0].slice(1)}
                                     </span>
                                 </div>
                                 <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
@@ -1054,37 +1151,16 @@ export default function CampaignManager() {
 
                     <CustomDropdown
                         options={[
-                            { id: "Broadcast", name: "Broadcast" },
-                            { id: "API Triggered", name: "API Triggered" },
+                            { id: "whatsapp", name: "WhatsApp" },
+                            { id: "telegram", name: "Telegram" },
+                            { id: "messenger", name: "Messenger" },
+                            { id: "instagram", name: "Instagram" },
+                            { id: "webchat", name: "Webchat" },
+                            { id: "twilio_sms", name: "SMS" },
                         ]}
-                        selected={selectedCampaignTypes}
-                        onChange={setSelectedCampaignTypes}
-                        placeholder="Campaign Type"
-                        width="160px"
-                        showSelectedOption={true}
-                        showSearch={false}
-                        triggerContent={
-                            <>
-                                <div className="flex items-center gap-2 truncate">
-                                    <Megaphone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <span className={cn("truncate text-[12px]", selectedCampaignTypes.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                        {selectedCampaignTypes.length === 0 ? "Campaign Type" : selectedCampaignTypes[0]}
-                                    </span>
-                                </div>
-                                <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
-                            </>
-                        }
-                    />
-
-                    <CustomDropdown
-                        options={[
-                            { id: "Immediate", name: "Immediate" },
-                            { id: "Scheduled", name: "Scheduled" },
-                            { id: "Recurring", name: "Recurring" },
-                        ]}
-                        selected={selectedMessageTypes}
-                        onChange={setSelectedMessageTypes}
-                        placeholder="Message Type"
+                        selected={selectedChannels}
+                        onChange={setSelectedChannels}
+                        placeholder="Channel"
                         width="160px"
                         showSelectedOption={true}
                         showSearch={false}
@@ -1092,8 +1168,38 @@ export default function CampaignManager() {
                             <>
                                 <div className="flex items-center gap-2 truncate">
                                     <MessageSquare className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <span className={cn("truncate text-[12px]", selectedMessageTypes.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
-                                        {selectedMessageTypes.length === 0 ? "Message Type" : selectedMessageTypes[0]}
+                                    <span className={cn("truncate text-[12px]", selectedChannels.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                                        {selectedChannels.length === 0
+                                            ? "Channel"
+                                            : selectedChannels[0].charAt(0).toUpperCase() + selectedChannels[0].slice(1).replace("_", " ")}
+                                    </span>
+                                </div>
+                                <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
+                            </>
+                        }
+                    />
+
+                    <CustomDropdown
+                        options={[
+                            { id: "today", name: "Today" },
+                            { id: "last7", name: "Last 7 days" },
+                            { id: "last30", name: "Last 30 days" },
+                            { id: "thisMonth", name: "This month" },
+                        ]}
+                        selected={dateRangeFilter}
+                        onChange={setDateRangeFilter}
+                        placeholder="Date Range"
+                        width="160px"
+                        showSelectedOption={true}
+                        showSearch={false}
+                        triggerContent={
+                            <>
+                                <div className="flex items-center gap-2 truncate">
+                                    <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className={cn("truncate text-[12px]", dateRangeFilter.length > 0 ? "text-slate-900 dark:text-white font-bold" : "text-slate-500 dark:text-slate-400")}>
+                                        {dateRangeFilter.length === 0
+                                            ? "Date Range"
+                                            : ({ today: "Today", last7: "Last 7 days", last30: "Last 30 days", thisMonth: "This month" } as Record<string, string>)[dateRangeFilter[0]] ?? dateRangeFilter[0]}
                                     </span>
                                 </div>
                                 <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
@@ -1153,25 +1259,33 @@ export default function CampaignManager() {
                             </th>
                             <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("name")}>
                                 <div className="flex items-center gap-2">
-                                    Campaign Name
+                                    Name &amp; Channel
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                                         {renderSortIcon("name")}
                                     </div>
                                 </div>
                             </th>
-                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("type")}>
+                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("audience")}>
                                 <div className="flex items-center gap-2">
-                                    Campaign Type
+                                    Audience
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {renderSortIcon("type")}
+                                        {renderSortIcon("audience")}
                                     </div>
                                 </div>
                             </th>
-                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("messageType")}>
+                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("createdAt")}>
                                 <div className="flex items-center gap-2">
-                                    Message Type
+                                    Created At
                                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {renderSortIcon("messageType")}
+                                        {renderSortIcon("createdAt")}
+                                    </div>
+                                </div>
+                            </th>
+                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("scheduledAt")}>
+                                <div className="flex items-center gap-2">
+                                    Scheduled
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {renderSortIcon("scheduledAt")}
                                     </div>
                                 </div>
                             </th>
@@ -1183,45 +1297,29 @@ export default function CampaignManager() {
                                     </div>
                                 </div>
                             </th>
-                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("sent")}>
-                                <div className="flex items-center gap-2">
-                                    Sent
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {renderSortIcon("sent")}
-                                    </div>
-                                </div>
-                            </th>
-                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer group" onClick={() => handleColumnSort("delivered")}>
-                                <div className="flex items-center gap-2">
-                                    Delivered
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {renderSortIcon("delivered")}
-                                    </div>
-                                </div>
-                            </th>
-                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 text-right">Actions</th>
+                            <th className="py-2 px-3 font-semibold text-[11px] text-slate-500 dark:text-slate-400 text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-slate-800/80">
                         {isLoadingCampaigns ? (
                             <tr>
-                                <td colSpan={8} className="py-20 text-center">
+                                <td colSpan={7} className="py-20 text-center">
                                     <div className="flex flex-col items-center gap-3">
                                         <Loader2 size={24} className="animate-spin text-primary" />
-                                        <p className="text-[11px] font-semibold text-slate-400">Fetching Campaigns...</p>
+                                        <p className="text-[11px] font-semibold text-slate-400">Fetching Broadcasts...</p>
                                     </div>
                                 </td>
                             </tr>
                         ) : getFilteredCampaigns().length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="py-20 text-center">
+                                <td colSpan={7} className="py-20 text-center">
                                     <div className="flex flex-col items-center gap-3 opacity-60">
                                         <div className="w-16 h-16 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-300 dark:text-slate-600 mb-2">
                                             <Send size={32} strokeWidth={1} />
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-[14px] font-bold text-slate-900 dark:text-white">No campaigns found</p>
-                                            <p className="text-[11px] font-medium text-slate-400">Create your first messaging campaign to reach your customers</p>
+                                            <p className="text-[14px] font-bold text-slate-900 dark:text-white">No broadcasts found</p>
+                                            <p className="text-[11px] font-medium text-slate-400">Create your first broadcast to reach your customers in minutes</p>
                                         </div>
                                         {canManageBroadcasts && (
                                           <Button
@@ -1248,40 +1346,82 @@ export default function CampaignManager() {
                                             className="border-slate-300 dark:border-slate-700 data-[state=checked]:bg-primary"
                                         />
                                     </td>
+                                    {/* NAME & CHANNEL — replyagent stacks the broadcast name above a
+                                        small channel-coloured chip showing which account it'll send via. */}
                                     <td className="py-2 px-3">
-                                        <span className="text-[12px] font-semibold text-slate-900 dark:text-white group-hover:text-primary transition-colors truncate max-w-[200px] block">
-                                            {campaign.name}
-                                        </span>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <span className={cn(
+                                                "shrink-0 h-6 w-6 rounded-full border flex items-center justify-center",
+                                                channelChipClass(campaign.channelType),
+                                            )}>
+                                                <ChannelChipIcon channel={campaign.channelType} />
+                                            </span>
+                                            <div className="min-w-0">
+                                                <p className="text-[12px] font-semibold text-slate-900 dark:text-white group-hover:text-primary transition-colors truncate max-w-[200px]">
+                                                    {campaign.name}
+                                                </p>
+                                                <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 truncate max-w-[200px]">
+                                                    {campaign.channelName ||
+                                                        (({
+                                                            whatsapp: "WhatsApp",
+                                                            telegram: "Telegram",
+                                                            messenger: "Messenger",
+                                                            instagram: "Instagram",
+                                                            webchat: "Webchat",
+                                                            twilio_sms: "SMS",
+                                                            twilio_call: "Call",
+                                                        } as Record<string, string>)[campaign.channelType ?? ""] ??
+                                                        (campaign.channelType ?? ""))}
+                                                </p>
+                                            </div>
+                                        </div>
                                     </td>
+                                    {/* AUDIENCE — primary total with a small "failed" indicator
+                                        when present, matching replyagent's row layout. */}
+                                    <td className="py-2 px-3">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[12px] font-semibold text-slate-900 dark:text-white tabular-nums">
+                                                {(campaign.audience ?? 0).toLocaleString()}
+                                            </span>
+                                            {(campaign.failed ?? 0) > 0 && (
+                                                <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 tabular-nums">
+                                                    · {campaign.failed} failed
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    {/* CREATED AT */}
+                                    <td className="py-2 px-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                        {campaign.createdAt
+                                            ? campaign.createdAt.toLocaleDateString(undefined, {
+                                                  day: "2-digit",
+                                                  month: "short",
+                                                  year: "2-digit",
+                                              })
+                                            : "—"}
+                                    </td>
+                                    {/* SCHEDULED */}
+                                    <td className="py-2 px-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                                        {campaign.scheduledAt
+                                            ? campaign.scheduledAt.toLocaleString(undefined, {
+                                                  day: "2-digit",
+                                                  month: "short",
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                              })
+                                            : "—"}
+                                    </td>
+                                    {/* STATUS */}
                                     <td className="py-2 px-3">
                                         <span className={cn(
-                                            "text-[10px] font-semibold px-2 py-0.5 rounded-md border",
-                                            campaign.type === "Broadcast" ? "bg-purple-50 text-purple-700 border-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800/50" :
-                                            "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50"
-                                        )}>
-                                            {campaign.type}
-                                        </span>
-                                    </td>
-                                    <td className="py-2 px-3">
-                                        <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                                            {campaign.messageType}
-                                        </span>
-                                    </td>
-                                    <td className="py-2 px-3">
-                                        <span className={cn(
-                                            "px-2 py-0.5 rounded-md text-[10px] font-semibold border shadow-sm",
-                                            campaign.status === "delivered" ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/50" :
+                                            "px-2 py-0.5 rounded-md text-[10px] font-semibold border shadow-sm capitalize",
+                                            campaign.status === "delivered" || campaign.status === "sent" ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/50" :
                                             campaign.status === "scheduled" ? "bg-yellow-50 text-yellow-700 border-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800/50" :
+                                            campaign.status === "failed" ? "bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800/50" :
                                             "bg-slate-50 text-slate-600 border-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
                                         )}>
                                             {campaign.status}
                                         </span>
-                                    </td>
-                                    <td className="py-2 px-3 text-[11px] font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
-                                        {campaign.sent.toLocaleString()}
-                                    </td>
-                                    <td className="py-2 px-3 text-[11px] font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
-                                        {campaign.delivered.toLocaleString()}
                                     </td>
                                     <td className="py-2 px-3 text-right">
                                         <DropdownMenu>
@@ -1439,32 +1579,169 @@ export default function CampaignManager() {
         <DialogContent className={campaignCreationStep === "apiTriggeredForm" || campaignCreationStep === "broadcastForm" ? "max-w-3xl" : "max-w-lg"} data-testid="dialog-create-campaign">
           {campaignCreationStep === "selectType" && (
             <>
-              <DialogHeader className="mb-2">
-                <DialogTitle>Create Campaign</DialogTitle>
+              {/* Replyagent-parity "Create a Broadcast" modal — ask for a
+                  name + a channel up front, then jump into the full
+                  broadcast composer. EZCONN's design system (slate
+                  palette, rounded cards, primary accent) is preserved
+                  rather than copying replyagent's chromatic styling. */}
+              <DialogHeader className="mb-3">
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 h-10 w-10 rounded-xl bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                    <Send size={18} className="text-primary" strokeWidth={2.5} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <DialogTitle className="text-[16px] font-bold">Create a Broadcast</DialogTitle>
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Name it and pick the channel you'll send from.
+                    </p>
+                  </div>
+                </div>
               </DialogHeader>
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="cursor-pointer hover-elevate active-elevate-2 shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0" data-testid="card-api-triggered" onClick={() => setCampaignCreationStep("apiTriggeredForm")}>
-                  <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-2 h-12 w-12 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                      <Zap size={24} className="text-primary dark:text-primary/80" />
+
+              <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+                {/* Step 1: Name */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">1</span>
+                    <label className="text-[13px] font-semibold text-slate-900 dark:text-white">Name</label>
+                  </div>
+                  <Input
+                    placeholder="e.g. June launch - Brasil list"
+                    value={campaignName}
+                    onChange={(e) => setCampaignName(e.target.value.slice(0, 512))}
+                    className="h-9 text-[13px]"
+                  />
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                    Only you and your team will see this name.
+                  </p>
+                </div>
+
+                {/* Step 2: Select a channel */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">2</span>
+                    <label className="text-[13px] font-semibold text-slate-900 dark:text-white">Select a channel</label>
+                  </div>
+
+                  {channels.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-6 text-center">
+                      <MessageSquare size={20} className="mx-auto text-slate-400 mb-2" />
+                      <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+                        No channels connected yet
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Connect a WhatsApp / Telegram / Messenger channel from Settings to start broadcasting.
+                      </p>
                     </div>
-                    <CardTitle className="text-base">API Triggered</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-center">
-                    <p className="text-sm text-muted-foreground">Send messages based on API calls and user actions</p>
-                  </CardContent>
-                </Card>
-                <Card className="cursor-pointer hover-elevate active-elevate-2 shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0" data-testid="card-broadcast" onClick={() => setCampaignCreationStep("broadcastForm")}>
-                  <CardHeader className="text-center pb-2">
-                    <div className="mx-auto mb-2 h-12 w-12 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                      <Send size={24} className="text-primary dark:text-primary/80" />
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(
+                        channels.reduce((acc: Record<string, any[]>, c: any) => {
+                          const key = String(c.channel_type ?? "whatsapp");
+                          (acc[key] ||= []).push(c);
+                          return acc;
+                        }, {}),
+                      ).map(([type, list]) => {
+                        const typeLabel = ({
+                          whatsapp: "WhatsApp",
+                          telegram: "Telegram",
+                          messenger: "Messenger",
+                          instagram: "Instagram",
+                          webchat: "Webchat",
+                          twilio_sms: "SMS",
+                          twilio_call: "Call",
+                        } as Record<string, string>)[type] ?? type;
+                        const typeChipClass = channelChipClass(type);
+                        return (
+                          <div key={type} className="space-y-1.5">
+                            <div className="flex items-center gap-2 px-1">
+                              <span className={cn("h-5 w-5 rounded-full border flex items-center justify-center", typeChipClass)}>
+                                <ChannelChipIcon channel={type} size={10} />
+                              </span>
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                                {typeLabel}
+                              </span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {list.map((c: any) => {
+                                const key = `${c.channel_type}:${c.channelable_id}`;
+                                const isSelected = newBroadcastChannelKey === key;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={key}
+                                    onClick={() => setNewBroadcastChannelKey(key)}
+                                    className={cn(
+                                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg border transition-all text-left",
+                                      isSelected
+                                        ? "border-primary bg-primary/5 dark:bg-primary/10"
+                                        : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40",
+                                    )}
+                                  >
+                                    <span className={cn("h-7 w-7 rounded-full border flex items-center justify-center shrink-0", typeChipClass)}>
+                                      <ChannelChipIcon channel={type} size={14} />
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[12px] font-semibold text-slate-900 dark:text-white truncate">
+                                        {c.name ?? `#${c.channelable_id}`}
+                                      </p>
+                                      {c.waba_id && (
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                          WABA: {c.waba_id}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <span
+                                      className={cn(
+                                        "shrink-0 h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all",
+                                        isSelected
+                                          ? "border-primary bg-primary"
+                                          : "border-slate-300 dark:border-slate-600",
+                                      )}
+                                    >
+                                      {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <CardTitle className="text-base">Broadcast</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-center">
-                    <p className="text-sm text-muted-foreground">Send bulk messages to a list of contacts</p>
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer — replyagent shows the helper hint inline next to the
+                  buttons; mirror that without restyling everything. */}
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 mt-3">
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  {newBroadcastChannelKey
+                    ? "Ready — click Create broadcast to continue."
+                    : "Choose a channel to continue."}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCreateOpen(false);
+                      resetCreateCampaignForm();
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!campaignName.trim() || !newBroadcastChannelKey}
+                    onClick={() => setCampaignCreationStep("broadcastForm")}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    Create broadcast
+                  </Button>
+                </div>
               </div>
             </>
           )}
@@ -1665,7 +1942,17 @@ export default function CampaignManager() {
                   <Button
                     className="gap-2 font-normal btn-outline-primary"
                     variant="outline"
-                    disabled={!campaignName || !campaignStartDate || (!campaignEndDate && !neverEnds) || !selectedWhatsAppTemplate}
+                    disabled={
+                      !campaignName ||
+                      // Same EDIT-lenient gate as the broadcast form: in
+                      // create mode all fields are required; in edit mode
+                      // a name change alone is enough to keep Save enabled.
+                      (!editingCampaignId && (
+                        !campaignStartDate ||
+                        (!campaignEndDate && !neverEnds) ||
+                        !selectedWhatsAppTemplate
+                      ))
+                    }
                     onClick={() => handleCreateCampaign("scheduled")}
                   >
                     {editingCampaignId ? "Save Campaign" : "Set Live"}
@@ -2196,11 +2483,19 @@ export default function CampaignManager() {
                     variant="outline"
                     disabled={
                       !campaignName ||
-                      !broadcastCampaignType ||
-                      !selectedWhatsAppTemplate ||
-                      !csvFile ||
-                      (broadcastCampaignType === 'Scheduled' && isSchedulesInvalid) ||
-                      (broadcastCampaignType === 'Recurring' && isRecurringInvalid)
+                      // CREATE flow asks for the full payload up front.
+                      // EDIT flow is more lenient — template / CSV / schedule
+                      // are already persisted on the broadcast and the inputs
+                      // aren't re-hydrated on open, so requiring them would
+                      // keep the Save button perma-disabled even when the
+                      // user has made a legitimate change.
+                      (!editingCampaignId && (
+                        !broadcastCampaignType ||
+                        !selectedWhatsAppTemplate ||
+                        !csvFile ||
+                        (broadcastCampaignType === 'Scheduled' && isSchedulesInvalid) ||
+                        (broadcastCampaignType === 'Recurring' && isRecurringInvalid)
+                      ))
                     }
                     onClick={() => handleCreateBroadcastCampaign("scheduled")}
                   >
@@ -2880,6 +3175,154 @@ export default function CampaignManager() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ─── Channel chip helpers (used in the NAME & CHANNEL column) ───────────
+function channelChipClass(channel?: string): string {
+  switch (channel) {
+    case "whatsapp":
+      return "bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-900/30 dark:border-emerald-800";
+    case "telegram":
+      return "bg-sky-50 border-sky-200 text-sky-600 dark:bg-sky-900/30 dark:border-sky-800";
+    case "messenger":
+      return "bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/30 dark:border-blue-800";
+    case "instagram":
+      return "bg-fuchsia-50 border-fuchsia-200 text-fuchsia-600 dark:bg-fuchsia-900/30 dark:border-fuchsia-800";
+    case "webchat":
+      return "bg-orange-50 border-orange-200 text-orange-600 dark:bg-orange-900/30 dark:border-orange-800";
+    case "twilio_sms":
+    case "twilio_call":
+      return "bg-rose-50 border-rose-200 text-rose-600 dark:bg-rose-900/30 dark:border-rose-800";
+    default:
+      return "bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700";
+  }
+}
+
+function ChannelChipIcon({
+  channel,
+  size = 12,
+}: {
+  channel?: string;
+  size?: number;
+}) {
+  // Real brand glyphs (react-icons) — used both in the broadcast row's
+  // colour chip and in the "Create a Broadcast" channel picker so the
+  // user sees the actual product logo (WhatsApp green tick, Telegram
+  // paper plane, etc.) instead of a generic chat bubble.
+  const klass = `h-[${size}px] w-[${size}px]`;
+  switch (channel) {
+    case "whatsapp":
+    case "zapi":
+    case "evolution":
+      return <FaWhatsapp className={klass} />;
+    case "telegram":
+      return <FaTelegramPlane className={klass} />;
+    case "messenger":
+      return <FaFacebookMessenger className={klass} />;
+    case "instagram":
+      return <FaInstagram className={klass} />;
+    case "webchat":
+      return <BsChatDotsFill className={klass} />;
+    case "twilio_sms":
+    case "twilio_call":
+      return <SiTwilio className={klass} />;
+    default:
+      return <MessageSquare className={klass} strokeWidth={2.5} />;
+  }
+}
+
+// ─── BroadcastStatsRow ──────────────────────────────────────────────────
+// Four KPI cards rendered above the filter bar, mirroring replyagent's
+// /broadcasts dashboard:
+//   1. Total Broadcasts   — count of broadcasts in the list
+//   2. Total Contacts     — sum of audience across all broadcasts
+//   3. Avg Delivery Rate  — totalSent / totalAudience (capped 100%)
+//   4. Avg Open Rate      — placeholder until per-recipient read receipts
+//                           are wired in (kept so the row stays 4-up)
+// Uses the project's existing slate / primary palette so the strip blends
+// with the surrounding card instead of standing out as a separate widget.
+function BroadcastStatsRow({ campaigns }: { campaigns: Campaign[] }) {
+  const totalBroadcasts = campaigns.length;
+  const totalContacts = campaigns.reduce(
+    (sum, c) => sum + (c.audience ?? 0),
+    0,
+  );
+  const totalSent = campaigns.reduce((sum, c) => sum + (c.sent ?? 0), 0);
+  const deliveryRate =
+    totalContacts > 0
+      ? Math.min(100, Math.round((totalSent / totalContacts) * 100))
+      : 0;
+  const openRate = 0; // No read receipts wired yet.
+
+  const cards: Array<{
+    label: string;
+    value: string;
+    hint: string;
+    Icon: any;
+    iconBg: string;
+    iconColor: string;
+  }> = [
+    {
+      label: "Total Broadcasts",
+      value: totalBroadcasts.toLocaleString(),
+      hint: totalBroadcasts === 0 ? "this workspace" : "in this workspace",
+      Icon: Send,
+      iconBg: "bg-primary/10 dark:bg-primary/15",
+      iconColor: "text-primary",
+    },
+    {
+      label: "Total Contacts",
+      value: totalContacts.toLocaleString(),
+      hint: "reachable audience",
+      Icon: Megaphone,
+      iconBg: "bg-blue-500/10 dark:bg-blue-500/15",
+      iconColor: "text-blue-600 dark:text-blue-400",
+    },
+    {
+      label: "Avg Delivery Rate",
+      value: `${deliveryRate}%`,
+      hint: `${totalSent.toLocaleString()} delivered`,
+      Icon: Activity,
+      iconBg: "bg-emerald-500/10 dark:bg-emerald-500/15",
+      iconColor: "text-emerald-600 dark:text-emerald-400",
+    },
+    {
+      label: "Avg Open Rate",
+      value: `${openRate}%`,
+      hint: "based on read receipts",
+      Icon: BarChart2,
+      iconBg: "bg-amber-500/10 dark:bg-amber-500/15",
+      iconColor: "text-amber-600 dark:text-amber-400",
+    },
+  ];
+
+  return (
+    <div className="px-3 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-900/30">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        {cards.map((c) => (
+          <div
+            key={c.label}
+            className="bg-white dark:bg-slate-900/60 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2.5 flex items-center gap-3"
+          >
+            <div className={cn("p-2 rounded-md", c.iconBg)}>
+              <c.Icon size={16} strokeWidth={2.5} className={c.iconColor} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 truncate">
+                {c.label}
+              </p>
+              <p className="text-[18px] font-bold leading-tight text-slate-900 dark:text-white">
+                {c.value}
+              </p>
+              <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 truncate">
+                {c.hint}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

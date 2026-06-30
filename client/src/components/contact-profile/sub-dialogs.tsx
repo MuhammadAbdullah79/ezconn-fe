@@ -442,6 +442,18 @@ export function OpportunityFormDialog({
 }
 
 // ─── Gallery Picker ────────────────────────────────────────────────
+//
+// Replyagent-parity media picker used by image / audio / video / document
+// activity fields in the smart-flow builder. Three things must work:
+//   1. List existing workspace media (filtered by mediaType when set)
+//   2. Upload a fresh file from the picker itself ("Add files")
+//   3. Enter a direct URL as fallback when the asset lives elsewhere
+//
+// Earlier bug: this dialog read `data.media`/`data.data` from
+// /api/gallery/listings, but the backend actually returns
+// `{ folders, file_folders: { data: [...] } }`. Reading the right key is
+// what makes the gallery stop showing "No media yet" for workspaces that
+// already have uploads.
 
 export function GalleryPickerDialog({
   open,
@@ -454,7 +466,11 @@ export function GalleryPickerDialog({
   onPick: (media: { id: string; url: string; object_name: string }) => void;
   mediaType?: string;
 }) {
-  const { data } = useQuery({
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [urlInput, setUrlInput] = useState("");
+
+  const { data, isLoading } = useQuery({
     queryKey: ["/api/gallery/listings", mediaType],
     queryFn: () =>
       apiGet(
@@ -463,49 +479,148 @@ export function GalleryPickerDialog({
     enabled: open,
   });
 
-  const items: any[] = useMemo(() => data?.media ?? data?.data ?? [], [data]);
+  // Backend shape: { folders, file_folders: { data, total, ... } }.
+  // Be defensive — also accept legacy `media` / top-level `data` so an
+  // older API contract still works.
+  const items: any[] = useMemo(() => {
+    return (
+      data?.file_folders?.data ??
+      data?.media ??
+      (Array.isArray(data?.data) ? data.data : []) ??
+      []
+    );
+  }, [data]);
+
+  const filteredItems = useMemo(() => {
+    if (!mediaType) return items;
+    const want = mediaType.toUpperCase();
+    return items.filter((m: any) => {
+      const t = (m.media_type ?? "").toString().toUpperCase();
+      return !t || t === want;
+    });
+  }, [items, mediaType]);
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("files", file);
+      const res = await apiRequest("POST", "/api/gallery/upload", fd);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/gallery/listings"] });
+      toast({ title: "Uploaded", description: "Media added to gallery." });
+    },
+    onError: (err: any) =>
+      toast({
+        title: "Upload failed",
+        description: err?.message ?? "Try again",
+        variant: "destructive",
+      }),
+  });
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadMutation.mutate(file);
+    e.target.value = ""; // allow re-selecting the same file
+  };
+
+  const handleUrlSubmit = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    onPick({ id: "", url, object_name: url.split("/").pop() ?? url });
+    setUrlInput("");
+    onOpenChange(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogTitle>Gallery</DialogTitle>
         <DialogDescription>
-          Pick an image from your gallery.
+          Pick an image from your gallery, upload a new one, or enter a URL.
         </DialogDescription>
+
+        {/* Action bar — upload + URL fallback */}
+        <div className="flex items-center gap-2 border-b pb-3">
+          <label className="inline-flex">
+            <input
+              type="file"
+              accept={mediaType === "image" ? "image/*" : undefined}
+              className="hidden"
+              onChange={handleFileInput}
+              disabled={uploadMutation.isPending}
+            />
+            <span className="inline-flex items-center gap-2 cursor-pointer text-xs px-3 py-1.5 rounded border bg-white hover:bg-muted">
+              <ImageIcon className="h-3.5 w-3.5" />
+              {uploadMutation.isPending ? "Uploading…" : "Add files"}
+            </span>
+          </label>
+
+          <div className="flex-1 flex items-center gap-2">
+            <Input
+              type="url"
+              placeholder="Or paste a direct URL (https://…)"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleUrlSubmit}
+              disabled={!urlInput.trim()}
+            >
+              Use URL
+            </Button>
+          </div>
+        </div>
+
         <ScrollArea className="h-96">
-          {items.length === 0 ? (
+          {isLoading ? (
             <p className="text-sm text-muted-foreground p-6 text-center">
-              No media yet. Upload from the Settings → Media Gallery page.
+              Loading…
+            </p>
+          ) : filteredItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-6 text-center">
+              No media yet. Click "Add files" above to upload, or paste a
+              direct URL.
             </p>
           ) : (
             <div className="grid grid-cols-4 gap-3 p-2">
-              {items.map((m: any) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className="border rounded overflow-hidden hover:ring-2 hover:ring-primary"
-                  onClick={() =>
-                    onPick({
-                      id: String(m.id),
-                      url: m.file_url ?? m.url,
-                      object_name: m.object_name ?? "",
-                    })
-                  }
-                >
-                  {m.file_url ? (
-                    <img
-                      src={m.thumb_200 ?? m.file_url}
-                      alt={m.object_name}
-                      className="w-full h-24 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-24 flex items-center justify-center bg-muted">
-                      <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  )}
-                  <p className="text-xs truncate p-1">{m.object_name}</p>
-                </button>
-              ))}
+              {filteredItems.map((m: any) => {
+                const id = String(m.object_id ?? m.id ?? "");
+                const url = m.file_url ?? m.url ?? "";
+                const thumb = m.thumb_200 ?? m.thumbnail ?? url;
+                return (
+                  <button
+                    key={id || url}
+                    type="button"
+                    className="border rounded overflow-hidden hover:ring-2 hover:ring-primary text-left"
+                    onClick={() =>
+                      onPick({
+                        id,
+                        url,
+                        object_name: m.object_name ?? "",
+                      })
+                    }
+                  >
+                    {url ? (
+                      <img
+                        src={thumb}
+                        alt={m.object_name}
+                        className="w-full h-24 object-cover bg-muted"
+                      />
+                    ) : (
+                      <div className="w-full h-24 flex items-center justify-center bg-muted">
+                        <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <p className="text-xs truncate p-1">{m.object_name}</p>
+                  </button>
+                );
+              })}
             </div>
           )}
         </ScrollArea>

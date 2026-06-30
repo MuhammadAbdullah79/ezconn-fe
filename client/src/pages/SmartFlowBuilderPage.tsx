@@ -14,7 +14,7 @@
  * full {nodes, edges} payload. The backend reconciles to
  * automation_steps / automation_step_activities / automation_flow rows.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactFlow, {
@@ -105,6 +105,7 @@ import {
   QueueContactsModal,
   ConfirmDeleteStep,
   ConfirmFlushQueue,
+  useConnectedAccounts,
 } from "./automation/modals";
 import { AUTOMATION_NODE_TYPES } from "./automation/nodes";
 import { ACTION_SCHEMAS } from "./automation/action-schemas";
@@ -116,6 +117,53 @@ const apiPost = async (url: string, data?: any) =>
   (await apiRequest("POST", url, data)).json();
 const apiPatch = async (url: string, data?: any) =>
   (await apiRequest("PATCH", url, data)).json();
+
+// ─── Context shared with custom node renderers ────────────────────────
+// Nodes themselves can't call hooks from the parent page, so we expose
+// the per-flow "add a step below this node" callback and the set of
+// channel types that actually have at least one connected account.
+
+export interface SmartFlowMenuCtxValue {
+  connectedChannelTypes: Set<string>;
+  /**
+   * Add a step descending from `sourceNodeId`. Pass `sourceHandle` for
+   * multi-branch nodes (Randomizer / Splitter / Condition) so the new
+   * edge originates from the specific branch handle rather than the
+   * default — otherwise React Flow renders both branches as coming from
+   * the same dot.
+   */
+  addStepBelow: (sourceNodeId: string, type: string, sourceHandle?: string) => void;
+  /** Clone a node next to the original. */
+  duplicateNode: (nodeId: string) => void;
+  /** Remove a node (and its edges). */
+  removeNode: (nodeId: string) => void;
+}
+
+export const SmartFlowMenuContext = createContext<SmartFlowMenuCtxValue>({
+  connectedChannelTypes: new Set(),
+  addStepBelow: () => {},
+  duplicateNode: () => {},
+  removeNode: () => {},
+});
+
+export function useSmartFlowMenu() {
+  return useContext(SmartFlowMenuContext);
+}
+
+// Channels we currently support in the add-step dropdown. Keep in sync
+// with `useConnectedAccounts` in modals.tsx — only types listed here can
+// ever appear in the dropdown, and they're filtered by what's connected.
+export const SMARTFLOW_CHANNEL_TYPES: ReadonlyArray<string> = [
+  "whatsapp",
+  "telegram",
+  "messenger",
+  "instagram",
+  "webchat",
+  "twilio_sms",
+  "twilio_call",
+  "zapi",
+  "evolution",
+];
 
 // ─── Page wrapper provides the store context ──────────────────────────
 
@@ -265,7 +313,7 @@ function BuilderInner() {
   const addNode = (
     type: string,
     options?: { extraData?: any; at?: { x: number; y: number } },
-  ) => {
+  ): string => {
     const id = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const node: Node = {
       id,
@@ -284,7 +332,71 @@ function BuilderInner() {
     };
     actions.addNode(node);
     actions.selectNode(id);
+    return id;
   };
+
+  // ─── Add step below a source node (used by per-node "↓" dropdown) ────
+  // Positions the new node ~180px below the source and immediately wires
+  // an edge from source → new so the user doesn't have to drag a handle.
+  const addStepBelow = useCallback(
+    (sourceNodeId: string, type: string, sourceHandle?: string) => {
+      const src = state.nodes.find((n) => n.id === sourceNodeId);
+      const at = src
+        ? { x: src.position.x + 300, y: src.position.y }
+        : undefined;
+      const newId = addNode(type, { at });
+      actions.addEdge({
+        id: `edge_${sourceNodeId}_${sourceHandle ?? "out"}_${newId}`,
+        source: sourceNodeId,
+        target: newId,
+        ...(sourceHandle ? { sourceHandle } : {}),
+      } as Edge);
+    },
+    [state.nodes, actions], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // ─── Connected channels filter (only show what's actually connected) ─
+  const connectedAccounts = useConnectedAccounts(true);
+  const connectedChannelTypes = useMemo(
+    () => new Set(connectedAccounts.map((a) => a.channel)),
+    [connectedAccounts],
+  );
+
+  // Duplicate a node — clones data + spawns it slightly offset so the new
+  // copy is visible. Wired through the menu context so hover-Copy buttons
+  // on individual nodes can fire it.
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      const src = state.nodes.find((n) => n.id === nodeId);
+      if (!src) return;
+      const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      actions.addNode({
+        id: newId,
+        type: src.type,
+        position: { x: src.position.x + 40, y: src.position.y + 40 },
+        data: JSON.parse(JSON.stringify(src.data ?? {})),
+      } as Node);
+      actions.selectNode(newId);
+    },
+    [state.nodes, actions],
+  );
+
+  // Remove a node — opens the "Are you sure?" confirmation first so the
+  // user can't accidentally wipe a step. The actual `actions.removeNode`
+  // call lives in the modal's onConfirm, which also clears the pending
+  // target id.
+  const [pendingDeleteNodeId, setPendingDeleteNodeId] = useState<string | null>(null);
+  const removeNode = useCallback(
+    (nodeId: string) => {
+      setPendingDeleteNodeId(nodeId);
+    },
+    [],
+  );
+
+  const smartFlowMenuValue = useMemo<SmartFlowMenuCtxValue>(
+    () => ({ connectedChannelTypes, addStepBelow, duplicateNode, removeNode }),
+    [connectedChannelTypes, addStepBelow, duplicateNode, removeNode],
+  );
 
   // ─── Right-click context menu (replyagent's cMenu) ───────────────────
   const [contextMenu, setContextMenu] = useState<{
@@ -359,6 +471,7 @@ function BuilderInner() {
         onExit={() => setLocation("/automations")}
       />
 
+      <SmartFlowMenuContext.Provider value={smartFlowMenuValue}>
       <div className="flex-1 flex overflow-hidden">
         {/* ─── Canvas ─── */}
         <div className="flex-1 relative">
@@ -399,7 +512,10 @@ function BuilderInner() {
               of the canvas. Keep it compact and on the right edge instead of
               the prior big floating circle. */}
           <div className="absolute right-4 top-4">
-            <AddNodeButton onPick={(type) => addNode(type)} />
+            <AddNodeButton
+              onPick={(type) => addNode(type)}
+              connectedChannelTypes={connectedChannelTypes}
+            />
           </div>
 
           {/* Replyagent's right-click cMenu — same step-type list as the
@@ -409,6 +525,7 @@ function BuilderInner() {
             <CanvasContextMenu
               x={contextMenu.x}
               y={contextMenu.y}
+              connectedChannelTypes={connectedChannelTypes}
               onPick={(type) => {
                 addNode(type, {
                   at: { x: contextMenu.flowX, y: contextMenu.flowY },
@@ -439,6 +556,7 @@ function BuilderInner() {
           />
         )}
       </div>
+      </SmartFlowMenuContext.Provider>
 
       {/* ─── Modals ─── */}
       <TriggersModal
@@ -532,6 +650,21 @@ function BuilderInner() {
             actions.removeNode(selectedNode.id);
             setDeleteStepOpen(false);
           }
+        }}
+      />
+      {/* Confirmation triggered by the hover Delete button on individual
+          nodes — distinct from the sidebar's Delete which uses the
+          `deleteStepOpen` flow above. */}
+      <ConfirmDeleteStep
+        open={pendingDeleteNodeId !== null}
+        onOpenChange={(o) => !o && setPendingDeleteNodeId(null)}
+        stepTitle={
+          state.nodes.find((n) => n.id === pendingDeleteNodeId)?.data?.label ??
+          "Step"
+        }
+        onConfirm={() => {
+          if (pendingDeleteNodeId) actions.removeNode(pendingDeleteNodeId);
+          setPendingDeleteNodeId(null);
         }}
       />
       <ConfirmFlushQueue
@@ -727,11 +860,13 @@ function CanvasContextMenu({
   y,
   onPick,
   onClose,
+  connectedChannelTypes,
 }: {
   x: number;
   y: number;
   onPick: (type: string) => void;
   onClose: () => void;
+  connectedChannelTypes: Set<string>;
 }) {
   // Close on outside click — capture-phase so the menu doesn't eat the click
   // that would deselect the canvas.
@@ -741,8 +876,11 @@ function CanvasContextMenu({
     return () => document.removeEventListener("click", handler, { capture: true } as any);
   }, [onClose]);
 
-  const items: Array<{ type: string; label: string; icon: React.ReactNode }> = [
-    { type: "trigger", label: "Trigger", icon: <Zap className="h-3.5 w-3.5 text-violet-600" /> },
+  // WhatsApp is always shown even before a WA account is connected so the
+  // user can scaffold the flow upfront; other channels appear only when
+  // their account is wired in.
+  const ALWAYS_VISIBLE = new Set(["whatsapp"]);
+  const ALL_CHANNELS: Array<{ type: string; label: string; icon: React.ReactNode }> = [
     { type: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="h-3.5 w-3.5 text-emerald-600" /> },
     { type: "telegram", label: "Telegram", icon: <MessageSquare className="h-3.5 w-3.5 text-sky-600" /> },
     { type: "messenger", label: "Messenger", icon: <MessageSquare className="h-3.5 w-3.5 text-blue-600" /> },
@@ -752,11 +890,20 @@ function CanvasContextMenu({
     { type: "twilio_call", label: "Call", icon: <MessageSquare className="h-3.5 w-3.5 text-rose-600" /> },
     { type: "zapi", label: "Z-API", icon: <MessageSquare className="h-3.5 w-3.5 text-emerald-700" /> },
     { type: "evolution", label: "Evolution", icon: <MessageSquare className="h-3.5 w-3.5 text-violet-600" /> },
-    { type: "delay", label: "Delay", icon: <Clock className="h-3.5 w-3.5 text-amber-600" /> },
+  ];
+  const channelItems = ALL_CHANNELS.filter(
+    (it) => ALWAYS_VISIBLE.has(it.type) || connectedChannelTypes.has(it.type),
+  );
+
+  const featureItems: Array<{ type: string; label: string; icon: React.ReactNode }> = [
     { type: "randomizer", label: "Randomizer", icon: <Shuffle className="h-3.5 w-3.5 text-indigo-600" /> },
+    { type: "delay", label: "Delay", icon: <Clock className="h-3.5 w-3.5 text-amber-600" /> },
     { type: "condition", label: "Condition", icon: <GitBranch className="h-3.5 w-3.5 text-teal-600" /> },
     { type: "action", label: "Action", icon: <Cog className="h-3.5 w-3.5 text-slate-600" /> },
+    { type: "splitter", label: "Splitter", icon: <Shuffle className="h-3.5 w-3.5 text-rose-600" /> },
   ];
+
+  const items = [...channelItems, ...featureItems];
 
   return (
     <div
@@ -792,9 +939,14 @@ function CanvasContextMenu({
 
 // ─── Add-node floating button ─────────────────────────────────────────
 
-function AddNodeButton({ onPick }: { onPick: (type: string) => void }) {
-  const items: Array<{ type: string; label: string; icon: React.ReactNode; color: string }> = [
-    { type: "trigger", label: "Trigger", icon: <Zap className="h-3.5 w-3.5" />, color: "text-violet-600" },
+function AddNodeButton({
+  onPick,
+  connectedChannelTypes,
+}: {
+  onPick: (type: string) => void;
+  connectedChannelTypes: Set<string>;
+}) {
+  const ALL_CHANNELS: Array<{ type: string; label: string; icon: React.ReactNode; color: string }> = [
     { type: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-emerald-600" },
     { type: "telegram", label: "Telegram", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-sky-600" },
     { type: "messenger", label: "Messenger", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-blue-600" },
@@ -804,10 +956,18 @@ function AddNodeButton({ onPick }: { onPick: (type: string) => void }) {
     { type: "twilio_call", label: "Call", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-rose-600" },
     { type: "zapi", label: "Z-API", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-emerald-700" },
     { type: "evolution", label: "Evolution", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-violet-600" },
-    { type: "delay", label: "Delay", icon: <Clock className="h-3.5 w-3.5" />, color: "text-amber-600" },
+  ];
+  const ALWAYS_VISIBLE = new Set(["whatsapp"]);
+  const channelItems = ALL_CHANNELS.filter(
+    (it) => ALWAYS_VISIBLE.has(it.type) || connectedChannelTypes.has(it.type),
+  );
+
+  const featureItems: Array<{ type: string; label: string; icon: React.ReactNode; color: string }> = [
     { type: "randomizer", label: "Randomizer", icon: <Shuffle className="h-3.5 w-3.5" />, color: "text-indigo-600" },
+    { type: "delay", label: "Delay", icon: <Clock className="h-3.5 w-3.5" />, color: "text-amber-600" },
     { type: "condition", label: "Condition", icon: <GitBranch className="h-3.5 w-3.5" />, color: "text-teal-600" },
     { type: "action", label: "Action", icon: <Cog className="h-3.5 w-3.5" />, color: "text-slate-600" },
+    { type: "splitter", label: "Splitter", icon: <Shuffle className="h-3.5 w-3.5" />, color: "text-rose-600" },
   ];
 
   return (
@@ -824,12 +984,27 @@ function AddNodeButton({ onPick }: { onPick: (type: string) => void }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-[70vh] overflow-auto">
-        {items.map((it) => (
+        {channelItems.map((it) => (
           <DropdownMenuItem key={it.type} onClick={() => onPick(it.type)}>
             <span className={it.color}>{it.icon}</span>
             <span className="ml-2">{it.label}</span>
           </DropdownMenuItem>
         ))}
+        {channelItems.length > 0 && <DropdownMenuSeparator />}
+        {featureItems.map((it) => (
+          <DropdownMenuItem key={it.type} onClick={() => onPick(it.type)}>
+            <span className={it.color}>{it.icon}</span>
+            <span className="ml-2">{it.label}</span>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={(e) => e.stopPropagation()}
+          className="text-muted-foreground"
+        >
+          <span className="text-slate-500 mr-2 text-xs">→</span>
+          Cancel
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1248,6 +1423,7 @@ function defaultLabelForType(type: string): string {
   if (type === "trigger") return "Trigger";
   if (type === "delay") return "Delay";
   if (type === "randomizer") return "Randomizer";
+  if (type === "splitter") return "Splitter";
   if (type === "condition") return "Condition";
   if (type === "action") return "Action";
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

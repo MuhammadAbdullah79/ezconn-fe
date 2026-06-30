@@ -104,19 +104,28 @@ interface ChannelAccount {
   channel: string;
 }
 
-function useConnectedAccounts(enabled: boolean): ChannelAccount[] {
-  const fetcher = (url: string, listKey: string) =>
+export function useConnectedAccounts(enabled: boolean): ChannelAccount[] {
+  // Different EZCONN endpoints wrap their list under different keys —
+  //   WhatsApp:  { wa: [...] }
+  //   Telegram:  { bots: [...] }
+  //   Messenger: { pages: [...] }
+  //   etc.
+  // Accept any of the documented keys, then fall back to the first array
+  // value on the object (so any future endpoint shape still works).
+  const fetcher = (url: string, listKeys: string[]) =>
     enabled
       ? apiGet(url)
           .then((r: any) => {
-            const list = Array.isArray(r)
-              ? r
-              : Array.isArray(r?.[listKey])
-                ? r[listKey]
-                : Array.isArray(r?.data)
-                  ? r.data
-                  : [];
-            return list;
+            if (Array.isArray(r)) return r;
+            for (const key of listKeys) {
+              if (Array.isArray(r?.[key])) return r[key];
+            }
+            if (r && typeof r === "object") {
+              for (const v of Object.values(r)) {
+                if (Array.isArray(v)) return v;
+              }
+            }
+            return [];
           })
           .catch(() => [])
       : Promise.resolve([]);
@@ -126,13 +135,13 @@ function useConnectedAccounts(enabled: boolean): ChannelAccount[] {
   // a Pusher channel set up on EZCONN, we poll every 30 s while the modal
   // is open so a newly-connected channel appears within half a minute.
   const refetchInterval = enabled ? 30_000 : false;
-  const wa = useQuery({ queryKey: ["/api/whatsapp/accounts"], queryFn: () => fetcher("/api/whatsapp/accounts", "accounts"), enabled, retry: false, refetchInterval });
-  const tg = useQuery({ queryKey: ["/api/telegram/bots"], queryFn: () => fetcher("/api/telegram/bots", "bots"), enabled, retry: false, refetchInterval });
-  const fb = useQuery({ queryKey: ["/api/messenger/pages"], queryFn: () => fetcher("/api/messenger/pages", "pages"), enabled, retry: false, refetchInterval });
-  const ig = useQuery({ queryKey: ["/api/instagram/pages"], queryFn: () => fetcher("/api/instagram/pages", "pages"), enabled, retry: false, refetchInterval });
-  const wc = useQuery({ queryKey: ["/api/webchat/instances"], queryFn: () => fetcher("/api/webchat/instances", "instances"), enabled, retry: false, refetchInterval });
-  const ev = useQuery({ queryKey: ["/api/evolution/instances"], queryFn: () => fetcher("/api/evolution/instances", "instances"), enabled, retry: false, refetchInterval });
-  const zp = useQuery({ queryKey: ["/api/zapi/instances"], queryFn: () => fetcher("/api/zapi/instances", "instances"), enabled, retry: false, refetchInterval });
+  const wa = useQuery({ queryKey: ["/api/whatsapp/accounts"], queryFn: () => fetcher("/api/whatsapp/accounts", ["wa", "accounts"]), enabled, retry: false, refetchInterval });
+  const tg = useQuery({ queryKey: ["/api/telegram/bots"], queryFn: () => fetcher("/api/telegram/bots", ["bots"]), enabled, retry: false, refetchInterval });
+  const fb = useQuery({ queryKey: ["/api/messenger/pages"], queryFn: () => fetcher("/api/messenger/pages", ["pages"]), enabled, retry: false, refetchInterval });
+  const ig = useQuery({ queryKey: ["/api/instagram/pages"], queryFn: () => fetcher("/api/instagram/pages", ["pages"]), enabled, retry: false, refetchInterval });
+  const wc = useQuery({ queryKey: ["/api/webchat/instances"], queryFn: () => fetcher("/api/webchat/instances", ["instances"]), enabled, retry: false, refetchInterval });
+  const ev = useQuery({ queryKey: ["/api/evolution/instances"], queryFn: () => fetcher("/api/evolution/instances", ["instances"]), enabled, retry: false, refetchInterval });
+  const zp = useQuery({ queryKey: ["/api/zapi/instances"], queryFn: () => fetcher("/api/zapi/instances", ["instances"]), enabled, retry: false, refetchInterval });
 
   return useMemo(() => {
     const acc: ChannelAccount[] = [];

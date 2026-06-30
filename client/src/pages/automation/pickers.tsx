@@ -542,6 +542,84 @@ export function GalleryPickButton({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+
+  // After selection, show the actual asset preview instead of just a
+  // button — replyagent's image activity editor renders the chosen image
+  // full-width with a "replace" affordance on hover, and we mirror that:
+  //   - image:    inline preview, click anywhere to replace
+  //   - audio:    inline <audio> player
+  //   - video:    inline <video> preview
+  //   - document: filename + icon (no inline preview possible)
+  const hasValue = !!(value && (value.url || value.id));
+
+  if (hasValue) {
+    const url = value!.url ?? "";
+    const name = value!.object_name ?? "selected";
+    return (
+      <>
+        <div className="relative w-full rounded-md border bg-muted/30 overflow-hidden group">
+          {mediaType === "image" && url ? (
+            <img
+              src={url}
+              alt={name}
+              className="w-full max-h-64 object-contain bg-white"
+            />
+          ) : mediaType === "audio" && url ? (
+            <audio controls src={url} className="w-full" />
+          ) : mediaType === "video" && url ? (
+            <video
+              controls
+              src={url}
+              className="w-full max-h-64 bg-black"
+            />
+          ) : (
+            <div className="px-3 py-4 flex items-center gap-2 text-sm">
+              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+              <span className="truncate">{name}</span>
+            </div>
+          )}
+
+          {/* Hover actions: replace (re-open picker) + clear */}
+          <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              title="Replace"
+              onClick={() => setOpen(true)}
+              className="h-6 w-6 rounded bg-white/90 border shadow-sm flex items-center justify-center text-slate-600 hover:bg-white"
+            >
+              <ImageIcon className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              title="Remove"
+              onClick={() =>
+                onChange({ id: "", url: "", object_name: "" })
+              }
+              className="h-6 w-6 rounded bg-rose-50 border border-rose-200 shadow-sm flex items-center justify-center text-rose-600 hover:bg-rose-100"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+
+          {name && (
+            <p className="text-[10px] text-muted-foreground truncate px-2 py-1 border-t bg-white">
+              {name}
+            </p>
+          )}
+        </div>
+        <GalleryPickerDialog
+          open={open}
+          onOpenChange={setOpen}
+          mediaType={mediaType}
+          onPick={(m) => {
+            onChange(m);
+            setOpen(false);
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <Button
@@ -552,12 +630,7 @@ export function GalleryPickButton({
         onClick={() => setOpen(true)}
       >
         <ImageIcon className="h-3.5 w-3.5" />
-        <span className="truncate">{value?.object_name ?? label}</span>
-        {value && (
-          <Badge variant="outline" className="ml-auto text-[10px]">
-            chosen
-          </Badge>
-        )}
+        <span className="truncate">{label}</span>
       </Button>
       <GalleryPickerDialog
         open={open}

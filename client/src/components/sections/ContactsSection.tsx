@@ -24,6 +24,149 @@ import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getUserInfo, hasAnyPerm } from "@/lib/auth";
+import { parsePhoneNumberFromString, getExampleNumber, type CountryCode, AsYouType } from "libphonenumber-js";
+import examples from "libphonenumber-js/mobile/examples";
+
+// ─── Country-code helpers ──────────────────────────────────────────────
+// Map the workspace's country phone_code (e.g. "92", "+1") to an ISO
+// alpha-2 region code that libphonenumber understands. We only handle the
+// common cases here — anything missing falls through to the international
+// validator which still accepts +CC prefixed numbers.
+const PHONE_CODE_TO_ISO: Record<string, CountryCode> = {
+  "1": "US",
+  "44": "GB",
+  "49": "DE",
+  "33": "FR",
+  "34": "ES",
+  "39": "IT",
+  "31": "NL",
+  "32": "BE",
+  "41": "CH",
+  "43": "AT",
+  "46": "SE",
+  "47": "NO",
+  "45": "DK",
+  "48": "PL",
+  "351": "PT",
+  "358": "FI",
+  "353": "IE",
+  "30": "GR",
+  "420": "CZ",
+  "55": "BR",
+  "52": "MX",
+  "54": "AR",
+  "56": "CL",
+  "57": "CO",
+  "51": "PE",
+  "58": "VE",
+  "20": "EG",
+  "27": "ZA",
+  "212": "MA",
+  "234": "NG",
+  "254": "KE",
+  "971": "AE",
+  "966": "SA",
+  "974": "QA",
+  "962": "JO",
+  "961": "LB",
+  "972": "IL",
+  "90": "TR",
+  "98": "IR",
+  "92": "PK",
+  "91": "IN",
+  "880": "BD",
+  "94": "LK",
+  "977": "NP",
+  "60": "MY",
+  "62": "ID",
+  "63": "PH",
+  "65": "SG",
+  "66": "TH",
+  "84": "VN",
+  "86": "CN",
+  "81": "JP",
+  "82": "KR",
+  "61": "AU",
+  "64": "NZ",
+};
+
+function phoneCodeToIso(phoneCode: string | undefined): CountryCode | undefined {
+  if (!phoneCode) return undefined;
+  return PHONE_CODE_TO_ISO[phoneCode.replace(/^\+/, "")];
+}
+
+// Returns the expected national number length(s) for the country. We pick
+// the example mobile number from libphonenumber so the limit auto-tracks
+// the official numbering plan (Pakistan = 10 national digits, etc.).
+function expectedNationalLength(iso: CountryCode | undefined): number | undefined {
+  if (!iso) return undefined;
+  const example = getExampleNumber(iso, examples);
+  return example?.nationalNumber.length;
+}
+
+interface PhoneValidationResult {
+  ok: boolean;
+  reason?: "empty" | "no-digits" | "too-short" | "too-long" | "invalid";
+  message?: string;
+}
+
+// Run a phone string through libphonenumber-js. When a country is
+// selected we use national-mode parsing (so the user can drop the +CC),
+// otherwise we treat the input as international and require the +.
+function validatePhone(
+  raw: string,
+  iso: CountryCode | undefined,
+): PhoneValidationResult {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) {
+    return { ok: false, reason: "empty", message: "Phone number is required." };
+  }
+  // Reject inputs that are just punctuation / dashes / spaces.
+  if (!/\d/.test(trimmed)) {
+    return {
+      ok: false,
+      reason: "no-digits",
+      message: "Phone number must contain digits.",
+    };
+  }
+  const parsed = parsePhoneNumberFromString(trimmed, iso);
+  if (!parsed) {
+    return {
+      ok: false,
+      reason: "invalid",
+      message: iso
+        ? "Invalid phone number for the selected country."
+        : "Invalid international phone number — include the + and country code.",
+    };
+  }
+  // If we know the country, gate strictly on its national length.
+  const expected = expectedNationalLength(iso);
+  if (expected !== undefined) {
+    const actual = parsed.nationalNumber.length;
+    if (actual < expected) {
+      return {
+        ok: false,
+        reason: "too-short",
+        message: `Phone number is too short — expected ${expected} digits.`,
+      };
+    }
+    if (actual > expected) {
+      return {
+        ok: false,
+        reason: "too-long",
+        message: `Phone number is too long — expected ${expected} digits.`,
+      };
+    }
+  }
+  if (!parsed.isValid()) {
+    return {
+      ok: false,
+      reason: "invalid",
+      message: "Phone number is not valid.",
+    };
+  }
+  return { ok: true };
+}
 
 type SortDirection = "asc" | "desc" | "default";
 
@@ -146,10 +289,28 @@ export default function ContactsSection() {
   const contacts: Contact[] = (contactsResponse?.contacts || contactsResponse || []).map((c: any) => ({
     id: (c.id || '').toString(),
     name: c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'No Name',
-    phoneNumber: c.primary_mobile || '-',
+    // Keep the raw value (empty string when missing) — the UI renders a
+    // "-" placeholder, but filters need to see the actual data so the
+    // "is empty" / "is not empty" operators behave correctly. Earlier
+    // this stored the literal "-" sentinel, which broke filtering for
+    // contacts that have no phone number on file.
+    phoneNumber: c.primary_mobile || '',
     tags: (c.tag_links || []).map((tl: any) => tl.tags?.name || tl.name || tl).filter(Boolean),
-    createdAt: c.created_at ? new Date(c.created_at).toISOString().split('T')[0] : '-',
-    lastActive: c.updated_at ? new Date(c.updated_at).toISOString().split('T')[0] : '-',
+    // Be permissive about field names + fall back to updated_at when
+    // created_at is null (legacy rows from before we started stamping it
+    // on create). Same goes for lastActive.
+    createdAt: (() => {
+      const raw = c.created_at ?? c.createdAt ?? c.updated_at ?? c.updatedAt;
+      if (!raw) return "";
+      const d = new Date(raw);
+      return Number.isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
+    })(),
+    lastActive: (() => {
+      const raw = c.updated_at ?? c.updatedAt ?? c.created_at ?? c.createdAt;
+      if (!raw) return "";
+      const d = new Date(raw);
+      return Number.isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0];
+    })(),
     updatedBy: 'System'
   }));
 
@@ -164,23 +325,59 @@ export default function ContactsSection() {
   }, [searchParams]);
 
   // Add Mutation
+  // ─── Add / Delete / Update mutations with optimistic updates ──────────
+  // The previous flow waited on the server response before closing the
+  // modal AND triggered a refetch which made the UI feel sluggish (~1-2s
+  // gap). We now apply the change to the cached query results immediately
+  // and roll back if the server rejects — list updates the moment the
+  // user clicks Save / Delete.
   const addMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/contacts", data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "Contact added" });
+    onMutate: async (newData) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/contacts"] });
+      const queries = queryClient.getQueriesData<any>({ queryKey: ["/api/contacts"] });
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const tempContact = {
+        id: tempId,
+        first_name: newData.first_name,
+        last_name: newData.last_name,
+        full_name: `${newData.first_name ?? ""} ${newData.last_name ?? ""}`.trim(),
+        primary_mobile: newData.phone,
+        tag_links: (newData.tags ?? []).map((name: string) => ({ tags: { name } })),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        _optimistic: true,
+      };
+      // Prepend to every cached /api/contacts query (the list is keyed by
+      // search/status so there can be several). Be defensive about shape.
+      queries.forEach(([key, value]) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+          queryClient.setQueryData(key, [tempContact, ...value]);
+        } else if (Array.isArray(value.contacts)) {
+          queryClient.setQueryData(key, { ...value, contacts: [tempContact, ...value.contacts] });
+        }
+      });
+      // Close modal + reset form immediately — server roundtrip happens
+      // in the background.
       setShowAddContactModal(false);
       setNewContactName("");
       setNewContactPhone("");
       setNewContactCountryId("");
       setNewContactTags([]);
+      toast({ title: "Contact added" });
+      return { queries, tempId };
     },
-    onError: (err: any) => {
-      // apiRequest throws `new Error(res.text())` — for a NestJS exception the body
-      // is JSON ({statusCode, message, error}), so pull out `.message` for a clean toast.
+    onError: (err: any, _vars, context) => {
+      // Roll the optimistic insert back so the user doesn't see a ghost row.
+      if (context?.queries) {
+        context.queries.forEach(([key, value]) => {
+          queryClient.setQueryData(key, value);
+        });
+      }
       let msg: string = err?.message ?? "";
       try {
         const parsed = JSON.parse(msg);
@@ -195,6 +392,12 @@ export default function ContactsSection() {
           : msg,
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Final reconciliation with the server: replaces the temp row with
+      // the real one (real id, normalised phone, etc.) without ever
+      // showing an empty list in between.
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
     },
   });
 
@@ -260,34 +463,102 @@ export default function ContactsSection() {
     URL.revokeObjectURL(url);
   };
 
-  // Delete Mutation
+  // Delete Mutation — optimistic removal so the row disappears the
+  // moment the user confirms.
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/contacts/${id}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "Contact deleted" });
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/contacts"] });
+      const queries = queryClient.getQueriesData<any>({ queryKey: ["/api/contacts"] });
+      queries.forEach(([key, value]) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+          queryClient.setQueryData(key, value.filter((c: any) => String(c.id) !== String(id)));
+        } else if (Array.isArray(value.contacts)) {
+          queryClient.setQueryData(key, {
+            ...value,
+            contacts: value.contacts.filter((c: any) => String(c.id) !== String(id)),
+          });
+        }
+      });
       setShowDeleteContactModal(false);
-    }
+      toast({ title: "Contact deleted" });
+      return { queries };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.queries) {
+        context.queries.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      }
+      let msg: string = err?.message ?? "Could not delete contact.";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.message)
+          msg = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message;
+      } catch { /* plain string */ }
+      toast({ title: "Delete failed", description: msg, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+    },
   });
 
-  // Update Mutation
+  // Update Mutation — optimistic patch so the row updates instantly.
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string, data: any }) => {
       const res = await apiRequest("PATCH", `/api/contacts/${id}`, data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
-      toast({ title: "Contact Updated", description: "Contact has been updated successfully" });
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/contacts"] });
+      const queries = queryClient.getQueriesData<any>({ queryKey: ["/api/contacts"] });
+      const patchRow = (row: any): any =>
+        String(row.id) === String(id)
+          ? {
+              ...row,
+              first_name: data.first_name ?? row.first_name,
+              last_name: data.last_name ?? row.last_name,
+              full_name: `${data.first_name ?? row.first_name ?? ""} ${data.last_name ?? row.last_name ?? ""}`.trim(),
+              primary_mobile: data.phone ?? row.primary_mobile,
+              tag_links: data.tags
+                ? data.tags.map((name: string) => ({ tags: { name } }))
+                : row.tag_links,
+              updated_at: new Date().toISOString(),
+            }
+          : row;
+      queries.forEach(([key, value]) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+          queryClient.setQueryData(key, value.map(patchRow));
+        } else if (Array.isArray(value.contacts)) {
+          queryClient.setQueryData(key, { ...value, contacts: value.contacts.map(patchRow) });
+        }
+      });
       setShowEditContactModal(false);
       setEditingContact(null);
       setEditContactName("");
       setEditContactPhone("");
       setEditContactTags([]);
       setEditTagInput("");
-    }
+      toast({ title: "Contact updated" });
+      return { queries };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.queries) {
+        context.queries.forEach(([key, value]) => queryClient.setQueryData(key, value));
+      }
+      let msg: string = err?.message ?? "Could not update contact.";
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed?.message)
+          msg = Array.isArray(parsed.message) ? parsed.message.join(", ") : parsed.message;
+      } catch { /* plain string */ }
+      toast({ title: "Update failed", description: msg, variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+    },
   });
 
   const currentUserName = "Demo User";
@@ -427,12 +698,17 @@ export default function ContactsSection() {
   const getFilteredAndSortedData = () => {
     let data = [...contacts];
 
-    // Apply search
+    // Apply search — phone may be empty (contact without a number), so
+    // skip the phone match in that case instead of relying on every row
+    // having a phoneNumber.
     if (search) {
-      data = data.filter(item =>
-        item.name.toLowerCase().includes(search.toLowerCase()) ||
-        item.phoneNumber.toLowerCase().includes(search.toLowerCase())
-      );
+      const needle = search.toLowerCase();
+      data = data.filter((item) => {
+        if (item.name.toLowerCase().includes(needle)) return true;
+        if (item.phoneNumber && item.phoneNumber.toLowerCase().includes(needle))
+          return true;
+        return false;
+      });
     }
 
     // Apply tag filter
@@ -677,18 +953,24 @@ export default function ContactsSection() {
       });
       return;
     }
-    if (!newContactPhone.trim()) {
+    // Phone is mandatory and must be a real number — not a dash, "abc",
+    // or a too-short / too-long string. We use libphonenumber-js to gate
+    // on the selected country's national numbering plan.
+    const selectedCountry = countries.find((c) => c.id === newContactCountryId);
+    const iso = phoneCodeToIso(selectedCountry?.phone_code);
+    const phoneResult = validatePhone(newContactPhone, iso);
+    if (!phoneResult.ok) {
       toast({
-        title: "Missing Fields",
-        description: "Please enter a phone number",
+        title: "Invalid Phone",
+        description: phoneResult.message ?? "Please enter a valid phone number.",
         variant: "destructive",
       });
       return;
     }
-    const names = newContactName.trim().split(' ');
+    const names = newContactName.trim().split(" ");
     addMutation.mutate({
       first_name: names[0],
-      last_name: names.slice(1).join(' '),
+      last_name: names.slice(1).join(" "),
       phone: newContactPhone.trim(),
       country_id: newContactCountryId || undefined,
       tags: newContactTags,
@@ -1121,7 +1403,13 @@ export default function ContactsSection() {
                                 </div>
                               )}
                             </div>
-                            <input type="text" placeholder="Value..." value={filter.value} onChange={(e) => updateFilter(filter.id, filter.column, filter.operator, e.target.value)} className="h-8 px-3 text-[11px] font-medium border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all bg-slate-50 dark:bg-slate-800/50 flex-1" />
+                            {filter.operator === "is empty" || filter.operator === "is not empty" ? (
+                              <div className="h-8 px-3 text-[11px] font-medium text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center bg-slate-50/40 dark:bg-slate-800/30 flex-1">
+                                (no value)
+                              </div>
+                            ) : (
+                              <input type="text" placeholder="Value..." value={filter.value} onChange={(e) => updateFilter(filter.id, filter.column, filter.operator, e.target.value)} className="h-8 px-3 text-[11px] font-medium border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all bg-slate-50 dark:bg-slate-800/50 flex-1" />
+                            )}
                             <button onClick={() => removeFilter(filter.id)} className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"><Trash2 size={13} /></button>
                             <GripVertical size={13} className="text-slate-300 cursor-grab active:cursor-grabbing" />
                           </div>
@@ -1304,7 +1592,9 @@ export default function ContactsSection() {
                             </button>
                           </div>
                         </td>
-                        <td className="py-1.5 px-4 font-medium text-slate-500 dark:text-slate-400 text-[11px]">{contact.phoneNumber}</td>
+                        <td className="py-1.5 px-4 font-medium text-slate-500 dark:text-slate-400 text-[11px]">
+                          {contact.phoneNumber || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
                         <td className="py-1.5 px-4 max-w-lg">
                           <div className="flex flex-wrap gap-1.5">
                             {contact.tags.map((tag) => (
@@ -1314,8 +1604,12 @@ export default function ContactsSection() {
                             ))}
                           </div>
                         </td>
-                        <td className="py-2 px-4 text-slate-500 dark:text-slate-500 text-[11px] font-medium">{contact.createdAt}</td>
-                        <td className="py-2 px-4 text-slate-500 dark:text-slate-500 text-[11px] font-medium">{contact.lastActive}</td>
+                        <td className="py-2 px-4 text-slate-500 dark:text-slate-500 text-[11px] font-medium">
+                          {contact.createdAt || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
+                        <td className="py-2 px-4 text-slate-500 dark:text-slate-500 text-[11px] font-medium">
+                          {contact.lastActive || <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
                         <td className="py-2 px-4 text-slate-500 dark:text-slate-500 text-[11px] font-medium">{contact.updatedBy}</td>
                         <td className="py-2 px-4">
                           <div className={`${selectedRows.size > 0 ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -1524,13 +1818,77 @@ export default function ContactsSection() {
                   ))}
                 </select>
               )}
-              <input
-                type="tel"
-                placeholder={newContactCountryId ? "Local number (e.g. 300 1234567)" : "Full number incl. country code, e.g. +92 300 1234567"}
-                value={newContactPhone}
-                onChange={(e) => setNewContactPhone(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus:outline-none transition-colors"
-              />
+              {(() => {
+                // Inline-validate as the user types so they get immediate
+                // feedback + we cap the digit count at the country's
+                // national length so they physically cannot enter 12
+                // digits for an 11-digit PK number, etc.
+                const selectedCountry = countries.find((c) => c.id === newContactCountryId);
+                const iso = phoneCodeToIso(selectedCountry?.phone_code);
+                const expected = expectedNationalLength(iso);
+                const digitCount = (newContactPhone.match(/\d/g) ?? []).length;
+                // Allow some headroom for international format chars (+, spaces, parens, dashes)
+                const maxLen = expected ? expected + 8 : 20;
+                const hint = expected
+                  ? `${digitCount}/${expected} digits${selectedCountry ? ` (${selectedCountry.name})` : ""}`
+                  : "International format — include + and country code";
+                const tooLong = expected !== undefined && digitCount > expected;
+                const isComplete = expected !== undefined && digitCount === expected;
+                return (
+                  <>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      maxLength={maxLen}
+                      placeholder={newContactCountryId ? "Local number (e.g. 300 1234567)" : "Full number incl. country code, e.g. +92 300 1234567"}
+                      value={newContactPhone}
+                      onChange={(e) => {
+                        let next = e.target.value;
+                        // When a country is selected, hard-cap the input
+                        // at the expected digit count by truncating extra
+                        // digits while keeping formatting chars.
+                        if (expected !== undefined) {
+                          const digits = (next.match(/\d/g) ?? []).slice(0, expected);
+                          if (digits.length === expected) {
+                            // Rebuild keeping non-digit chars in place up
+                            // to where we have digits, drop the rest.
+                            let kept = "";
+                            let used = 0;
+                            for (const ch of next) {
+                              if (/\d/.test(ch)) {
+                                if (used >= expected) break;
+                                kept += ch;
+                                used++;
+                              } else {
+                                kept += ch;
+                              }
+                            }
+                            next = kept;
+                          }
+                        }
+                        setNewContactPhone(next);
+                      }}
+                      className={cn(
+                        "w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none transition-colors",
+                        tooLong ? "border-red-500" : "border-input",
+                      )}
+                    />
+                    <p
+                      className={cn(
+                        "text-[11px]",
+                        tooLong
+                          ? "text-red-600"
+                          : isComplete
+                            ? "text-emerald-600"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {hint}
+                    </p>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Tags Section */}

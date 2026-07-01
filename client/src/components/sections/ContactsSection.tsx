@@ -19,6 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import CustomDropdown from "@/components/CustomDropdown";
 import ContactProfileModal from "@/components/ContactProfileModal";
+import { PhoneInputWithFlag } from "@/components/PhoneInputWithFlag";
+import { COUNTRIES as STATIC_COUNTRIES } from "@/lib/countries";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
@@ -367,6 +369,7 @@ export default function ContactsSection() {
       setNewContactName("");
       setNewContactPhone("");
       setNewContactCountryId("");
+      setNewContactCountryIso("PK");
       setNewContactTags([]);
       toast({ title: "Contact added" });
       return { queries, tempId };
@@ -588,6 +591,10 @@ export default function ContactsSection() {
   const [newContactName, setNewContactName] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
   const [newContactCountryId, setNewContactCountryId] = useState<string>("");
+  // ISO-2 country code driving the flag/dial-code picker. The backend
+  // still expects `country_id` on save, so on submit we resolve the ISO
+  // back to the matching workspace-country row via the shared dial code.
+  const [newContactCountryIso, setNewContactCountryIso] = useState<string>("PK");
   const [newContactTags, setNewContactTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState("");
 
@@ -954,10 +961,11 @@ export default function ContactsSection() {
       return;
     }
     // Phone is mandatory and must be a real number — not a dash, "abc",
-    // or a too-short / too-long string. We use libphonenumber-js to gate
-    // on the selected country's national numbering plan.
-    const selectedCountry = countries.find((c) => c.id === newContactCountryId);
-    const iso = phoneCodeToIso(selectedCountry?.phone_code);
+    // or a too-short / too-long string. We validate against the ISO-2
+    // code picked in the flag chip; the workspace country_id (if we
+    // could resolve one) rides along on the save payload for the
+    // backend's normalizeMobile step.
+    const iso = (newContactCountryIso || "PK") as any;
     const phoneResult = validatePhone(newContactPhone, iso);
     if (!phoneResult.ok) {
       toast({
@@ -1799,79 +1807,51 @@ export default function ContactsSection() {
               />
             </div>
 
-            {/* Phone Input — country selector (only when country data exists) + number.
-                The number is normalised server-side to +CC… so it dedups against
-                WhatsApp inbound contacts. */}
+            {/* Phone Input — replyagent-parity flag picker + searchable
+                country list, identical to the agency panel's Add Agent
+                form. The picker chip stores the ISO-2 code; on save we
+                resolve it back to the matching workspace country row. */}
             <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground">Phone Number<span className="text-red-500 pl-0.5">*</span></label>
-              {countries.length > 0 && (
-                <select
-                  value={newContactCountryId}
-                  onChange={(e) => setNewContactCountryId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus:outline-none transition-colors"
-                >
-                  <option value="">International — type the full number with +</option>
-                  {countries.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} (+{(c.phone_code || "").replace(/^\+/, "")})
-                    </option>
-                  ))}
-                </select>
-              )}
+              <label className="text-sm font-medium text-foreground">
+                Phone Number<span className="text-red-500 pl-0.5">*</span>
+              </label>
               {(() => {
-                // Inline-validate as the user types so they get immediate
-                // feedback + we cap the digit count at the country's
-                // national length so they physically cannot enter 12
-                // digits for an 11-digit PK number, etc.
-                const selectedCountry = countries.find((c) => c.id === newContactCountryId);
-                const iso = phoneCodeToIso(selectedCountry?.phone_code);
+                const iso = (newContactCountryIso || "PK") as any;
                 const expected = expectedNationalLength(iso);
                 const digitCount = (newContactPhone.match(/\d/g) ?? []).length;
-                // Allow some headroom for international format chars (+, spaces, parens, dashes)
-                const maxLen = expected ? expected + 8 : 20;
-                const hint = expected
-                  ? `${digitCount}/${expected} digits${selectedCountry ? ` (${selectedCountry.name})` : ""}`
-                  : "International format — include + and country code";
                 const tooLong = expected !== undefined && digitCount > expected;
                 const isComplete = expected !== undefined && digitCount === expected;
+                const staticCountry = STATIC_COUNTRIES.find((c) => c.code === iso);
+                const hint = expected
+                  ? `${digitCount}/${expected} digits${staticCountry ? ` (${staticCountry.name})` : ""}`
+                  : "Local number";
                 return (
                   <>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      maxLength={maxLen}
-                      placeholder={newContactCountryId ? "Local number (e.g. 300 1234567)" : "Full number incl. country code, e.g. +92 300 1234567"}
-                      value={newContactPhone}
-                      onChange={(e) => {
-                        let next = e.target.value;
-                        // When a country is selected, hard-cap the input
-                        // at the expected digit count by truncating extra
-                        // digits while keeping formatting chars.
-                        if (expected !== undefined) {
-                          const digits = (next.match(/\d/g) ?? []).slice(0, expected);
-                          if (digits.length === expected) {
-                            // Rebuild keeping non-digit chars in place up
-                            // to where we have digits, drop the rest.
-                            let kept = "";
-                            let used = 0;
-                            for (const ch of next) {
-                              if (/\d/.test(ch)) {
-                                if (used >= expected) break;
-                                kept += ch;
-                                used++;
-                              } else {
-                                kept += ch;
-                              }
-                            }
-                            next = kept;
-                          }
+                    <PhoneInputWithFlag
+                      country={newContactCountryIso || "PK"}
+                      onCountryChange={(newIso) => {
+                        setNewContactCountryIso(newIso);
+                        // Keep newContactCountryId in sync with the workspace
+                        // countries table so the save payload picks up the
+                        // correct backend id.
+                        const dial = STATIC_COUNTRIES.find((c) => c.code === newIso)?.dial;
+                        if (dial) {
+                          const match = countries.find(
+                            (c) => `+${(c.phone_code || "").replace(/^\+/, "")}` === dial,
+                          );
+                          setNewContactCountryId(match?.id ?? "");
                         }
-                        setNewContactPhone(next);
                       }}
-                      className={cn(
-                        "w-full px-3 py-2 text-sm border rounded-md bg-background focus:outline-none transition-colors",
-                        tooLong ? "border-red-500" : "border-input",
+                      value={newContactPhone}
+                      onChange={(digits) => {
+                        // Hard-cap to the country's national length.
+                        const capped =
+                          expected !== undefined ? digits.slice(0, expected) : digits;
+                        setNewContactPhone(capped);
+                      }}
+                      inputClassName={cn(
+                        "h-10 text-sm",
+                        tooLong ? "border-red-500" : "",
                       )}
                     />
                     <p

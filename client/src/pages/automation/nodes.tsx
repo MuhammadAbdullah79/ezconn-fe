@@ -14,8 +14,10 @@
  * The `data` prop passed by ReactFlow is the node's `data` field from the
  * store — we read the action-slug / value / channel from there.
  */
-import { memo } from "react";
+import { memo, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Handle, Position, type NodeProps } from "reactflow";
+import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -156,13 +158,16 @@ function AddStepDropdown({
   handleId,
   style,
 }: AddStepDropdownProps) {
-  const { connectedChannelTypes, addStepBelow } = useSmartFlowMenu();
+  const { connectedChannelTypes, addStepBelow, hasOutgoingEdge } = useSmartFlowMenu();
 
-  // WhatsApp is always visible (even when not yet connected) so the user
-  // can lay out a flow before wiring up the account. All other channels
-  // appear only when their account is actually connected — matches the
-  // user's request: "abhi WhatsApp add kr do, baki connect karne par show".
-  const ALWAYS_VISIBLE = new Set(["whatsapp"]);
+  // "One child per output" rule — once this (node, handle) already has an
+  // outgoing edge, hide the dot entirely. To add a different next step the
+  // user first deletes the existing child. Matches replyagent behaviour.
+  if (hasOutgoingEdge(nodeId, handleId)) return null;
+
+  // Channel must be onboard (connected account exists) before it can be
+  // added to a flow — WhatsApp included. Prevents scaffolding a broken
+  // flow that references a channel with no runtime account behind it.
   const channels: Array<{ type: string; label: string }> = [
     { type: "whatsapp", label: "WhatsApp" },
     { type: "telegram", label: "Telegram" },
@@ -173,9 +178,7 @@ function AddStepDropdown({
     { type: "twilio_call", label: "Call" },
     { type: "zapi", label: "Z-API" },
     { type: "evolution", label: "Evolution" },
-  ].filter(
-    (it) => ALWAYS_VISIBLE.has(it.type) || connectedChannelTypes.has(it.type),
-  );
+  ].filter((it) => connectedChannelTypes.has(it.type));
 
   const features: Array<{ type: string; label: string }> = [
     { type: "randomizer", label: "Randomizer" },
@@ -295,38 +298,27 @@ const NODE_WIDTH = 200;
  */
 export const TriggerNode = memo(({ id, data }: NodeProps<any>) => {
   const activities: any[] = data?.activities ?? [];
+  // When the user deletes every custom trigger the canvas card falls back
+  // to a synthetic Default row. Historically we read `activity_properties`
+  // here, but that field persists the event of the FIRST trigger even
+  // after deletion — so after removing "Tag applied" the card kept saying
+  // "Tag applied: not selected". Force the fallback to a real default_url
+  // regardless of stale activity_properties so deletion visibly resets to
+  // "Default".
   const items = activities.length
     ? activities
-    : [{ event: data?.activity_properties?.event ?? data?.event ?? "default_url", label: "Default" }];
+    : [{ event: "default_url", label: "Default" }];
 
-  const renderActivitySummary = (act: any): string => {
-    const schema = getTriggerSchema(act.event);
-    const label = schema?.label ?? act.label ?? "Default";
-    const payload = act.payload ?? {};
-    // Lightweight per-event summary for readability on the canvas card.
-    switch (act.event) {
-      case "default_url":
-        return "Default";
-      case "tag_applied":
-      case "tag_removed":
-        return `${label}: ${payload.tag_id ? `tag #${payload.tag_id}` : "Tag not selected"}`;
-      case "custom_field_changed":
-      case "system_field_changed":
-      case "date_field_changed":
-        return `${label}: ${payload.field_id ?? payload.field ?? "(field)"}`;
-      case "wa_keyword":
-      case "tg_keyword":
-      case "ig_keyword":
-      case "fb_keyword":
-      case "wc_keyword":
-      case "twilio_keyword":
-      case "evolution_keyword":
-      case "zapi_keyword":
-        return `${label}: ${(payload.keywords ?? []).join(", ") || "(no keywords)"}`;
-      default:
-        return label;
-    }
-  };
+  // Cached lookups so tag / custom field IDs resolve to their real names on
+  // the canvas — matches replyagent showing "Tag applied: marketing" rather
+  // than "Tag applied: #5". React Query dedupes: every TriggerNode shares
+  // the same in-memory response.
+  const tagsById = useTriggerLookup("/api/tags/list", "tags", "name");
+  const fieldsById = useTriggerLookup(
+    "/api/custom-fields",
+    "fields",
+    (f) => f.label ?? f.name,
+  );
 
   return (
     <div
@@ -340,16 +332,22 @@ export const TriggerNode = memo(({ id, data }: NodeProps<any>) => {
         </span>
         <span className="text-[13px] font-semibold text-slate-800">Start</span>
       </div>
-      {/* Activity rows with muted bg — matches replyagent's card row look */}
+      {/* Activity rows — single-line "Label: value" summary matching
+          replyagent's Start card. Value resolves the picked tag/field to
+          its actual name; empty payload falls back to "not selected". */}
       <div className="bg-slate-50/50">
-        {items.map((it, idx) => (
-          <div
-            key={idx}
-            className="px-3 py-2 text-[11px] text-slate-700 border-t border-slate-100 first:border-t-0 truncate"
-          >
-            {renderActivitySummary(it)}
-          </div>
-        ))}
+        {items.map((it, idx) => {
+          const summary = triggerRowSummary(it, { tagsById, fieldsById });
+          return (
+            <div
+              key={idx}
+              className="px-3 py-2 text-[11px] text-slate-700 border-t border-slate-100 first:border-t-0 truncate"
+              title={summary}
+            >
+              {summary}
+            </div>
+          );
+        })}
       </div>
       {/* Bottom hint text with the dropdown dot */}
       <div className="px-3 py-1.5 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 bg-white">
@@ -360,6 +358,100 @@ export const TriggerNode = memo(({ id, data }: NodeProps<any>) => {
   );
 });
 TriggerNode.displayName = "TriggerNode";
+
+// Shared React Query hook: fetch the remote list at `url`, extract items by
+// listKey, and return a { id → name } map so `#5` renders as "marketing".
+// Every TriggerNode calls this — React Query dedupes by queryKey, so all
+// consumers share the same response.
+function useTriggerLookup(
+  url: string,
+  listKey: string,
+  labelKey: string | ((row: any) => string),
+): Map<string, string> {
+  const { data } = useQuery({
+    queryKey: [url],
+    queryFn: async () => {
+      try {
+        return await (await apiRequest("GET", url)).json();
+      } catch {
+        return { [listKey]: [] };
+      }
+    },
+    retry: false,
+    staleTime: 60_000,
+  });
+  return useMemo(() => {
+    const list: any[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.[listKey])
+        ? data[listKey]
+        : Array.isArray(data?.data)
+          ? data.data
+          : [];
+    const m = new Map<string, string>();
+    for (const row of list) {
+      const label =
+        typeof labelKey === "function"
+          ? labelKey(row)
+          : (row[labelKey] ?? row.name);
+      if (row.id != null && label) m.set(String(row.id), String(label));
+    }
+    return m;
+    // labelKey is captured on first render; it's a plain string or literal
+    // function so we can safely omit it from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+}
+
+// Compact single-line "Label: value" summary rendered on the Start card,
+// matching replyagent's Start block exactly. The label comes from the
+// schema (trailing ":" stripped so we control the separator), and the
+// value is either the resolved name from the lookup map (tag / field) or
+// a "…not selected" placeholder when the trigger hasn't been configured.
+function triggerRowSummary(
+  act: any,
+  lookups: { tagsById: Map<string, string>; fieldsById: Map<string, string> },
+): string {
+  const schema = getTriggerSchema(act.event);
+  const rawLabel = schema?.label ?? act.label ?? "Default";
+  const label = rawLabel.replace(/:\s*$/, "");
+  // The trigger field-form (activity-editors.tsx) writes selected values to
+  // `properties`, while some legacy code paths seeded `payload`. Read
+  // `properties` first, fall back to `payload`, so both storage shapes
+  // render the picked tag / field / keywords correctly.
+  const payload = act.properties ?? act.payload ?? {};
+
+  const tagName = (id: any) =>
+    (id != null && lookups.tagsById.get(String(id))) || null;
+  const fieldName = (id: any) =>
+    (id != null && lookups.fieldsById.get(String(id))) || null;
+
+  switch (act.event) {
+    case "default_url":
+      return "Default";
+    case "tag_applied":
+    case "tag_removed":
+      return `${label}: ${tagName(payload.tag_id) ?? "Tag not selected"}`;
+    case "custom_field_changed":
+    case "date_field_changed":
+      return `${label}: ${fieldName(payload.field_id) ?? "Field not selected"}`;
+    case "system_field_changed":
+      return `${label}: ${payload.field ?? "Field not selected"}`;
+    case "wa_keyword":
+    case "tg_keyword":
+    case "ig_keyword":
+    case "fb_keyword":
+    case "wc_keyword":
+    case "twilio_keyword":
+    case "evolution_keyword":
+    case "zapi_keyword": {
+      const kw = (payload.keywords ?? []) as string[];
+      return `${label}: ${kw.length ? kw.join(", ") : "No keywords"}`;
+    }
+    default:
+      return label;
+  }
+}
 
 // ─── Channel node (WhatsApp/Telegram/IG/Messenger/Webchat/SMS/Call/Zapi/Evolution) ──
 

@@ -21,6 +21,7 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  MarkerType,
   ReactFlowProvider,
   addEdge,
   applyEdgeChanges,
@@ -137,6 +138,12 @@ export interface SmartFlowMenuCtxValue {
   duplicateNode: (nodeId: string) => void;
   /** Remove a node (and its edges). */
   removeNode: (nodeId: string) => void;
+  /**
+   * Returns true if the given (nodeId, sourceHandle?) already has an
+   * outgoing edge. Used by AddStepDropdown to enforce the "one child per
+   * output" rule — the dot is hidden once a child exists.
+   */
+  hasOutgoingEdge: (sourceNodeId: string, sourceHandle?: string) => boolean;
 }
 
 export const SmartFlowMenuContext = createContext<SmartFlowMenuCtxValue>({
@@ -144,6 +151,7 @@ export const SmartFlowMenuContext = createContext<SmartFlowMenuCtxValue>({
   addStepBelow: () => {},
   duplicateNode: () => {},
   removeNode: () => {},
+  hasOutgoingEdge: () => false,
 });
 
 export function useSmartFlowMenu() {
@@ -335,11 +343,34 @@ function BuilderInner() {
     return id;
   };
 
+  // ─── "One child per output" rule ────────────────────────────────────
+  // Every node may spawn only ONE outgoing edge per output handle. For
+  // single-output nodes (Trigger / channels / Delay / Condition / Action)
+  // that's one child total; for multi-branch nodes (Randomizer / Splitter)
+  // it's one child per branch handle. Enforced by hiding the add-dot once
+  // an outgoing edge exists AND by refusing manual-drag connects.
+  const hasOutgoingEdge = useCallback(
+    (sourceNodeId: string, sourceHandle?: string) => {
+      return state.edges.some(
+        (e) =>
+          e.source === sourceNodeId &&
+          (sourceHandle
+            ? (e.sourceHandle ?? undefined) === sourceHandle
+            : !e.sourceHandle),
+      );
+    },
+    [state.edges],
+  );
+
   // ─── Add step below a source node (used by per-node "↓" dropdown) ────
   // Positions the new node ~180px below the source and immediately wires
   // an edge from source → new so the user doesn't have to drag a handle.
   const addStepBelow = useCallback(
     (sourceNodeId: string, type: string, sourceHandle?: string) => {
+      // One-child-per-output guard: the dot is normally hidden once an edge
+      // exists, but this is a defensive no-op in case a stale click races
+      // the re-render.
+      if (hasOutgoingEdge(sourceNodeId, sourceHandle)) return;
       const src = state.nodes.find((n) => n.id === sourceNodeId);
       const at = src
         ? { x: src.position.x + 300, y: src.position.y }
@@ -350,9 +381,24 @@ function BuilderInner() {
         source: sourceNodeId,
         target: newId,
         ...(sourceHandle ? { sourceHandle } : {}),
+        // Explicit arrow head so the flow direction is unambiguous even
+        // when the edge is created programmatically (defaultEdgeOptions
+        // only applies to onConnect-created edges).
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: "#94a3b8",
+          width: 18,
+          height: 18,
+        },
       } as Edge);
+      // Re-select the new node after the current batch settles. Without
+      // this defer, React Flow's own `onNodesChange` from the added node
+      // can race the SELECT_NODE dispatched inside addNode and flip the
+      // sidebar back to whatever was selected before the click. The
+      // microtask ensures our selection is the last state write.
+      queueMicrotask(() => actions.selectNode(newId));
     },
-    [state.nodes, actions], // eslint-disable-line react-hooks/exhaustive-deps
+    [state.nodes, actions, hasOutgoingEdge], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ─── Connected channels filter (only show what's actually connected) ─
@@ -394,8 +440,14 @@ function BuilderInner() {
   );
 
   const smartFlowMenuValue = useMemo<SmartFlowMenuCtxValue>(
-    () => ({ connectedChannelTypes, addStepBelow, duplicateNode, removeNode }),
-    [connectedChannelTypes, addStepBelow, duplicateNode, removeNode],
+    () => ({
+      connectedChannelTypes,
+      addStepBelow,
+      duplicateNode,
+      removeNode,
+      hasOutgoingEdge,
+    }),
+    [connectedChannelTypes, addStepBelow, duplicateNode, removeNode, hasOutgoingEdge],
   );
 
   // ─── Right-click context menu (replyagent's cMenu) ───────────────────
@@ -435,7 +487,21 @@ function BuilderInner() {
     [state.edges, actions],
   );
   const onConnect = useCallback(
-    (conn: Connection) => actions.setEdges(addEdge(conn, state.edges)),
+    (conn: Connection) => {
+      // One-child-per-output rule: silently drop the connect if the source
+      // (nodeId + optional handle) already has an outgoing edge. Keeps
+      // manual drag-to-connect in sync with the dot-dropdown guard.
+      if (!conn.source) return;
+      const already = state.edges.some(
+        (e) =>
+          e.source === conn.source &&
+          (conn.sourceHandle
+            ? (e.sourceHandle ?? undefined) === conn.sourceHandle
+            : !e.sourceHandle),
+      );
+      if (already) return;
+      actions.setEdges(addEdge(conn, state.edges));
+    },
     [state.edges, actions],
   );
 
@@ -498,11 +564,18 @@ function BuilderInner() {
               // Replyagent-parity edge look — a soft slate stroke that's a
               // bit thicker than React Flow's default so the curves read
               // clearly against the white canvas without dominating the
-              // node cards.
+              // node cards. A filled arrow head on the target end makes the
+              // flow direction (previous → next) unambiguous.
               defaultEdgeOptions={{
                 type: "smoothstep",
                 style: { stroke: "#94a3b8", strokeWidth: 1.75 },
                 animated: false,
+                markerEnd: {
+                  type: MarkerType.ArrowClosed,
+                  color: "#94a3b8",
+                  width: 18,
+                  height: 18,
+                },
               }}
               fitView
               proOptions={{ hideAttribution: true }}
@@ -511,18 +584,60 @@ function BuilderInner() {
                   that exactly — pass color="transparent" so the white page
                   background shows through. */}
               <Background color="transparent" gap={1} />
-              <Controls position="bottom-right" />
-              <MiniMap zoomable pannable position="bottom-left" />
+              {/* Controls (zoom in/out, fit view / full-screen, lock) live
+                  on the LEFT edge together with the top-left "+ Add"
+                  button — user prefers all builder chrome on one side.
+                  MiniMap moves to bottom-right so it doesn't overlap. */}
+              <Controls position="bottom-left" />
+              <MiniMap zoomable pannable position="bottom-right" />
             </ReactFlow>
             </div>
           )}
 
           {/* Replyagent's "+" is a small contextual button at the top-right
               of the canvas. Keep it compact and on the right edge instead of
-              the prior big floating circle. */}
-          <div className="absolute right-4 top-4">
+              the prior big floating circle.
+
+              Auto-wire priority:
+                1. Selected node (if it can accept a child) — matches the
+                   explicit "insert here" intent.
+                2. Fallback: most-recently-added leaf node (no outgoing edge,
+                   not multi-branch) so the flow keeps chaining forward even
+                   when the user forgets to click the tail first.
+                3. Nothing on canvas that can accept a child — spawn a
+                   standalone node so the click never silently no-ops.
+
+              Multi-branch parents (Randomizer / Splitter) are always
+              excluded from auto-wire — the user must pick a specific
+              branch via the per-node dot. */}
+          <div className="absolute left-4 top-4 z-10">
             <AddNodeButton
-              onPick={(type) => addNode(type)}
+              onPick={(type) => {
+                const canAcceptChild = (n: Node | null | undefined) =>
+                  !!n &&
+                  n.type !== "randomizer" &&
+                  n.type !== "splitter" &&
+                  !hasOutgoingEdge(n.id);
+
+                if (canAcceptChild(selectedNode)) {
+                  addStepBelow(selectedNode!.id, type);
+                  return;
+                }
+                // Scan from most recently added → oldest so a stray
+                // multi-branch tail doesn't shadow older valid leaves.
+                const leaf = [...state.nodes]
+                  .reverse()
+                  .find(canAcceptChild);
+                if (leaf) {
+                  addStepBelow(leaf.id, type);
+                  return;
+                }
+                // Standalone-add path — mirror the microtask re-select from
+                // addStepBelow so the sidebar always opens the newly-added
+                // node's editor even when there was no parent to wire from.
+                const orphanId = addNode(type);
+                queueMicrotask(() => actions.selectNode(orphanId));
+              }}
               connectedChannelTypes={connectedChannelTypes}
             />
           </div>
@@ -536,10 +651,14 @@ function BuilderInner() {
               y={contextMenu.y}
               connectedChannelTypes={connectedChannelTypes}
               onPick={(type) => {
-                addNode(type, {
+                const newId = addNode(type, {
                   at: { x: contextMenu.flowX, y: contextMenu.flowY },
                 });
                 setContextMenu(null);
+                // Ensure the right sidebar opens on the freshly-added node —
+                // see the note on addStepBelow's re-select for the race this
+                // works around.
+                queueMicrotask(() => actions.selectNode(newId));
               }}
               onClose={() => setContextMenu(null)}
             />
@@ -580,9 +699,18 @@ function BuilderInner() {
           // the `channel_account_id` so the user doesn't have to repeat it.
           const target = state.nodes.find((n) => n.id === targetId);
           const existing = (target?.data?.activities as any[]) ?? [];
+          // Store the field values under `properties` — this is the shape
+          // the trigger field-form (activity-editors.tsx) writes to and the
+          // canvas Start card reads from. Also stamp a per-activity `slug`
+          // so React can key rows stably even before the first save.
           const next = [
             ...existing,
-            { event, label: schema?.label ?? event, payload: prefill ?? {} },
+            {
+              slug: `trg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              event,
+              label: schema?.label ?? event,
+              properties: prefill ?? {},
+            },
           ];
           actions.updateNodeData(targetId, {
             label: "Start",
@@ -885,10 +1013,8 @@ function CanvasContextMenu({
     return () => document.removeEventListener("click", handler, { capture: true } as any);
   }, [onClose]);
 
-  // WhatsApp is always shown even before a WA account is connected so the
-  // user can scaffold the flow upfront; other channels appear only when
-  // their account is wired in.
-  const ALWAYS_VISIBLE = new Set(["whatsapp"]);
+  // Channel must be onboard (connected account exists) before it can be
+  // added — WhatsApp included. Matches AddStepDropdown / AddNodeButton.
   const ALL_CHANNELS: Array<{ type: string; label: string; icon: React.ReactNode }> = [
     { type: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="h-3.5 w-3.5 text-emerald-600" /> },
     { type: "telegram", label: "Telegram", icon: <MessageSquare className="h-3.5 w-3.5 text-sky-600" /> },
@@ -900,9 +1026,7 @@ function CanvasContextMenu({
     { type: "zapi", label: "Z-API", icon: <MessageSquare className="h-3.5 w-3.5 text-emerald-700" /> },
     { type: "evolution", label: "Evolution", icon: <MessageSquare className="h-3.5 w-3.5 text-violet-600" /> },
   ];
-  const channelItems = ALL_CHANNELS.filter(
-    (it) => ALWAYS_VISIBLE.has(it.type) || connectedChannelTypes.has(it.type),
-  );
+  const channelItems = ALL_CHANNELS.filter((it) => connectedChannelTypes.has(it.type));
 
   const featureItems: Array<{ type: string; label: string; icon: React.ReactNode }> = [
     { type: "randomizer", label: "Randomizer", icon: <Shuffle className="h-3.5 w-3.5 text-indigo-600" /> },
@@ -966,10 +1090,8 @@ function AddNodeButton({
     { type: "zapi", label: "Z-API", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-emerald-700" },
     { type: "evolution", label: "Evolution", icon: <MessageSquare className="h-3.5 w-3.5" />, color: "text-violet-600" },
   ];
-  const ALWAYS_VISIBLE = new Set(["whatsapp"]);
-  const channelItems = ALL_CHANNELS.filter(
-    (it) => ALWAYS_VISIBLE.has(it.type) || connectedChannelTypes.has(it.type),
-  );
+  // Only onboard (connected) channels can be added — WhatsApp included.
+  const channelItems = ALL_CHANNELS.filter((it) => connectedChannelTypes.has(it.type));
 
   const featureItems: Array<{ type: string; label: string; icon: React.ReactNode; color: string }> = [
     { type: "randomizer", label: "Randomizer", icon: <Shuffle className="h-3.5 w-3.5" />, color: "text-indigo-600" },
@@ -992,7 +1114,7 @@ function AddNodeButton({
           Add
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-[70vh] overflow-auto">
+      <DropdownMenuContent align="start" className="max-h-[70vh] overflow-auto">
         {channelItems.map((it) => (
           <DropdownMenuItem key={it.type} onClick={() => onPick(it.type)}>
             <span className={it.color}>{it.icon}</span>
@@ -1488,6 +1610,15 @@ function serializedEdgesFromAutomation(automation: any): Edge[] {
     id: String(f.id ?? `e${i}`),
     source: String(f.source_node_id ?? f.connector_node_id ?? f.connector_id ?? ""),
     target: String(f.target_node_id ?? f.next_node_id ?? f.next_step_id ?? ""),
+    // Arrow head on every hydrated edge so previously-saved flows also
+    // show flow direction after the reload — defaultEdgeOptions only
+    // covers new edges, not ones we push in via the edges prop.
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: "#94a3b8",
+      width: 18,
+      height: 18,
+    },
   }));
 }
 

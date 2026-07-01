@@ -548,16 +548,21 @@ export function TriggerActivitiesPanel({
                   </p>
                 )}
               </div>
-              {!isDefault && list.length > 1 && (
+              {/* Delete visible on every non-Default trigger — replyagent
+                  parity: a single "Tag applied" row without a Default is
+                  still deletable. The Default URL row is protected because
+                  the flow needs at least one entry point. */}
+              {!isDefault && (
                 <button
                   type="button"
-                  className="text-muted-foreground hover:text-destructive shrink-0"
+                  className="text-rose-500 hover:text-rose-600 shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     removeAt(idx);
                   }}
+                  title="Delete trigger"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" />
                 </button>
               )}
             </div>

@@ -1699,12 +1699,12 @@ export default function ContactsSection() {
             {/* Pagination */}
             <div className="py-3 px-5 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between bg-slate-50/30 dark:bg-transparent">
               <div className="flex items-center gap-4">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
                   {getFilteredAndSortedData().length} results
                 </span>
 
                 <div className="flex items-center gap-2 border-l border-slate-200 dark:border-slate-800 pl-4">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Rows:</span>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">Rows:</span>
                   <div className="relative" ref={dropdownRef}>
                     <button
                       type="button"
@@ -1737,7 +1737,7 @@ export default function ContactsSection() {
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
                   Page <span className="text-slate-900 dark:text-slate-200">1</span> of 1
                 </div>
                 <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl">

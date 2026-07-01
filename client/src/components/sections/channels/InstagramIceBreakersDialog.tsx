@@ -98,7 +98,7 @@ export default function InstagramIceBreakersDialog({ open, account, onClose }: P
               <MessageSquare size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Quick Starter Questions</div>
+              <div className={cn("text-[14px] font-semibold", text)}>Quick Starter Questions</div>
               <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", sub)}>
                 Add up to 4 questions shown when a user first messages{" "}
                 <span className="font-mono">@{account.username ?? account.name}</span>. Each can trigger an automation.
@@ -118,7 +118,7 @@ export default function InstagramIceBreakersDialog({ open, account, onClose }: P
               {items.map((item, i) => (
                 <div key={i} className={cn("rounded-xl border p-4 space-y-3", dark ? "bg-slate-900/60 border-slate-700" : "bg-white border-slate-200")}>
                   <div className="flex items-center gap-2">
-                    <span className={cn("text-[9px] font-black uppercase tracking-widest opacity-40 w-6 shrink-0", sub)}>Q{i + 1}</span>
+                    <span className={cn("text-[10px] font-semibold opacity-40 w-6 shrink-0", sub)}>Q{i + 1}</span>
                     <input
                       value={item.text}
                       maxLength={60}
@@ -134,7 +134,7 @@ export default function InstagramIceBreakersDialog({ open, account, onClose }: P
                     </button>
                   </div>
                   <div className="pl-8">
-                    <label className={cn("text-[10px] font-black uppercase tracking-widest opacity-50 mb-1 block", sub)}>Trigger automation</label>
+                    <label className={cn("text-[11px] font-semibold opacity-50 mb-1 block", sub)}>Trigger automation</label>
                     <select
                       value={item.automationId ?? ""}
                       onChange={(e) => setItems((p) => p.map((it, idx) => idx === i ? { ...it, automationId: e.target.value || null } : it))}
@@ -157,7 +157,7 @@ export default function InstagramIceBreakersDialog({ open, account, onClose }: P
                 <button
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
-                  className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+                  className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
                 >
                   <Trash2 size={12} /> Clear all
                 </button>
@@ -165,7 +165,7 @@ export default function InstagramIceBreakersDialog({ open, account, onClose }: P
               {items.length < 4 && (
                 <button
                   onClick={() => setItems((p) => [...p, { text: "", automationId: null }])}
-                  className="h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
+                  className="h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
                 >
                   <Plus size={12} /> Add Question
                 </button>
@@ -175,14 +175,14 @@ export default function InstagramIceBreakersDialog({ open, account, onClose }: P
               <button
                 onClick={onClose}
                 disabled={saveMutation.isPending || deleteMutation.isPending}
-                className={cn("h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
+                className={cn("h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
               >
                 Close
               </button>
               <button
                 onClick={() => saveMutation.mutate()}
                 disabled={saveMutation.isPending || items.length === 0}
-                className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saveMutation.isPending ? "Saving…" : "Save"}
               </button>

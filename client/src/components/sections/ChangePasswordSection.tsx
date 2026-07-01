@@ -122,8 +122,8 @@ const ChangePasswordSection = () => {
     dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900",
   );
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // Live client-side validation feeds the inline rule checklist + disables
   // Save. Server still re-validates, so a successful API call is a guarantee
@@ -215,10 +215,10 @@ const ChangePasswordSection = () => {
               <Lock className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
-                {t("change_password", { defaultValue: "Change Password" })}
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
+                {t("change_password", { defaultValue: "Change password" })}
               </h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60 max-w-2xl", sub)}>
                 {t("password.subtitle", {
                   defaultValue: "Update the password for your user account.",
                 })}
@@ -239,7 +239,7 @@ const ChangePasswordSection = () => {
         <div className="p-8 space-y-6">
           {/* Requirements */}
           <div className={cn("rounded-[1.5rem] border p-6 space-y-3", softBg, softBorder)}>
-            <p className={cn("text-[11px] font-black uppercase tracking-widest text-primary")}>
+            <p className={cn("text-[12px] font-semibold text-primary")}>
               {t("password.requirements", { defaultValue: "Password Requirements" })}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

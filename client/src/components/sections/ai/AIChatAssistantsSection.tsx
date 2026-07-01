@@ -85,17 +85,17 @@ export default function AIChatAssistantsSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { data: agentsData, isLoading } = useQuery({
     queryKey: ["/api/ai/agents"],
@@ -241,7 +241,7 @@ export default function AIChatAssistantsSection() {
                   <Bot className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                  <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                     {selectedAgent ? "Edit Assistant" : "Create New Assistant"}
                   </h1>
                   <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
@@ -273,7 +273,7 @@ export default function AIChatAssistantsSection() {
                       key={tab.value}
                       value={tab.value}
                       className={cn(
-                        "flex items-center gap-2 px-1 py-5 rounded-none text-[11px] font-black uppercase tracking-widest transition-all shadow-none bg-transparent border-b-2 border-transparent",
+                        "flex items-center gap-2 px-1 py-5 rounded-none text-[12px] font-semibold transition-all shadow-none bg-transparent border-b-2 border-transparent",
                         "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-primary",
                         "hover:text-primary",
                         dark ? "text-slate-500" : "text-slate-400"
@@ -417,7 +417,7 @@ export default function AIChatAssistantsSection() {
                               type="button"
                               onClick={() => setFormData({ ...formData, history_limit: val })}
                               className={cn(
-                                "flex-1 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border",
+                                "flex-1 h-11 rounded-xl text-[12px] font-semibold transition-all border",
                                 active
                                   ? "bg-primary text-white border-primary shadow-md shadow-primary/20"
                                   : dark
@@ -437,7 +437,7 @@ export default function AIChatAssistantsSection() {
 
               {/* ── Knowledge ── */}
               <TabsContent value="knowledge" className="p-8 outline-none space-y-5">
-                <h4 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>Add Assistant Files</h4>
+                <h4 className={cn("text-[13px] font-semibold", text)}>Add Assistant Files</h4>
 
                 <div className="flex gap-2">
                   {([
@@ -452,7 +452,7 @@ export default function AIChatAssistantsSection() {
                         type="button"
                         onClick={() => setFormData({ ...formData, source_type: opt.v })}
                         className={cn(
-                          "flex-1 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border",
+                          "flex-1 h-11 rounded-xl text-[12px] font-semibold transition-all border",
                           active
                             ? "border-primary text-primary bg-primary/5"
                             : dark
@@ -472,7 +472,7 @@ export default function AIChatAssistantsSection() {
                       <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
                         <FileText size={20} />
                       </div>
-                      <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Upload PDF Files</h3>
+                      <h3 className={cn("text-[14px] font-semibold", text)}>Upload PDF Files</h3>
                       <p className={cn("text-[11px] font-medium opacity-60", sub)}>Upload your PDF knowledge base files here.</p>
                       <button
                         type="button"
@@ -488,7 +488,7 @@ export default function AIChatAssistantsSection() {
                     <div className="space-y-3 max-w-xl mx-auto">
                       <div className={cn("flex border rounded-xl overflow-hidden h-11 items-center transition-all",
                         dark ? "bg-slate-950/50 border-slate-800 focus-within:border-primary/40" : "bg-white border-slate-200 focus-within:border-primary/40")}>
-                        <span className={cn("px-3 text-[10px] font-black uppercase tracking-widest border-r h-full flex items-center",
+                        <span className={cn("px-3 text-[11px] font-semibold border-r h-full flex items-center",
                           dark ? "text-slate-500 border-slate-800 bg-slate-900/40" : "text-slate-400 border-slate-200 bg-slate-50")}>https://</span>
                         <Input placeholder="example.com" className={cn(inputCls, "h-full border-0 rounded-none focus-visible:ring-0")} />
                       </div>
@@ -523,7 +523,7 @@ export default function AIChatAssistantsSection() {
                     <Zap size={22} />
                   </div>
                   <div className="space-y-1 max-w-md">
-                    <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Function Calling</h3>
+                    <h3 className={cn("text-[14px] font-semibold", text)}>Function Calling</h3>
                     <p className={cn("text-[11px] font-medium opacity-60 leading-relaxed", sub)}>
                       Define custom functions that the AI can call to interact with your business logic or external APIs.
                     </p>
@@ -566,14 +566,14 @@ export default function AIChatAssistantsSection() {
                 <Bot className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>AI Chat Assistants</h1>
-                <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>AI chat assistants</h1>
+                <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
                   Feed your assistant with custom data.
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className={cn("flex items-center gap-3 px-3 h-10 rounded-xl border text-[10px] font-black uppercase tracking-widest", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
+              <div className={cn("flex items-center gap-3 px-3 h-10 rounded-xl border text-[11px] font-semibold", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
                 <span>Active: {totalActive}</span>
                 <div className="w-px h-3" style={{ backgroundColor: dark ? "rgb(30 41 59)" : "rgb(226 232 240)" }} />
                 <span>Limit: {limit}</span>
@@ -609,11 +609,11 @@ export default function AIChatAssistantsSection() {
                 <table className="w-full">
                   <thead>
                     <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/30" : "bg-white/60")}>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Model</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>AI Calls</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
-                      <th className={cn("py-4 px-6 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Name</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Model</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>AI Calls</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Status</th>
+                      <th className={cn("py-4 px-6 text-right text-[11px] font-semibold", sub)}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -626,7 +626,7 @@ export default function AIChatAssistantsSection() {
                           </p>
                         </td>
                         <td className={cn("py-3 px-6 text-[12px] font-bold", text)}>
-                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold">
                             {agent.model}
                           </Badge>
                         </td>
@@ -701,7 +701,7 @@ export default function AIChatAssistantsSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Assistant?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Assistant?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">"{agentToDelete?.name}"</span> will be permanently removed and all active conversations with this assistant will stop.
                 </p>
@@ -711,7 +711,7 @@ export default function AIChatAssistantsSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={confirmDeleteAgent}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>
@@ -727,7 +727,7 @@ export default function AIChatAssistantsSection() {
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>{children}</label>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>{children}</label>
   );
 }
 
@@ -770,8 +770,8 @@ function SliderRow({
         className="w-full accent-primary"
       />
       <div className="flex justify-between">
-        <span className={cn("text-[10px] font-black uppercase tracking-widest opacity-60", sub)}>{leftLabel}</span>
-        <span className={cn("text-[10px] font-black uppercase tracking-widest opacity-60", sub)}>{rightLabel}</span>
+        <span className={cn("text-[11px] font-semibold opacity-60", sub)}>{leftLabel}</span>
+        <span className={cn("text-[11px] font-semibold opacity-60", sub)}>{rightLabel}</span>
       </div>
     </div>
   );

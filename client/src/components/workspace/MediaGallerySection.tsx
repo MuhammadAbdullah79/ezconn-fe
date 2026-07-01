@@ -57,10 +57,10 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
   );
 
   const primaryBtn =
-    "h-11 px-6 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-6 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const outlineBtn = cn(
-    "h-10 px-4 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-4 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
@@ -312,9 +312,9 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
               <Film className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Media Gallery</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
-                Efficiently manage and organize the Workspace media right here.
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Media gallery</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
+                Efficiently manage and organize the workspace media right here.
               </p>
             </div>
           </div>
@@ -333,7 +333,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
               ) : (
                 <div className="flex items-center gap-2 px-3 h-10">
                   <Folder size={14} className="text-primary" />
-                  <span className={cn("text-[11px] font-black uppercase tracking-widest", sub)}>Root</span>
+                  <span className={cn("text-[12px] font-semibold", sub)}>Root</span>
                 </div>
               )}
 
@@ -426,7 +426,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                   key={f}
                   onClick={() => setFilter(f)}
                   className={cn(
-                    "h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
+                    "h-8 px-3 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap",
                     active
                       ? "bg-primary/10 text-primary"
                       : dark ? "text-slate-500 hover:text-primary hover:bg-slate-900/40" : "text-slate-500 hover:text-primary hover:bg-slate-100/60"
@@ -443,7 +443,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-64 gap-3">
                 <Loader2 className="w-7 h-7 animate-spin text-primary" />
-                <p className={cn("text-[11px] font-bold opacity-60 uppercase tracking-widest", sub)}>Loading files...</p>
+                <p className={cn("text-[11px] font-bold opacity-60", sub)}>Loading files...</p>
               </div>
             ) : filteredMedia.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
@@ -451,7 +451,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                   <Film className="w-6 h-6 text-primary" />
                 </div>
                 <div className="space-y-1">
-                  <p className={cn("text-[13px] font-black uppercase tracking-widest", text)}>No Files Found</p>
+                  <p className={cn("text-[14px] font-semibold", text)}>No Files Found</p>
                   <p className={cn("text-[11px] font-medium opacity-60 max-w-xs", sub)}>
                     Upload your first file to get started.
                   </p>
@@ -577,10 +577,10 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                 <Table>
                   <TableHeader>
                     <TableRow className={cn("border-b hover:bg-transparent", softBorder)}>
-                      <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Name</TableHead>
-                      <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Type</TableHead>
-                      <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Size</TableHead>
-                      <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest text-right", sub)}>Actions</TableHead>
+                      <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Name</TableHead>
+                      <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Type</TableHead>
+                      <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Size</TableHead>
+                      <TableHead className={cn("py-4 px-6 text-[11px] font-semibold text-right", sub)}>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -611,7 +611,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                           </div>
                         </TableCell>
                         <TableCell className="py-3 px-6">
-                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold">
                             {item.media_type}
                           </Badge>
                         </TableCell>
@@ -662,7 +662,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                 <Pencil size={16} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Rename File</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Rename File</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>Update the file name</p>
               </div>
             </div>
@@ -698,7 +698,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete File?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete File?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   This action cannot be undone. The file will be permanently removed.
                 </p>
@@ -708,7 +708,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => { if (deleteId) deleteMutation.mutate(deleteId); setDeleteId(null); }}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>
@@ -733,7 +733,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                   <UploadCloud size={16} />
                 </div>
                 <div>
-                  <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <h2 className={cn("text-[14px] font-semibold", text)}>
                     {uploadMutation.isPending ? "Uploading..." : "Upload Files"}
                   </h2>
                   <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -758,7 +758,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                 <Loader2 className="w-10 h-10 text-primary animate-spin" />
                 <div className="w-full space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className={cn("text-[11px] font-black uppercase tracking-widest", text)}>
+                    <span className={cn("text-[12px] font-semibold", text)}>
                       {uploadProgress < 100 ? "Uploading" : "Finalizing"}
                     </span>
                     <span className={cn("text-[13px] font-black", "text-primary")}>{uploadProgress}%</span>
@@ -792,7 +792,7 @@ export default function MediaGallerySection({ onSelect }: MediaGallerySectionPro
                   <Upload size={20} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <p className={cn("text-[12px] font-black uppercase tracking-widest", text)}>Drop files here</p>
+                  <p className={cn("text-[13px] font-semibold", text)}>Drop files here</p>
                   <p className={cn("text-[11px] font-medium opacity-60 mt-1", sub)}>
                     or <span className="text-primary font-black">browse</span> to choose files
                   </p>

@@ -44,17 +44,17 @@ export default function APISection() {
   const softBorder = dark ? "border-slate-800" : "border-slate-100";
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { data: apiKeys, isLoading } = useQuery({
     queryKey: ["/api/integrations/api-keys"],
@@ -111,7 +111,7 @@ export default function APISection() {
                 <Code2 className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>API</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>API</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
                   Manage your API credentials to integrate external applications.
                 </p>
@@ -121,7 +121,7 @@ export default function APISection() {
             <div className="flex items-center gap-2 shrink-0">
               <div className={cn("px-3 py-1.5 rounded-lg border flex items-center gap-2", softBorder, dark ? "bg-slate-900/50" : "bg-white")}>
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Production Active</span>
+                <span className={cn("text-[11px] font-semibold", sub)}>Production Active</span>
               </div>
             </div>
           </div>
@@ -141,7 +141,7 @@ export default function APISection() {
                       Use this token for Digital Connect authentication.
                     </p>
                   </div>
-                  <Badge variant="outline" className="h-6 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                  <Badge variant="outline" className="h-6 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                     Active
                   </Badge>
                 </div>
@@ -150,7 +150,7 @@ export default function APISection() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Lock size={12} className="text-primary" />
-                    <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                    <span className={cn("text-[11px] font-semibold", sub)}>
                       Private Token
                     </span>
                   </div>
@@ -195,7 +195,7 @@ export default function APISection() {
                     <Key size={13} />
                   </div>
                   <p className={cn("text-[11px] font-medium leading-relaxed", sub)}>
-                    <span className={cn("font-black uppercase tracking-widest", text)}>Security Notice:</span>{" "}
+                    <span className={cn("font-semibold", text)}>Security Notice:</span>{" "}
                     Never expose this token in client-side code or public repositories.
                   </p>
                 </div>
@@ -246,7 +246,7 @@ export default function APISection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Revoke API Key?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Revoke API Key?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   This token will be permanently removed and any integrations using it will stop working.
                 </p>
@@ -256,7 +256,7 @@ export default function APISection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => { deleteMutation.mutate(currentKey.id); setShowDeleteConfirm(false); }}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Revoke
               </AlertDialogAction>

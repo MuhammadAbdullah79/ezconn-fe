@@ -38,7 +38,16 @@ function InsightsDashboardContent() {
   ];
 
   return (
-    <div className="p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out" data-testid="insights-dashboard">
+    // Outer floating card — mirrors the header + settings treatment so
+    // the Insights page reads as its own rounded panel with visible
+    // gap and shadow, not an edge-to-edge sheet flush against the
+    // header. m-3 keeps a consistent 12px inset on ALL sides — matches
+    // the settings p-3 wrapper so the vertical gap above the card
+    // (below the header) reads the same across pages.
+    <div
+      className="m-3 p-6 space-y-8 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out"
+      data-testid="insights-dashboard"
+    >
       {/* Header: Title (left) + Tabs pill (right, slightly shifted away from the right edge
           via mr-* so it doesn't crowd the page edge — actions panel is portaled into the
           global header next to the bell, separately). */}

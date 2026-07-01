@@ -50,7 +50,7 @@ export default function WhiteLabelSection() {
   );
 
   const primaryBtn =
-    "h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20";
+    "h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20";
 
   const { data: brandingData, isLoading } = useQuery<any>({
     queryKey: ["/api/workspaces/branding"],
@@ -308,13 +308,13 @@ export default function WhiteLabelSection() {
               <BadgeCheck className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>White Label</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
-                Change color, logo and favicon of your Workspace
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>White label</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
+                Change color, logo and favicon of your workspace
               </p>
             </div>
           </div>
-          <div className={cn("px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
+          <div className={cn("px-3 py-1.5 rounded-lg border text-[10px] font-semibold flex items-center gap-1.5", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
             <Sparkles size={11} className="text-primary" /> Premium Branding
           </div>
         </div>
@@ -329,7 +329,7 @@ export default function WhiteLabelSection() {
                     key={tab.value}
                     value={tab.value}
                     className={cn(
-                      "flex items-center gap-2 px-1 py-5 rounded-none text-[11px] font-black uppercase tracking-widest transition-all shadow-none bg-transparent border-b-2 border-transparent",
+                      "flex items-center gap-2 px-1 py-5 rounded-none text-[12px] font-semibold transition-all shadow-none bg-transparent border-b-2 border-transparent",
                       "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-primary",
                       "hover:text-primary",
                       dark ? "text-slate-500" : "text-slate-400"
@@ -443,7 +443,7 @@ export default function WhiteLabelSection() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-1 h-4 bg-primary rounded-full" />
-                  <h4 className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Brand</h4>
+                  <h4 className={cn("text-[12px] font-semibold", text)}>Brand</h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <ColorPicker dark={dark} label="Main Theme" value={colors.mainTheme} onChange={(v) => handleColorChange("mainTheme", v)} />
@@ -454,7 +454,7 @@ export default function WhiteLabelSection() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-1 h-4 bg-primary rounded-full" />
-                  <h4 className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Chat Bubbles</h4>
+                  <h4 className={cn("text-[12px] font-semibold", text)}>Chat Bubbles</h4>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <ColorPicker dark={dark} label="Incoming Bubble" value={colors.incomingBubble} onChange={(v) => handleColorChange("incomingBubble", v)} />
@@ -487,7 +487,7 @@ export default function WhiteLabelSection() {
                           {currentDomain.domain}
                         </a>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Active</span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Active</span>
                           <span className={cn("text-[10px] font-bold opacity-60", sub)}>subdomain: {currentDomain.sub_domain}</span>
                         </div>
                       </div>
@@ -495,7 +495,7 @@ export default function WhiteLabelSection() {
                     <button
                       onClick={() => deleteDomainMutation.mutate()}
                       disabled={deleteDomainMutation.isPending}
-                      className="h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 disabled:opacity-50"
+                      className="h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 disabled:opacity-50"
                     >
                       <Trash2 size={12} /> {deleteDomainMutation.isPending ? "Removing..." : "Remove"}
                     </button>
@@ -510,7 +510,7 @@ export default function WhiteLabelSection() {
                   <div className="flex items-center gap-3 flex-wrap max-w-3xl">
                     <div className={cn("flex border rounded-xl overflow-hidden h-11 items-center transition-all flex-1 min-w-[280px]",
                       dark ? "bg-slate-950/50 border-slate-800 focus-within:border-primary/40" : "bg-white border-slate-200 focus-within:border-primary/40")}>
-                      <span className={cn("px-3 text-[10px] font-black uppercase tracking-widest border-r h-full flex items-center",
+                      <span className={cn("px-3 text-[11px] font-semibold border-r h-full flex items-center",
                         dark ? "text-slate-500 border-slate-800 bg-slate-900/40" : "text-slate-400 border-slate-200 bg-slate-50")}>https://</span>
                       <input
                         placeholder="app"
@@ -565,13 +565,13 @@ export default function WhiteLabelSection() {
                         <FieldLabel dark={dark}>Verified email</FieldLabel>
                         <div className="flex items-center gap-2 mt-1">
                           <p className={cn("text-[13px] font-black truncate", text)}>{notificationEmail.email}</p>
-                          <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Verified</span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Verified</span>
                         </div>
                       </div>
                       <button
                         onClick={() => deleteEmailMutation.mutate(String(notificationEmail.id))}
                         disabled={deleteEmailMutation.isPending}
-                        className="h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 disabled:opacity-50 shrink-0"
+                        className="h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 disabled:opacity-50 shrink-0"
                       >
                         <Trash2 size={12} /> Remove
                       </button>
@@ -586,7 +586,7 @@ export default function WhiteLabelSection() {
                       description={`Add these DNS records for ${notificationEmail.domain} at your DNS provider, then click Verify. Propagation can take a few minutes to hours.`}
                     />
                     <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder)}>
-                      <div className={cn("grid grid-cols-12 px-5 py-3 text-[9px] font-black uppercase tracking-widest", dark ? "bg-slate-900/40 text-slate-400" : "bg-slate-50 text-slate-500")}>
+                      <div className={cn("grid grid-cols-12 px-5 py-3 text-[10px] font-semibold", dark ? "bg-slate-900/40 text-slate-400" : "bg-slate-50 text-slate-500")}>
                         <div className="col-span-2">Type</div>
                         <div className="col-span-5">Hostname</div>
                         <div className="col-span-5">Value</div>
@@ -606,7 +606,7 @@ export default function WhiteLabelSection() {
                       <button
                         onClick={() => deleteEmailMutation.mutate(String(notificationEmail.id))}
                         disabled={deleteEmailMutation.isPending}
-                        className={cn("h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all border-rose-500/30 text-rose-500 hover:bg-rose-500/10 disabled:opacity-50")}
+                        className={cn("h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all border-rose-500/30 text-rose-500 hover:bg-rose-500/10 disabled:opacity-50")}
                       >
                         Remove
                       </button>
@@ -627,7 +627,7 @@ export default function WhiteLabelSection() {
                     <Mail className="w-8 h-8 text-primary transition-transform group-hover:scale-110" />
                   </div>
                   <div className="space-y-1.5 max-w-sm">
-                    <h3 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Notification E-mail</h3>
+                    <h3 className={cn("text-[16px] font-bold tracking-tight", text)}>Notification E-mail</h3>
                     <p className={cn("text-[12px] font-medium leading-relaxed opacity-60", sub)}>
                       Integrate your e-mail to send branded agent invitation and forgot password emails.
                     </p>
@@ -670,7 +670,7 @@ export default function WhiteLabelSection() {
                     <button
                       onClick={() => setShowEmailForm(false)}
                       className={cn(
-                        "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all",
+                        "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all",
                         dark ? "border-slate-800 text-slate-300 hover:border-slate-700" : "border-slate-200 text-slate-700 hover:border-slate-300"
                       )}
                     >
@@ -701,7 +701,7 @@ function SectionHeading({ dark, title, description }: { dark: boolean; title: st
   const sub  = dark ? "text-slate-500" : "text-slate-400";
   return (
     <div className="space-y-1.5">
-      <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>{title}</h3>
+      <h3 className={cn("text-[14px] font-semibold", text)}>{title}</h3>
       {description && (
         <p className={cn("text-[11px] font-medium leading-relaxed opacity-60 max-w-2xl", sub)}>{description}</p>
       )}
@@ -712,7 +712,7 @@ function SectionHeading({ dark, title, description }: { dark: boolean; title: st
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>{children}</label>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>{children}</label>
   );
 }
 
@@ -765,7 +765,7 @@ function DnsRecordRow({
   return (
     <div className={cn("grid grid-cols-12 items-center px-5 py-3 border-t gap-2", border)}>
       <div className="col-span-2 flex items-center gap-1.5">
-        <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest", dark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600")}>{type}</span>
+        <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-semibold", dark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600")}>{type}</span>
         {verified ? (
           <CheckCircle2 size={12} className="text-emerald-500" />
         ) : (

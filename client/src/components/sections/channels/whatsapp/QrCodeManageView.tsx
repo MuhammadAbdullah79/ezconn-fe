@@ -450,28 +450,28 @@ export default function QrCodeManageView({
     const s = String(status ?? "").toUpperCase();
     if (s === "CONNECTED") {
       return (
-        <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+        <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
           Connected
         </Badge>
       );
     }
     if (s === "PENDING" || s === "DISCONNECTED") {
       return (
-        <Badge variant="outline" className="h-5 px-2 rounded-md border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest">
+        <Badge variant="outline" className="h-5 px-2 rounded-md border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
           Disconnected
         </Badge>
       );
     }
     if (s === "FAILED") {
       return (
-        <Badge variant="outline" className="h-5 px-2 rounded-md border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[9px] font-black uppercase tracking-widest">
+        <Badge variant="outline" className="h-5 px-2 rounded-md border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[10px] font-semibold">
           Failed
         </Badge>
       );
     }
     if (s === "DELETING" || s === "DELETED") return null;
     return (
-      <Badge variant="outline" className="h-5 px-2 rounded-md border-slate-300 bg-slate-50 text-slate-600 text-[9px] font-black uppercase tracking-widest">
+      <Badge variant="outline" className="h-5 px-2 rounded-md border-slate-300 bg-slate-50 text-slate-600 text-[10px] font-semibold">
         {s.toLowerCase()}
       </Badge>
     );
@@ -481,13 +481,13 @@ export default function QrCodeManageView({
     const p = (provider ?? "zapi").toLowerCase();
     if (p === "uazapi") {
       return (
-        <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+        <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
           New
         </Badge>
       );
     }
     return (
-      <Badge variant="outline" className="h-5 px-2 rounded-md border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest">
+      <Badge variant="outline" className="h-5 px-2 rounded-md border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400 text-[10px] font-semibold">
         Legacy
       </Badge>
     );
@@ -500,7 +500,7 @@ export default function QrCodeManageView({
       {mode === "list" && (
         <div className="flex items-center justify-between">
           <div>
-            <h2 className={cn("text-[15px] font-black uppercase tracking-widest", text)}>
+            <h2 className={cn("text-[16px] font-semibold", text)}>
               Z-API instances
             </h2>
             <p className={cn("text-[11px] font-bold opacity-60 mt-0.5", sub)}>
@@ -512,7 +512,7 @@ export default function QrCodeManageView({
               resetCreateForm();
               setMode("new");
             }}
-            className="h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
+            className="h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2"
           >
             <Plus size={12} /> Create instance
           </button>
@@ -561,7 +561,7 @@ export default function QrCodeManageView({
                 resetCreateForm();
                 setMode("new");
               }}
-              className="h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
+              className="h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
             >
               <Plus size={12} /> Create instance
             </button>
@@ -715,7 +715,7 @@ export default function QrCodeManageView({
                     {/* Code field (read-only + copy) */}
                     {instance.code && (
                       <div className={cn("flex items-center gap-2 p-3 rounded-xl border", softBorder, dark ? "bg-slate-900/40" : "bg-white")}>
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Code</span>
+                        <span className={cn("text-[11px] font-semibold", sub)}>Code</span>
                         <code className={cn("text-[12px] font-mono font-bold flex-1 truncate", text)}>{instance.code}</code>
                         <button
                           onClick={() => copyCode(instance.code!)}
@@ -729,14 +729,14 @@ export default function QrCodeManageView({
                     {/* Phone number */}
                     {instance.phone_number && (
                       <div className={cn("flex items-center gap-2 p-3 rounded-xl border", softBorder, dark ? "bg-slate-900/40" : "bg-white")}>
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Phone</span>
+                        <span className={cn("text-[11px] font-semibold", sub)}>Phone</span>
                         <span className={cn("text-[12px] font-bold", text)}>{instance.phone_number}</span>
                       </div>
                     )}
 
                     {/* Queue count */}
                     <div className={cn("flex items-center gap-2 p-3 rounded-xl border", softBorder, dark ? "bg-slate-900/40" : "bg-white")}>
-                      <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Queue</span>
+                      <span className={cn("text-[11px] font-semibold", sub)}>Queue</span>
                       {queueCountMutation.isPending && queueCountMutation.variables === instance.id ? (
                         <Loader2 size={14} className="animate-spin text-primary" />
                       ) : typeof instance.count !== "undefined" ? (
@@ -763,7 +763,7 @@ export default function QrCodeManageView({
         <div className={cn("rounded-[1.5rem] border p-6 space-y-5", softBg, softBorder)}>
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={cn("text-[14px] font-black uppercase tracking-widest", text)}>Create instance</h3>
+              <h3 className={cn("text-[15px] font-semibold", text)}>Create instance</h3>
               <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>Enter a friendly name and Z-API credentials.</p>
             </div>
             <button
@@ -779,7 +779,7 @@ export default function QrCodeManageView({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Instance name</label>
+              <label className={cn("text-[11px] font-semibold", sub)}>Instance name</label>
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value.slice(0, 50))}
@@ -822,7 +822,7 @@ export default function QrCodeManageView({
             <button
               onClick={handleCreate}
               disabled={createMutation.isPending}
-              className="h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-primary/20"
+              className="h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold flex items-center gap-2 shadow-lg shadow-primary/20"
             >
               {createMutation.isPending ? (
                 <>
@@ -848,7 +848,7 @@ export default function QrCodeManageView({
                   <QrCode size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     Scan to connect
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -883,7 +883,7 @@ export default function QrCodeManageView({
               </button>
               <button
                 onClick={() => { setQrInstance(null); setQrImage(null); }}
-                className="h-11 px-6 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest"
+                className="h-11 px-6 rounded-xl bg-primary text-white text-[11px] font-semibold"
               >
                 Close
               </button>
@@ -902,7 +902,7 @@ export default function QrCodeManageView({
                   <ReplyAll size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     Default Auto-reply
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -914,7 +914,7 @@ export default function QrCodeManageView({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Select automation</label>
+                <label className={cn("text-[11px] font-semibold", sub)}>Select automation</label>
                 <select
                   value={drAutomationId ?? ""}
                   onChange={(e) => setDrAutomationId(e.target.value || null)}
@@ -927,7 +927,7 @@ export default function QrCodeManageView({
                 </select>
               </div>
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Trigger</label>
+                <label className={cn("text-[11px] font-semibold", sub)}>Trigger</label>
                 <select
                   value={drInterval}
                   onChange={(e) => setDrInterval(e.target.value)}
@@ -955,7 +955,7 @@ export default function QrCodeManageView({
                       const aid = drAutomationId ?? drInstance?.auto_reply_automation_id;
                       if (aid) { setDrInstance(null); setLocation(`/automations/${aid}`); }
                     }}
-                    className="h-11 px-6 rounded-xl border border-primary/30 text-primary hover:bg-primary/5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                    className="h-11 px-6 rounded-xl border border-primary/30 text-primary hover:bg-primary/5 text-[11px] font-semibold flex items-center gap-2"
                   >
                     <ExternalLink size={12} /> View Automation
                   </button>
@@ -968,7 +968,7 @@ export default function QrCodeManageView({
                         auto_reply_interval: drInterval,
                       })
                     }
-                    className="h-11 px-6 rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-500/5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                    className="h-11 px-6 rounded-xl border border-rose-500/30 text-rose-500 hover:bg-rose-500/5 text-[11px] font-semibold flex items-center gap-2"
                   >
                     <Trash2 size={12} /> Remove
                   </button>
@@ -987,7 +987,7 @@ export default function QrCodeManageView({
                   })
                 }
                 disabled={autoReplyMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-primary/20"
+                className="h-11 px-7 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 shadow-lg shadow-primary/20"
               >
                 {autoReplyMutation.isPending ? (
                   <>
@@ -1014,7 +1014,7 @@ export default function QrCodeManageView({
                   <Pencil size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Rename instance</DialogTitle>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>Rename instance</DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                     Letters only, max 50 characters.
                   </DialogDescription>
@@ -1048,7 +1048,7 @@ export default function QrCodeManageView({
                   renameMutation.mutate({ id: renameInstance!.id, name: renameValue.trim() });
                 }}
                 disabled={renameMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-primary/20"
+                className="h-11 px-7 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 shadow-lg shadow-primary/20"
               >
                 {renameMutation.isPending ? "Saving" : "Save"}
               </button>
@@ -1066,7 +1066,7 @@ export default function QrCodeManageView({
                 <CircleAlert size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete instance?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete instance?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{deleteInstance?.name}</span> will be removed and its chats will stop syncing.
                 </p>
@@ -1087,7 +1087,7 @@ export default function QrCodeManageView({
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => deleteInstance && deleteMutation.mutate(deleteInstance.id)}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-500/20"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold flex items-center gap-2 shadow-lg shadow-rose-500/20"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>
@@ -1105,7 +1105,7 @@ export default function QrCodeManageView({
                 <PlugZap size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Disconnect instance?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Disconnect instance?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                   The number will stop receiving WhatsApp messages until you scan the QR again.
                 </p>
@@ -1117,7 +1117,7 @@ export default function QrCodeManageView({
                 onClick={() =>
                   disconnectInstance && disconnectMutation.mutate(disconnectInstance.id)
                 }
-                className="h-11 px-7 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-semibold flex items-center gap-2"
               >
                 Disconnect
               </AlertDialogAction>
@@ -1135,7 +1135,7 @@ export default function QrCodeManageView({
                 <Layers size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Clear queued items?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Clear queued items?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                   All pending outgoing messages waiting in this instance's queue will be deleted permanently.
                 </p>
@@ -1147,7 +1147,7 @@ export default function QrCodeManageView({
                 onClick={() =>
                   clearQueueInstance && clearQueueMutation.mutate(clearQueueInstance.id)
                 }
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold flex items-center gap-2"
               >
                 Yes, clear
               </AlertDialogAction>

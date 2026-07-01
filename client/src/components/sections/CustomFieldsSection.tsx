@@ -286,16 +286,16 @@ export default function CustomFieldsSection() {
     dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900",
   );
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // ── Data ─────────────────────────────────────────────────────────
   const { data: enums } = useQuery<EnumsResponse>({
@@ -734,9 +734,9 @@ export default function CustomFieldsSection() {
                 <Database className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Custom Fields</h1>
-                <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
-                  Manage custom fields and link them to Contacts, Companies, or Opportunities.
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Custom fields</h1>
+                <p className={cn("text-[11px] font-medium mt-0.5 opacity-60 max-w-2xl", sub)}>
+                  Manage custom fields and link them to contacts, companies, or opportunities.
                 </p>
               </div>
             </div>
@@ -810,7 +810,7 @@ export default function CustomFieldsSection() {
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                  <span className={cn("text-[11px] font-semibold", sub)}>
                     {totalFields} of {WORKSPACE_FIELD_LIMIT}
                   </span>
                   <select
@@ -833,13 +833,13 @@ export default function CustomFieldsSection() {
                 <table className="w-full">
                   <thead>
                     <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                      <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                      <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>ID</th>
-                      <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Content Type</th>
-                      <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Data Format</th>
-                      <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>For</th>
-                      <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Feeder</th>
-                      <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                      <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Name</th>
+                      <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>ID</th>
+                      <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Content Type</th>
+                      <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Data Format</th>
+                      <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>For</th>
+                      <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Feeder</th>
+                      <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -938,7 +938,7 @@ export default function CustomFieldsSection() {
                 </table>
               </div>
 
-              <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+              <div className={cn("px-6 py-3 border-t text-[11px] font-semibold", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
                 Showing {fields.length} of {totalFields} custom fields
               </div>
             </div>
@@ -956,7 +956,7 @@ export default function CustomFieldsSection() {
                   <Database size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     {isEditMode ? "Edit Custom Field" : "Create Custom Field"}
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -1088,7 +1088,7 @@ export default function CustomFieldsSection() {
                           )}
                         >
                           <Icon size={28} className={selected ? "text-primary" : sub.includes("white") ? "text-slate-400" : "text-slate-500"} />
-                          <span className={cn("text-[11px] font-black uppercase tracking-widest", text)}>{opt.text}</span>
+                          <span className={cn("text-[12px] font-semibold", text)}>{opt.text}</span>
                         </button>
                       );
                     })}
@@ -1123,7 +1123,7 @@ export default function CustomFieldsSection() {
                             )}
                           >
                             <Icon size={18} className={selected ? "text-primary" : "text-slate-500"} />
-                            <span className={cn("text-[11px] font-black uppercase tracking-widest", text)}>{opt.label}</span>
+                            <span className={cn("text-[12px] font-semibold", text)}>{opt.label}</span>
                           </button>
                         );
                       })}
@@ -1155,7 +1155,7 @@ export default function CustomFieldsSection() {
               {/* Validations */}
               {showValidation && (form.contentType === "TEXT" || form.contentType === "NUMBER") && (
                 <div className={cn("rounded-xl border p-4 space-y-3", softBg, softBorder)}>
-                  <p className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Validations</p>
+                  <p className={cn("text-[12px] font-semibold", text)}>Validations</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className={cn(labelCls)}>
@@ -1195,7 +1195,7 @@ export default function CustomFieldsSection() {
 
               {showValidation && (form.contentType === "DATE" || form.contentType === "DATETIME") && (
                 <div className={cn("rounded-xl border p-4 space-y-3", softBg, softBorder)}>
-                  <p className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Validations</p>
+                  <p className={cn("text-[12px] font-semibold", text)}>Validations</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className={cn(labelCls)}>Date format</label>
@@ -1243,7 +1243,7 @@ export default function CustomFieldsSection() {
 
               {showValidation && form.contentType === "PHONE" && (
                 <div className={cn("rounded-xl border p-4 space-y-3", softBg, softBorder)}>
-                  <p className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Validations</p>
+                  <p className={cn("text-[12px] font-semibold", text)}>Validations</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className={cn(labelCls)}>Country</label>
@@ -1313,7 +1313,7 @@ export default function CustomFieldsSection() {
                             type="button"
                             onClick={() => setForm((p) => ({ ...p, listType: t.slug as "create" | "import", properties: [] }))}
                             className={cn(
-                              "px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-colors",
+                              "px-4 py-2 text-[12px] font-semibold transition-colors",
                               active ? "text-primary border-b-2 border-primary" : sub,
                             )}
                           >
@@ -1336,7 +1336,7 @@ export default function CustomFieldsSection() {
                             onChange={(e) => selectAllCountries(e.target.checked)}
                             className="rounded accent-[hsl(var(--primary))]"
                           />
-                          <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                          <span className={cn("text-[11px] font-semibold", sub)}>
                             Select all countries
                           </span>
                         </label>
@@ -1383,7 +1383,7 @@ export default function CustomFieldsSection() {
                             onChange={(e) => selectAllCurrencies(e.target.checked)}
                             className="rounded accent-[hsl(var(--primary))]"
                           />
-                          <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                          <span className={cn("text-[11px] font-semibold", sub)}>
                             Select all currencies
                           </span>
                         </label>
@@ -1563,7 +1563,7 @@ export default function CustomFieldsSection() {
                   <Folder size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     {editingFolder ? "Rename Folder" : "Create Folder"}
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -1620,7 +1620,7 @@ export default function CustomFieldsSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Field?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Field?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{fieldToDelete?.label ?? "This field"}</span> and every stored value will be permanently removed.
                 </p>
@@ -1631,7 +1631,7 @@ export default function CustomFieldsSection() {
               <AlertDialogAction
                 onClick={() => fieldToDelete && deleteMutation.mutate(fieldToDelete.slug)}
                 disabled={deleteMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 {deleteMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 Delete

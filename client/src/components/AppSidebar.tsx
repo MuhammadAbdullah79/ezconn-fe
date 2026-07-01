@@ -317,10 +317,16 @@ export default function AppSidebar() {
   return (
     <>
     <header className={cn(
-      "fixed top-0 left-0 right-0 z-50 h-16 transition-all duration-300 border-b no-focus-outline",
-      theme === "dark" 
-        ? "bg-[#0f172a] border-slate-800 shadow-lg" 
-        : "bg-white border-slate-200 shadow-sm"
+      // Replyagent-parity floating header — inset from every edge so the
+      // header reads as its own rounded card separated from the content
+      // panel below. Custom drop-shadow tokens push more weight below the
+      // card than Tailwind's stock shadow-lg, so the "floating above the
+      // content" cue reads clearly the way it does on replyagent's
+      // dashboard.
+      "fixed top-3 left-3 right-3 z-50 h-16 transition-all duration-300 border rounded-2xl no-focus-outline",
+      theme === "dark"
+        ? "bg-[#0f172a] border-slate-800 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)]"
+        : "bg-white border-slate-200/70 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)]"
     )}>
       <div className="flex items-center justify-between h-full px-5">
         {/* Left: Logo + EZCONN + Menu + Search */}
@@ -366,9 +372,27 @@ export default function AppSidebar() {
                   ? "bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
                   : "bg-primary/5 border-primary/10 text-slate-700 hover:bg-white hover:shadow-md hover:scale-[1.02] hover:text-primary"
               )}>
-                <div className={cn("p-1 rounded-lg transition-colors", theme === "dark" ? "bg-slate-700" : "bg-white shadow-sm")}>
-                  <LayoutGrid size={14} className="text-primary" />
-                </div>
+                {/* Nine-dot waffle icon — matches replyagent's app-launcher
+                    style menu. Rendered inline so we get exactly the 3×3
+                    filled-circle pattern rather than lucide's 2×2 grid. */}
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="text-slate-900 dark:text-white"
+                  aria-hidden="true"
+                >
+                  <circle cx="4" cy="4" r="1.5" />
+                  <circle cx="10" cy="4" r="1.5" />
+                  <circle cx="16" cy="4" r="1.5" />
+                  <circle cx="4" cy="10" r="1.5" />
+                  <circle cx="10" cy="10" r="1.5" />
+                  <circle cx="16" cy="10" r="1.5" />
+                  <circle cx="4" cy="16" r="1.5" />
+                  <circle cx="10" cy="16" r="1.5" />
+                  <circle cx="16" cy="16" r="1.5" />
+                </svg>
                 <span className="hidden md:block text-[14px] font-bold tracking-tight">Menu</span>
                 <ChevronDown size={14} className="text-gray-400 group-hover:rotate-180 transition-transform duration-300" />
               </button>
@@ -382,7 +406,7 @@ export default function AppSidebar() {
                 theme === "dark" ? "bg-[#1e293b] border-slate-700 text-slate-300" : "bg-white border-slate-100 text-slate-600"
               )}
             >
-              <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Navigation</DropdownMenuLabel>
+              <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-gray-500">Navigation</DropdownMenuLabel>
               <div className="space-y-1">
                 {menuItems.slice(0, 8).map((item) => (
                   <DropdownMenuItem key={item.label} asChild>

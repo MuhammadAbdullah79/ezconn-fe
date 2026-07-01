@@ -96,10 +96,10 @@ export default function RolesSection() {
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
@@ -274,7 +274,7 @@ export default function RolesSection() {
                 <Shield className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {editingRole ? "Edit Role" : "Create Role"}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
@@ -357,7 +357,7 @@ export default function RolesSection() {
                 {/* Stats */}
                 <div className={cn("rounded-[1.25rem] border p-4 space-y-3", dark ? "bg-slate-950/50 border-slate-800" : "bg-white border-slate-200")}>
                   <div className="flex items-center justify-between">
-                    <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Capability</span>
+                    <span className={cn("text-[11px] font-semibold", sub)}>Capability</span>
                     <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md">{pct}%</span>
                   </div>
                   <div className={cn("h-1.5 rounded-full overflow-hidden", dark ? "bg-slate-800" : "bg-slate-100")}>
@@ -369,7 +369,7 @@ export default function RolesSection() {
                       <span className={cn("text-[11px] font-bold", text)}>{enabledCount} / {totalPerms}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={cn("text-[9px] font-black uppercase tracking-widest", sub)}>All</span>
+                      <span className={cn("text-[10px] font-semibold", sub)}>All</span>
                       <Switch checked={enableAll} onCheckedChange={handleEnableAll} className="data-[state=checked]:bg-primary scale-75" />
                     </div>
                   </div>
@@ -403,7 +403,7 @@ export default function RolesSection() {
                               <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary/10 text-primary shrink-0">
                                 <Icon size={14} />
                               </div>
-                              <h2 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{group.name}</h2>
+                              <h2 className={cn("text-[13px] font-semibold", text)}>{group.name}</h2>
                               {count > 0 && (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-primary/10 text-primary">{count}</span>
                               )}
@@ -510,12 +510,12 @@ export default function RolesSection() {
               <Shield className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Roles & Permissions</h1>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Roles & permissions</h1>
               <div className="flex items-center gap-2 mt-1">
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold flex items-center gap-1">
                   <ShieldCheck size={10} /> {activeRoles.length} Active
                 </span>
-                <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest flex items-center gap-1", dark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500")}>
+                <span className={cn("px-2 py-0.5 rounded-md text-[11px] font-semibold flex items-center gap-1", dark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500")}>
                   <Archive size={10} /> {archivedRoles.length} Archived
                 </span>
               </div>
@@ -536,7 +536,7 @@ export default function RolesSection() {
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key as any)}
                     className={cn(
-                      "flex items-center gap-2 py-5 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all",
+                      "flex items-center gap-2 py-5 text-[12px] font-semibold border-b-2 transition-all",
                       active ? "border-primary text-primary" : cn("border-transparent hover:text-primary", sub)
                     )}
                   >
@@ -582,7 +582,7 @@ export default function RolesSection() {
                   <Shield className="w-6 h-6 text-primary" />
                 </div>
                 <div className="space-y-1">
-                  <p className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <p className={cn("text-[14px] font-semibold", text)}>
                     {activeTab === "active" ? "No Active Roles" : "Archive Empty"}
                   </p>
                   <p className={cn("text-[11px] font-medium opacity-60 max-w-xs", sub)}>
@@ -660,7 +660,7 @@ export default function RolesSection() {
 
                       <div className="space-y-2 pt-3 border-t" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
                         <div className="flex items-center justify-between">
-                          <span className={cn("text-[9px] font-black uppercase tracking-widest", sub)}>Permissions</span>
+                          <span className={cn("text-[10px] font-semibold", sub)}>Permissions</span>
                           <span className={cn("text-[10px] font-black", text)}>{permCount}</span>
                         </div>
                         <div className={cn("h-1 rounded-full overflow-hidden", dark ? "bg-slate-800" : "bg-slate-100")}>
@@ -682,7 +682,7 @@ export default function RolesSection() {
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
       {children}
     </label>
   );

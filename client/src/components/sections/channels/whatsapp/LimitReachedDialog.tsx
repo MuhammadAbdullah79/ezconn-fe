@@ -38,7 +38,7 @@ export default function LimitReachedDialog({ open, limit, onClose }: Props) {
           <div className="flex justify-center pt-2">
             <button
               onClick={onClose}
-              className="h-10 px-6 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-primary text-white hover:bg-primary/90"
+              className="h-10 px-6 rounded-xl text-[11px] font-semibold transition-all bg-primary text-white hover:bg-primary/90"
             >
               OK
             </button>

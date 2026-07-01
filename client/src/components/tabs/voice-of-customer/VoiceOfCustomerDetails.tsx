@@ -212,7 +212,7 @@ export default function VoiceOfCustomerDetails() {
                   <th 
                     key={h.k} 
                     onClick={() => handleAgentSort(h.k)}
-                    className={cn("pb-2 px-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer group", thCls)}
+                    className={cn("pb-2 px-3 text-[10px] font-bold cursor-pointer group", thCls)}
                   >
                     <div className="flex items-center gap-1.5">
                       {h.l} {renderSortIcon(h.k, agentSort)}
@@ -266,7 +266,7 @@ export default function VoiceOfCustomerDetails() {
                   <th 
                     key={h.k} 
                     onClick={() => handleConversationSort(h.k)}
-                    className={cn("pb-2 px-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer group", thCls)}
+                    className={cn("pb-2 px-3 text-[10px] font-bold cursor-pointer group", thCls)}
                   >
                     <div className="flex items-center gap-1.5">
                       {h.l} {renderSortIcon(h.k, conversationSort)}

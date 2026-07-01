@@ -51,9 +51,9 @@ const PasswordPolicySection = () => {
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
-  const labelCls = cn("text-[10px] font-black uppercase tracking-widest", sub);
+  const labelCls = cn("text-[11px] font-semibold", sub);
 
   const { isLoading, data: fetchedData } = useQuery<PasswordPolicySettings>({
     queryKey: ["/api/workspaces/password-policy"],
@@ -124,7 +124,7 @@ const PasswordPolicySection = () => {
               <ShieldCheck className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Password Policy</h1>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Password Policy</h1>
               <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
                 Configure password policy settings for your user accounts.
               </p>

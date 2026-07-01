@@ -30,7 +30,7 @@ export default function DeletionGuard({ phrase = "DELETE", onValid, className }:
 
   return (
     <div className={cn("space-y-2", className)}>
-      <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>
+      <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>
         Type <span className="text-rose-500">{phrase}</span> to confirm
       </label>
       <Input

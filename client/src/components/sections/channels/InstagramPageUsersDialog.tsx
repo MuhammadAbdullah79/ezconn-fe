@@ -87,7 +87,7 @@ export default function InstagramPageUsersDialog({ open, account, onClose }: Pro
               <UserCog size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Page Access Control</div>
+              <div className={cn("text-[14px] font-semibold", text)}>Page Access Control</div>
               <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", sub)}>
                 Select which workspace agents can manage and respond from{" "}
                 <span className="font-mono">@{account.username ?? account.name}</span>.
@@ -140,14 +140,14 @@ export default function InstagramPageUsersDialog({ open, account, onClose }: Pro
             <button
               onClick={onClose}
               disabled={saveMutation.isPending}
-              className={cn("h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
+              className={cn("h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
             >
               Close
             </button>
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending || members.length === 0}
-              className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saveMutation.isPending ? "Saving…" : "Save"}
             </button>

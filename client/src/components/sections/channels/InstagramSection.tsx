@@ -98,7 +98,7 @@ function statusBadge(status: string) {
     ERROR:        "bg-rose-500",
   };
   return (
-    <span className={cn("flex items-center gap-1 text-[10px] font-black uppercase tracking-widest", info.color)}>
+    <span className={cn("flex items-center gap-1 text-[11px] font-semibold", info.color)}>
       <div className={cn("w-1.5 h-1.5 rounded-full", dot[status] ?? "bg-slate-400")} />
       {info.label}
     </span>
@@ -119,13 +119,13 @@ export default function InstagramSection() {
   const softBorder = dark ? "border-slate-800" : "border-slate-100";
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark
       ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary"
       : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
   const igGradient = "bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600";
@@ -257,7 +257,7 @@ export default function InstagramSection() {
                   <Instagram className="w-5 h-5 text-pink-500" />
                 </div>
                 <div>
-                  <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                  <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                     Instagram{isPreferred ? "" : " — Facebook Managed"}
                   </h1>
                   <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
@@ -318,7 +318,7 @@ export default function InstagramSection() {
                             <p className={cn("text-[13px] font-black truncate", text)}>{account.name || "Instagram Account"}</p>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               {account.username && (
-                                <Badge variant="outline" className="h-5 px-2 rounded-md border-pink-500/20 bg-pink-500/5 text-pink-600 dark:text-pink-400 text-[9px] font-black uppercase tracking-widest">
+                                <Badge variant="outline" className="h-5 px-2 rounded-md border-pink-500/20 bg-pink-500/5 text-pink-600 dark:text-pink-400 text-[10px] font-semibold">
                                   @{account.username}
                                 </Badge>
                               )}
@@ -330,7 +330,7 @@ export default function InstagramSection() {
                             {/* Instagram Page ID (replyagent: insta_page_id), show-if-present */}
                             {account.ig_user_id && (
                               <div className="flex items-center gap-1.5 mt-1">
-                                <span className={cn("text-[8px] font-black uppercase tracking-widest opacity-40", sub)}>ID</span>
+                                <span className={cn("text-[9px] font-semibold opacity-40", sub)}>ID</span>
                                 <span className={cn("text-[10px] font-mono truncate max-w-[180px] opacity-70", sub)}>{account.ig_user_id}</span>
                                 <button
                                   onClick={() => copyId(account.ig_user_id)}
@@ -403,7 +403,7 @@ export default function InstagramSection() {
                         {visibleStats.map((stat) => (
                           <div key={stat.label} className="flex-1 px-6 py-4 text-center" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
                             <p className={cn("text-[18px] font-black", text)}>{Number(stat.value).toLocaleString()}</p>
-                            <p className={cn("text-[9px] font-black uppercase tracking-widest opacity-60 mt-0.5", sub)}>{stat.label}</p>
+                            <p className={cn("text-[10px] font-semibold opacity-60 mt-0.5", sub)}>{stat.label}</p>
                           </div>
                         ))}
                       </div>
@@ -449,7 +449,7 @@ export default function InstagramSection() {
                   <AlertCircle size={18} />
                 </div>
                 <div>
-                  <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Instagram Account?</h2>
+                  <h2 className={cn("text-[14px] font-semibold", text)}>Delete Instagram Account?</h2>
                   <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                     <span className="text-rose-500 font-black">{accountToDelete?.name}</span> will be permanently disconnected.
                   </p>
@@ -470,7 +470,7 @@ export default function InstagramSection() {
                 <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => { deleteMutation.mutate({ id: accountToDelete.id, deleteMedia }); setShowDeleteConfirm(false); }}
-                  className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                  className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
                 >
                   <Trash2 size={12} /> Delete
                 </AlertDialogAction>
@@ -518,7 +518,7 @@ export default function InstagramSection() {
                   <AlertCircle size={22} />
                 </div>
                 <div>
-                  <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Limit reached</h2>
+                  <h2 className={cn("text-[14px] font-semibold", text)}>Limit reached</h2>
                   <p className={cn("text-[11px] font-medium opacity-60 mt-1.5 leading-relaxed", sub)}>
                     You have reached the maximum limit of{" "}
                     <span className="font-black text-amber-500">{igLimit}</span> Instagram{" "}
@@ -527,7 +527,7 @@ export default function InstagramSection() {
                 </div>
               </div>
               <div className="flex justify-center">
-                <AlertDialogAction className="h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-white text-[10px] font-black uppercase tracking-widest transition-all">
+                <AlertDialogAction className="h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-white text-[11px] font-semibold transition-all">
                   OK
                 </AlertDialogAction>
               </div>
@@ -548,7 +548,7 @@ export default function InstagramSection() {
             <Instagram className="w-5 h-5 text-pink-500" />
           </div>
           <div>
-            <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Instagram</h1>
+            <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Instagram</h1>
             <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
               Connect your Instagram Business account to automate conversations.
             </p>
@@ -571,7 +571,7 @@ export default function InstagramSection() {
                   )}
                 </div>
               </div>
-              <Badge className="h-5 px-2.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black uppercase tracking-widest border">
+              <Badge className="h-5 px-2.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-semibold border">
                 Preferred
               </Badge>
             </div>

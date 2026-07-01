@@ -30,7 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, ChevronDown, ChevronsUpDown, ChevronUp, ChevronDown as ChevronDownIcon, ArrowLeft, Info, Activity, Megaphone, MessageSquare, RefreshCw, Eye, UsersRound, CheckCircle2, Mail } from "lucide-react";
+import { MoreVertical, ChevronDown, ChevronsUpDown, ChevronUp, ChevronDown as ChevronDownIcon, ArrowLeft, Info, Activity, Megaphone, MessageSquare, RefreshCw, Eye, UsersRound, CheckCircle2, Mail, AlertTriangle, Clock, Minus, Filter, Tag, Hash, User, Phone as PhoneIcon, Link2, Globe, DollarSign, Percent, CheckSquare, MessageCircle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -105,6 +105,12 @@ interface Campaign {
   channelType?: string;
   /** Display name of the connected channel account (e.g. WhatsApp number name). */
   channelName?: string;
+  /** Channel account id — used to reconstruct newBroadcastChannelKey when opening the composer for edit/view. */
+  channelableId?: string | null;
+  /** Agent / user id who created or is assigned to this broadcast. Drives the Agent filter. */
+  agentId?: string | null;
+  /** Backend metadata blob preserved so the composer can rehydrate delivery-profile + audience + toggle state. */
+  metadata?: Record<string, any>;
   /** ISO created-at date (used in CREATED AT column). */
   createdAt?: Date;
   status: string;
@@ -170,6 +176,7 @@ export default function CampaignManager() {
   // backwards-compat with any saved views).
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [dateRangeFilter, setDateRangeFilter] = useState<string[]>([]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [activeDetailsTab, setActiveDetailsTab] = useState("details");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCampaignTypes, setSelectedCampaignTypes] = useState<string[]>([]);
@@ -215,6 +222,79 @@ export default function CampaignManager() {
   const [recurringStartPickerOpen, setRecurringStartPickerOpen] = useState(false);
   const [recurringEndPickerOpen, setRecurringEndPickerOpen] = useState(false);
 
+  // ─── Full-page broadcast composer state ────────────────────────────
+  // The composer replaces the CampaignManager list surface once the user
+  // finishes the "Create a Broadcast" modal. All composer-specific inputs
+  // live here so switching back to the list keeps its state intact.
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerAudienceMatch, setComposerAudienceMatch] = useState<"any" | "all">("any");
+  // Send-attempt tracking so inline error strings only surface AFTER the
+  // user has clicked "Send broadcast". Freshly opened composer keeps the
+  // fields clean; once an attempt is blocked the errors persist per-field
+  // and clear individually as each field is filled in.
+  const [composerSendAttempted, setComposerSendAttempted] = useState(false);
+  const [composerScheduleMode, setComposerScheduleMode] = useState<"now" | "later">("now");
+  const [composerScheduleDate, setComposerScheduleDate] = useState<Date | undefined>(undefined);
+  // Audience condition picker — mirrors replyagent's "Select a condition"
+  // + "Configure condition" flow. `composerConditions` stores fully
+  // configured filters (field + operator + value). Two modals feed it:
+  //   1. picker      — pick which field to filter on
+  //   2. configureCondition — set operator (Is / Contains / …) + value
+  const [conditionModalOpen, setConditionModalOpen] = useState(false);
+  const [conditionSearch, setConditionSearch] = useState("");
+  const [composerConditions, setComposerConditions] = useState<Array<{
+    id: string;         // stable per-row key
+    fieldId: string;    // "tag" / "contact_id" / "cf_5" / …
+    fieldLabel: string; // "Tag" / "Contact ID"
+    category: string;   // "General" / "System" / …
+    icon: string;
+    fieldType: "enum" | "text" | "number" | "date" | "boolean";
+    operator: string;    // "is" / "is_not" / "contains" / …
+    value: string;       // stored value (id for enum, raw text otherwise)
+    valueLabel?: string; // human-readable label for enum values
+  }>>([]);
+  // Configure-modal state — populated when the user picks a field from
+  // the condition picker. `configureField` doubles as the modal's open
+  // flag (null = closed).
+  const [configureField, setConfigureField] = useState<null | {
+    fieldId: string;
+    fieldLabel: string;
+    category: string;
+    icon: string;
+    fieldType: "enum" | "text" | "number" | "date" | "boolean";
+    // Enum-only: dropdown options (id + label)
+    enumOptions?: Array<{ id: string; label: string }>;
+  }>(null);
+  const [configureOperator, setConfigureOperator] = useState<string>("is");
+  const [configureValue, setConfigureValue] = useState<string>("");
+  const [configureValueLabel, setConfigureValueLabel] = useState<string>("");
+  const [composerScheduleHour, setComposerScheduleHour] = useState("09");
+  const [composerScheduleMinute, setComposerScheduleMinute] = useState("00");
+  const [composerScheduleDatePickerOpen, setComposerScheduleDatePickerOpen] = useState(false);
+  const [composerPauseIfMarketing, setComposerPauseIfMarketing] = useState(false);
+  const [composerTagFailed, setComposerTagFailed] = useState<string>("");
+  const [composerDeliveryPreset, setComposerDeliveryPreset] = useState<"conservative" | "standard" | "aggressive" | "custom">("standard");
+  // The 4 delivery-profile inputs mirror replyagent's rate-controls: how
+  // many messages fire in a burst, how long we wait between bursts, and a
+  // random inter-message delay range (min → max seconds).
+  const [composerBatchSize, setComposerBatchSize] = useState(10);
+  const [composerBatchPause, setComposerBatchPause] = useState(60);
+  const [composerIntervalMin, setComposerIntervalMin] = useState(2);
+  const [composerIntervalMax, setComposerIntervalMax] = useState(7);
+  // Applying a preset writes the four values above so the user can drop
+  // into a curve and tweak from there. "custom" doesn't reset — it just
+  // marks the active pill.
+  const applyDeliveryPreset = (preset: "conservative" | "standard" | "aggressive" | "custom") => {
+    setComposerDeliveryPreset(preset);
+    if (preset === "conservative") {
+      setComposerBatchSize(5); setComposerBatchPause(120); setComposerIntervalMin(5); setComposerIntervalMax(15);
+    } else if (preset === "standard") {
+      setComposerBatchSize(10); setComposerBatchPause(60); setComposerIntervalMin(2); setComposerIntervalMax(7);
+    } else if (preset === "aggressive") {
+      setComposerBatchSize(25); setComposerBatchPause(20); setComposerIntervalMin(1); setComposerIntervalMax(3);
+    }
+  };
+
   const queryClient = useQueryClient();
 
   // Fetch campaigns from backend
@@ -239,6 +319,69 @@ export default function CampaignManager() {
   });
   const channels: any[] = channelsResponse?.channels ?? [];
   const defaultChannel = channels[0] ?? null;
+
+  // Workspace tags — drives the composer's "Tag failed contacts" dropdown.
+  // Uses the same /api/tags/list endpoint the SmartFlow trigger picker
+  // already consumes, so React Query dedupes the payload across views.
+  const { data: tagsResponse } = useQuery<any>({
+    queryKey: ["/api/tags/list"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/tags/list");
+      return res.json();
+    },
+  });
+  const workspaceTags: Array<{ id: string; name: string }> = useMemo(() => {
+    const raw = tagsResponse?.tags ?? tagsResponse?.data ?? tagsResponse ?? [];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((t: any) => t?.id != null && t?.name)
+      .map((t: any) => ({ id: String(t.id), name: String(t.name) }));
+  }, [tagsResponse]);
+
+  // Workspace custom fields — populates the "Custom Fields" category in
+  // the audience condition picker.
+  const { data: customFieldsResponse } = useQuery<any>({
+    queryKey: ["/api/custom-fields"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/custom-fields");
+      return res.json();
+    },
+  });
+  const workspaceCustomFields: Array<{ id: string; name: string }> = useMemo(() => {
+    const raw = customFieldsResponse?.fields ?? customFieldsResponse?.data ?? customFieldsResponse ?? [];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((f: any) => f?.id != null)
+      .map((f: any) => ({ id: String(f.id), name: String(f.label ?? f.name ?? `#${f.id}`) }));
+  }, [customFieldsResponse]);
+
+  // Workspace agents/users — powers the Agent filter dropdown above the
+  // stat cards. Users are keyed by string id so filter matches downstream
+  // work regardless of BigInt / int / string representations returned by
+  // different endpoints.
+  const { data: usersResponse } = useQuery<any>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/users");
+      return res.json();
+    },
+  });
+  const workspaceUsers: Array<{ id: string; name: string }> = useMemo(() => {
+    const raw = usersResponse?.users ?? usersResponse?.data ?? usersResponse ?? [];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((u: any) => u?.id != null)
+      .map((u: any) => ({
+        id: String(u.id),
+        name: String(
+          u.name
+            ?? u.full_name
+            ?? [u.first_name, u.last_name].filter(Boolean).join(" ").trim()
+            ?? u.email
+            ?? `#${u.id}`,
+        ),
+      }));
+  }, [usersResponse]);
 
   // Real WhatsApp templates (approved only) — replaces the previous hardcoded
   // mock list. The shape returned by the backend (`components` array, Meta
@@ -418,6 +561,19 @@ export default function CampaignManager() {
         failed: b.total_failed || 0,
         channelType: b.channel_type || "whatsapp",
         channelName: b.channel?.name ?? b.channelable?.name ?? b.channel_name ?? "",
+        channelableId: b.channelable_id != null ? String(b.channelable_id) : null,
+        // The row's owning agent — try the common columns different
+        // backends use. Falls back to null so unassigned rows don't
+        // accidentally match a filter.
+        agentId:
+          b.assigned_to != null ? String(b.assigned_to)
+          : b.assigned_user_id != null ? String(b.assigned_user_id)
+          : b.created_by != null ? String(b.created_by)
+          : b.user_id != null ? String(b.user_id)
+          : b.creator_id != null ? String(b.creator_id)
+          : b.metadata?.agentId != null ? String(b.metadata.agentId)
+          : null,
+        metadata: b.metadata ?? {},
         createdAt: parseDate(createdRaw),
         status: uiStatus,
         whatsAppTemplateName: templateRow?.name ?? (b.metadata?.whatsAppTemplateName ?? ""),
@@ -676,6 +832,14 @@ export default function CampaignManager() {
       const token = dateRangeFilter[0];
       filtered = filtered.filter((c) =>
         dateRangeMatches(c.createdAt ?? c.startDate, token),
+      );
+    }
+
+    // Filter by agent. Empty selection = show all; picking one or more
+    // restricts the list to rows owned by those user ids.
+    if (selectedAgents.length > 0) {
+      filtered = filtered.filter(
+        (c) => c.agentId != null && selectedAgents.includes(c.agentId),
       );
     }
 
@@ -939,6 +1103,169 @@ export default function CampaignManager() {
     };
   };
 
+  // ─── Composer submit ────────────────────────────────────────────────
+  // Builds a broadcast payload from the composer's audience + schedule +
+  // delivery-profile state and posts it. "draft" saves without kicking
+  // off delivery; "now" transitions the newly-created row into pending
+  // via the existing sendBroadcast endpoint so the cron sweep picks it
+  // up within the next minute.
+  const buildComposerPayload = (uiStatus: "draft" | "scheduled") => {
+    const templateRow = whatsappTemplates.find((t: any) => t.name === selectedWhatsAppTemplate);
+    const wa_template_id = templateRow?.backend_id ?? templateRow?.id ?? null;
+    const active = channels.find(
+      (c: any) => `${c.channel_type}:${c.channelable_id}` === newBroadcastChannelKey,
+    ) ?? defaultChannel;
+
+    let scheduled_at: string | null = null;
+    if (uiStatus === "scheduled" && composerScheduleMode === "later" && composerScheduleDate) {
+      const d = new Date(composerScheduleDate);
+      d.setHours(Number(composerScheduleHour), Number(composerScheduleMinute), 0, 0);
+      scheduled_at = d.toISOString();
+    }
+
+    return {
+      name: campaignName,
+      channel_type: active?.channel_type ?? "whatsapp",
+      channelable_id: active?.channelable_id ?? null,
+      channelable_type: active?.channelable_type ?? null,
+      wa_template_id,
+      scheduled_at,
+      status: uiStatus,
+      metadata: {
+        type: "Broadcast",
+        messageType: composerScheduleMode === "now" ? "Immediate" : "Scheduled",
+        whatsAppTemplateName: selectedWhatsAppTemplate,
+        audienceMatch: composerAudienceMatch,
+        pauseIfMarketing: composerPauseIfMarketing,
+        tagFailed: composerTagFailed || null,
+        deliveryProfile: {
+          preset: composerDeliveryPreset,
+          batchSize: composerBatchSize,
+          batchPause: composerBatchPause,
+          intervalMin: composerIntervalMin,
+          intervalMax: composerIntervalMax,
+        },
+      },
+    };
+  };
+
+  // Composer close = clear both the open flag AND the edit-target id so a
+  // subsequent "+ New Broadcast" doesn't accidentally PATCH the last-
+  // opened row.
+  const closeComposer = () => {
+    setComposerOpen(false);
+    setEditingCampaignId(null);
+    setComposerSendAttempted(false);
+  };
+
+  // Hydrate every composer input from a saved campaign row and open the
+  // composer. Called by both the row's Edit icon (pencil) and View icon
+  // (eye) — replyagent doesn't have a separate read-only view, opening
+  // the composer with the campaign already loaded IS the view.
+  const openComposerForCampaign = (campaign: Campaign) => {
+    setEditingCampaignId(campaign.id);
+    setCampaignName(campaign.name ?? "");
+    // Reconstruct the channel key so Column-1's Sending From renders the
+    // right chip. Prefer channelableId; fall back to matching by name.
+    const channelKey = campaign.channelableId
+      ? `${campaign.channelType ?? "whatsapp"}:${campaign.channelableId}`
+      : (() => {
+          const match = channels.find(
+            (c: any) =>
+              String(c.channel_type) === (campaign.channelType ?? "whatsapp") &&
+              (c.name ?? "") === (campaign.channelName ?? ""),
+          );
+          return match ? `${match.channel_type}:${match.channelable_id}` : "";
+        })();
+    setNewBroadcastChannelKey(channelKey);
+    // Template
+    setSelectedWhatsAppTemplate(campaign.whatsAppTemplateName || null);
+    setSelectedTemplate(
+      whatsappTemplates.find((t: any) => t.name === campaign.whatsAppTemplateName) || null,
+    );
+    // Schedule
+    if (campaign.scheduledAt) {
+      setComposerScheduleMode("later");
+      setComposerScheduleDate(new Date(campaign.scheduledAt));
+      const d = new Date(campaign.scheduledAt);
+      setComposerScheduleHour(String(d.getHours()).padStart(2, "0"));
+      setComposerScheduleMinute(String(d.getMinutes()).padStart(2, "0"));
+    } else {
+      setComposerScheduleMode("now");
+      setComposerScheduleDate(undefined);
+    }
+    // Composer-only extras (persisted under metadata by handleComposerSend).
+    const md: any = campaign.metadata ?? {};
+    setComposerAudienceMatch((md.audienceMatch === "all" ? "all" : "any"));
+    setComposerPauseIfMarketing(!!md.pauseIfMarketing);
+    setComposerTagFailed(md.tagFailed ?? "");
+    const dp = md.deliveryProfile ?? {};
+    setComposerDeliveryPreset(dp.preset ?? "standard");
+    if (dp.batchSize != null) setComposerBatchSize(Number(dp.batchSize));
+    if (dp.batchPause != null) setComposerBatchPause(Number(dp.batchPause));
+    if (dp.intervalMin != null) setComposerIntervalMin(Number(dp.intervalMin));
+    if (dp.intervalMax != null) setComposerIntervalMax(Number(dp.intervalMax));
+    setComposerConditions(Array.isArray(md.conditions) ? md.conditions : []);
+    setComposerSendAttempted(false);
+    setComposerOpen(true);
+  };
+
+  const handleComposerSaveDraft = () => {
+    if (!campaignName.trim() || !newBroadcastChannelKey) {
+      toast({ title: "Missing details", description: "Add a name and pick a channel first.", variant: "destructive" });
+      return;
+    }
+    const payload = buildComposerPayload("draft");
+    const onSuccess = () => {
+      setComposerOpen(false);
+      setEditingCampaignId(null);
+    };
+    // Edit path routes through the update mutation so we don't create a
+    // duplicate row when the user re-saves.
+    if (editingCampaignId) {
+      updateBroadcastMutation.mutate({ id: editingCampaignId, data: payload }, { onSuccess });
+    } else {
+      createBroadcastMutation.mutate(payload, { onSuccess });
+    }
+  };
+
+  const handleComposerSend = () => {
+    // Flip the "attempted" flag so inline errors under each field surface.
+    // The individual field checks are duplicated in the render logic —
+    // this early-return just stops the network call. Once the user
+    // fills the missing pieces the errors clear automatically since
+    // they read the current values live.
+    const anyMissing =
+      !campaignName.trim() ||
+      !newBroadcastChannelKey ||
+      !selectedWhatsAppTemplate ||
+      composerConditions.length === 0 ||
+      (composerScheduleMode === "later" && !composerScheduleDate);
+    if (anyMissing) {
+      setComposerSendAttempted(true);
+      toast({ title: "Please complete the highlighted fields", variant: "destructive" });
+      return;
+    }
+    setComposerSendAttempted(false);
+    // Create OR update → then transition to sending if user picked "Send
+    // now"; if they scheduled a future date the row stays "pending" and
+    // the cron picks it up automatically.
+    const payload = buildComposerPayload("scheduled");
+    const onSuccess = (data: any) => {
+      const id = data?.id ?? data?.broadcast?.id ?? editingCampaignId;
+      if (composerScheduleMode === "now" && id) {
+        sendBroadcastMutation.mutate(Number(id));
+      }
+      setComposerOpen(false);
+      setEditingCampaignId(null);
+    };
+    if (editingCampaignId) {
+      updateBroadcastMutation.mutate({ id: editingCampaignId, data: payload }, { onSuccess });
+    } else {
+      createBroadcastMutation.mutate(payload, { onSuccess });
+    }
+  };
+
   const handleCreateCampaign = (status: "draft" | "scheduled") => {
     if (!defaultChannel) {
       toast({
@@ -1068,6 +1395,743 @@ export default function CampaignManager() {
   };
 
 
+  // ─── Full-page broadcast composer ────────────────────────────────
+  // Rendered instead of the list when composerOpen is true. Uses the
+  // campaignName + newBroadcastChannelKey the modal collected, plus the
+  // composer's own audience / schedule / delivery state. Same shell
+  // padding + rounded card as the list so the transition feels like
+  // "same page, different content" rather than a modal spawn.
+  if (composerOpen) {
+    const activeChannel = channels.find(
+      (c: any) => `${c.channel_type}:${c.channelable_id}` === newBroadcastChannelKey,
+    );
+    const activeChannelType = String(activeChannel?.channel_type ?? "whatsapp");
+    const activeChannelName = activeChannel?.name ?? "Channel";
+    const activeChannelSub = activeChannel?.phone_number ?? activeChannel?.display_phone_number ?? "";
+    // Chip state per progress step. Audience needs a segment name AND a
+    // resolved channel; Template needs a picked template; Schedule needs
+    // either "now" or a picked date; Delivery is always ready (has
+    // sensible defaults).
+    const steps = [
+      { key: "audience", label: "Audience", ready: !!campaignName.trim() && !!newBroadcastChannelKey },
+      { key: "template", label: "Template", ready: !!selectedWhatsAppTemplate },
+      { key: "schedule", label: "Schedule", ready: composerScheduleMode === "now" || !!composerScheduleDate },
+      { key: "delivery", label: "Delivery", ready: true },
+    ];
+    const readyCount = steps.filter((s) => s.ready).length;
+    const remaining = steps.length - readyCount;
+
+    // Est. duration = time to deliver AUDIENCE messages given batch size
+    // + inter-batch pause + per-message interval (using the midpoint of
+    // the random range). Falls back to a dash while audience is 0.
+    const audienceCount = 0; // TODO: wire real audience computation
+    const midInterval = (composerIntervalMin + composerIntervalMax) / 2;
+    const secondsPerBatch = composerBatchSize * midInterval + composerBatchPause;
+    const numBatches = audienceCount > 0 ? Math.ceil(audienceCount / composerBatchSize) : 0;
+    const totalSeconds = Math.max(0, numBatches * secondsPerBatch - composerBatchPause);
+    const formatDuration = (s: number) => {
+      if (s <= 0) return "—";
+      const hh = Math.floor(s / 3600);
+      const mm = Math.floor((s % 3600) / 60);
+      const ss = Math.floor(s % 60);
+      if (hh > 0) return `~${hh}h ${mm}m`;
+      if (mm > 0) return `~${mm}m ${ss}s`;
+      return `~${ss}s`;
+    };
+    const estDuration = formatDuration(totalSeconds);
+    const isSubmitting = createBroadcastMutation.isPending || sendBroadcastMutation.isPending;
+    return (
+      <div className="px-6 py-6 pb-24 animate-in fade-in duration-500" data-testid="broadcast-composer">
+        {/* Header card */}
+        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-300 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={closeComposer}
+                className="shrink-0 h-8 w-8 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+                title="Back"
+              >
+                <ArrowLeft size={16} />
+              </button>
+              <div className="shrink-0 p-2 rounded-xl bg-primary text-primary-foreground shadow-sm">
+                <Megaphone size={18} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-[16px] font-bold text-slate-900 dark:text-white truncate">
+                    {editingCampaignId ? campaignName || "Broadcast" : "Performance Broadcast"}
+                  </h1>
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 uppercase tracking-wider">
+                    {editingCampaignId ? "Edit" : "Draft"}
+                  </span>
+                </div>
+                <p className="text-[11.5px] text-slate-500 dark:text-slate-400 truncate">
+                  High-performance bulk messaging for your audience
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeComposer}
+                className="h-8 px-3 text-[12px] font-semibold text-slate-600 dark:text-slate-300"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleComposerSaveDraft}
+                disabled={isSubmitting}
+                className="h-8 px-3 text-[12px] font-semibold border-slate-200 dark:border-slate-800"
+              >
+                {createBroadcastMutation.isPending && <Loader2 size={12} className="mr-1.5 animate-spin" />}
+                Save as draft
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleComposerSend}
+                disabled={isSubmitting || readyCount < 3}
+                className="h-8 px-4 text-[12px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20 disabled:opacity-60"
+              >
+                {sendBroadcastMutation.isPending
+                  ? <Loader2 size={12} className="mr-1.5 animate-spin" />
+                  : <Send size={13} strokeWidth={2.5} className="mr-1.5" />}
+                {composerScheduleMode === "now" ? "Send broadcast" : "Schedule"}
+              </Button>
+            </div>
+          </div>
+
+          {/* Progress steps */}
+          <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/40 dark:bg-slate-900/30">
+            <div className="flex items-center gap-2 flex-wrap">
+              {steps.map((s, i) => (
+                <span
+                  key={s.key}
+                  className={cn(
+                    "flex items-center gap-1.5 h-7 px-3 rounded-full text-[11.5px] font-semibold border transition-all",
+                    s.ready
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-300"
+                      : "bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400",
+                  )}
+                >
+                  {s.ready ? (
+                    <CheckCircle2 size={12} strokeWidth={2.5} />
+                  ) : (
+                    <span className="h-4 w-4 rounded-full bg-slate-300 dark:bg-slate-700 flex items-center justify-center text-[9px] font-bold text-white">
+                      {i + 1}
+                    </span>
+                  )}
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+              <span className="text-slate-700 dark:text-slate-200 font-semibold">{readyCount} of {steps.length}</span> ready · <span className="text-slate-700 dark:text-slate-200 font-semibold">{remaining}</span> step{remaining === 1 ? "" : "s"} remaining
+            </p>
+          </div>
+
+          {/* 3-column body */}
+          <div className="px-5 py-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Column 1: Audience */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 space-y-4">
+              <div className="flex items-start gap-2.5">
+                <span className="h-8 w-8 rounded-lg bg-fuchsia-100 dark:bg-fuchsia-900/40 flex items-center justify-center text-fuchsia-600 dark:text-fuchsia-400 shrink-0">
+                  <UsersRound size={16} strokeWidth={2.5} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400">01 · Audience</p>
+                  <h3 className="text-[14px] font-bold text-slate-900 dark:text-white">Who receives this</h3>
+                </div>
+              </div>
+              {/* Sending from */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-center gap-3">
+                <span className={cn(
+                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                  ({
+                    whatsapp: "bg-emerald-100 text-emerald-600",
+                    telegram: "bg-sky-100 text-sky-600",
+                    messenger: "bg-blue-100 text-blue-600",
+                    instagram: "bg-fuchsia-100 text-fuchsia-600",
+                    webchat: "bg-orange-100 text-orange-600",
+                  } as Record<string, string>)[activeChannelType] ?? "bg-slate-100 text-slate-600",
+                )}>
+                  <ChannelChipIcon channel={activeChannelType} size={16} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400">Sending from</p>
+                  <p className="text-[12.5px] font-semibold text-slate-900 dark:text-white truncate">
+                    {activeChannelName}
+                  </p>
+                </div>
+                {activeChannelSub && (
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0">
+                    {activeChannelSub}
+                  </span>
+                )}
+              </div>
+              {/* Segment name */}
+              <div className="space-y-1.5">
+                <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">Segment name</label>
+                <Input
+                  value={campaignName}
+                  onChange={(e) => setCampaignName(e.target.value.slice(0, 512))}
+                  className={cn(
+                    "h-9 text-[13px] rounded-lg",
+                    composerSendAttempted && !campaignName.trim()
+                      ? "border-rose-300 dark:border-rose-800 focus-visible:ring-rose-300"
+                      : "border-slate-200 dark:border-slate-800",
+                  )}
+                />
+                {composerSendAttempted && !campaignName.trim() && (
+                  <p className="text-[11px] text-rose-500 italic">Please provide a segment name</p>
+                )}
+              </div>
+              {/* Match */}
+              <div className="space-y-1.5">
+                <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">Match</label>
+                <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800/60">
+                  {(["any", "all"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setComposerAudienceMatch(m)}
+                      className={cn(
+                        "py-1.5 rounded-md text-[11.5px] font-semibold transition-all",
+                        composerAudienceMatch === m
+                          ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm"
+                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+                      )}
+                    >
+                      {m === "any" ? "Any condition" : "All conditions"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Selected conditions — each chip shows the full filter
+                  ("Tag is 'marketing'") plus a small uppercase category
+                  label at the top so the user can scan multiple
+                  conditions at a glance. */}
+              {composerConditions.length > 0 && (
+                <div className="space-y-2">
+                  {composerConditions.map((c, i) => {
+                    const verb = conditionOperatorPreview(c.fieldType, c.operator);
+                    const skips = operatorSkipsValue(c.operator);
+                    const displayValue = skips
+                      ? ""
+                      : c.fieldType === "enum" || c.fieldType === "text"
+                        ? `"${c.valueLabel || c.value}"`
+                        : c.value;
+                    return (
+                      <div
+                        key={c.id}
+                        className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400">
+                            {c.category}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setComposerConditions(composerConditions.filter((_, idx) => idx !== i))
+                            }
+                            className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 shrink-0"
+                            title="Remove"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="h-6 w-6 rounded-md bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 shrink-0">
+                            <ConditionGlyph name={c.icon} size={11} />
+                          </span>
+                          <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate flex-1">
+                            {c.fieldLabel} {verb}{displayValue ? " " + displayValue : ""}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Add condition */}
+              <button
+                onClick={() => setConditionModalOpen(true)}
+                className="w-full py-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40 hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                + Add condition
+              </button>
+              {/* Total audience — replyagent uses a warm rose→pink accent
+                  so this row stands out from the emerald + slate chrome
+                  around it. Number becomes a gradient text; a filled
+                  circular user chip anchors the bottom-right. Placeholder
+                  count = number of picked conditions until a real
+                  contact-count endpoint is wired in. */}
+              <div className="relative rounded-xl border border-rose-200 dark:border-rose-900/40 bg-gradient-to-br from-rose-50/70 via-white to-fuchsia-50/60 dark:from-rose-950/20 dark:via-slate-900/40 dark:to-fuchsia-950/20 p-3 overflow-hidden">
+                <p className="text-[28px] font-bold leading-none tabular-nums bg-gradient-to-br from-rose-600 to-fuchsia-600 bg-clip-text text-transparent">
+                  {composerConditions.length}
+                </p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1.5">Total audience</p>
+                <p className="text-[10.5px] text-slate-400 dark:text-slate-500">Will receive the message</p>
+                {composerSendAttempted && composerConditions.length === 0 && (
+                  <p className="text-[10.5px] text-rose-500 italic mt-1.5">
+                    There is no audience to send this broadcast to.
+                  </p>
+                )}
+                <span className="absolute right-3 bottom-3 h-9 w-9 rounded-full bg-gradient-to-br from-rose-500 to-fuchsia-500 shadow-md shadow-rose-500/30 flex items-center justify-center">
+                  <UsersRound size={16} className="text-white" strokeWidth={2.5} />
+                </span>
+              </div>
+            </div>
+
+            {/* Column 2: Configuration */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 space-y-4">
+              <div className="flex items-start gap-2.5">
+                <span className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                  <MessageSquare size={16} strokeWidth={2.5} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400">02 · Configuration</p>
+                  <h3 className="text-[14px] font-bold text-slate-900 dark:text-white">Message & schedule</h3>
+                </div>
+              </div>
+              {/* Template */}
+              <div className="space-y-1.5">
+                <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">Template</label>
+                <Select
+                  value={selectedWhatsAppTemplate || ""}
+                  onValueChange={(value) => {
+                    setSelectedWhatsAppTemplate(value);
+                    setSelectedTemplate(whatsappTemplates.find(t => t.name === value) || null);
+                  }}
+                >
+                  <SelectTrigger className={cn(
+                    "h-11 rounded-xl bg-white dark:bg-slate-900",
+                    composerSendAttempted && !selectedWhatsAppTemplate
+                      ? "border-rose-300 dark:border-rose-800 focus-visible:ring-rose-300"
+                      : "border-slate-200 dark:border-slate-800",
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <span className="h-6 w-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-amber-500">★</span>
+                      <SelectValue placeholder="Select the template" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {whatsappTemplates.map(template => (
+                      <SelectItem key={template.id} value={template.name}>{template.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {composerSendAttempted && !selectedWhatsAppTemplate && (
+                  <p className="text-[11px] text-rose-500 italic">Please select a template</p>
+                )}
+              </div>
+              {/* Pause if Marketing */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-start gap-3">
+                <span className="h-7 w-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 shrink-0">
+                  <CheckCircle2 size={13} strokeWidth={2.5} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-semibold text-slate-900 dark:text-white">Pause if Meta reclassifies to Marketing</p>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                    The system will verify whether Meta has automatically reclassified the message type as Marketing. If so, the broadcast will not be sent.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setComposerPauseIfMarketing(!composerPauseIfMarketing)}
+                  className={cn(
+                    "shrink-0 h-5 w-9 rounded-full transition-colors relative",
+                    composerPauseIfMarketing ? "bg-primary" : "bg-slate-300 dark:bg-slate-700",
+                  )}
+                >
+                  <span className={cn(
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
+                    composerPauseIfMarketing ? "left-4" : "left-0.5",
+                  )} />
+                </button>
+              </div>
+              {/* Schedule */}
+              <div className="space-y-1.5">
+                <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">Schedule</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setComposerScheduleMode("now")}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all",
+                      composerScheduleMode === "now"
+                        ? "border-primary bg-primary/[0.06] shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40",
+                    )}
+                  >
+                    <Zap size={14} className="text-primary mb-1.5" strokeWidth={2.5} />
+                    <p className="text-[12px] font-semibold text-slate-900 dark:text-white">Send now</p>
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400">Start immediately</p>
+                  </button>
+                  <button
+                    onClick={() => setComposerScheduleMode("later")}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all",
+                      composerScheduleMode === "later"
+                        ? "border-primary bg-primary/[0.06] shadow-sm"
+                        : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40",
+                    )}
+                  >
+                    <Calendar size={14} className={cn("mb-1.5", composerScheduleMode === "later" ? "text-primary" : "text-slate-500")} strokeWidth={2.5} />
+                    <p className="text-[12px] font-semibold text-slate-900 dark:text-white">Schedule</p>
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400">Pick date &amp; time</p>
+                  </button>
+                </div>
+                {/* Date + time inputs appear only when "Schedule" mode is
+                    active. Time is broken into HH / MM selects so the user
+                    doesn't need a native time picker. */}
+                {composerScheduleMode === "later" && (
+                  <div className="space-y-1.5 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Popover open={composerScheduleDatePickerOpen} onOpenChange={setComposerScheduleDatePickerOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "h-9 justify-between text-left font-normal text-[12px] rounded-lg",
+                            composerSendAttempted && !composerScheduleDate
+                              ? "border-rose-300 dark:border-rose-800"
+                              : "border-slate-200 dark:border-slate-800",
+                          )}
+                        >
+                          <div className="flex items-center min-w-0">
+                            <Calendar size={12} className="mr-1.5 shrink-0" />
+                            <span className="truncate">
+                              {composerScheduleDate ? composerScheduleDate.toLocaleDateString() : "Pick date"}
+                            </span>
+                          </div>
+                          <ChevronDown size={12} className="shrink-0 text-slate-400" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={composerScheduleDate}
+                          onSelect={(date) => {
+                            setComposerScheduleDate(date);
+                            setComposerScheduleDatePickerOpen(false);
+                          }}
+                          disabled={{ before: new Date() }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <div className="grid grid-cols-2 gap-1">
+                      <Select value={composerScheduleHour} onValueChange={setComposerScheduleHour}>
+                        <SelectTrigger className="h-9 text-[12px] rounded-lg">
+                          <SelectValue placeholder="HH" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+                            <SelectItem key={h} value={h}>{h}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={composerScheduleMinute} onValueChange={setComposerScheduleMinute}>
+                        <SelectTrigger className="h-9 text-[12px] rounded-lg">
+                          <SelectValue placeholder="MM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["00", "15", "30", "45"].map((m) => (
+                            <SelectItem key={m} value={m}>{m}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {composerSendAttempted && !composerScheduleDate && (
+                    <p className="text-[11px] text-rose-500 italic">Please pick a schedule date</p>
+                  )}
+                  </div>
+                )}
+              </div>
+              {/* Tag failed contacts */}
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+                <div className="flex items-start gap-2.5 mb-2">
+                  <span className="h-7 w-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 shrink-0">
+                    <span className="text-[11px]">🏷</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold text-slate-900 dark:text-white">Tag failed contacts</p>
+                    <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Apply a tag to the contacts that the message delivery failed.
+                    </p>
+                  </div>
+                </div>
+                <Select value={composerTagFailed} onValueChange={setComposerTagFailed}>
+                  <SelectTrigger className="h-9 rounded-lg text-[12px]">
+                    <SelectValue placeholder="Create or select a tag" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">No tag</SelectItem>
+                    {workspaceTags.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Column 3: Preview */}
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 space-y-4">
+              <div className="flex items-start gap-2.5">
+                <span className="h-8 w-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <Eye size={16} strokeWidth={2.5} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400">03 · Preview</p>
+                  <h3 className="text-[14px] font-bold text-slate-900 dark:text-white">How it lands</h3>
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-100 dark:bg-slate-800/60 h-[280px] flex items-center justify-center">
+                {selectedTemplate ? (
+                  <PreviewV2
+                    mode="chat"
+                    headerText={selectedTemplate.header || ""}
+                    bodyText={selectedTemplate.body || ""}
+                    footerText={selectedTemplate.footer || ""}
+                    selectedMediaFile={null}
+                    templateButtons={selectedTemplate.buttons || []}
+                    variableSamples={selectedTemplate.variableSamples || {}}
+                  />
+                ) : (
+                  <p className="text-[12px] text-slate-400">No template selected</p>
+                )}
+              </div>
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                    <UsersRound size={12} /> Audience
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-white tabular-nums">{audienceCount.toLocaleString()} contacts</span>
+                </div>
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                    <Clock size={12} /> Est. duration
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{estDuration}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                    <Zap size={12} /> First message at
+                  </span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    {composerScheduleMode === "now"
+                      ? "Now"
+                      : composerScheduleDate
+                        ? `${composerScheduleDate.toLocaleDateString()} ${composerScheduleHour}:${composerScheduleMinute}`
+                        : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Delivery profile */}
+          <div className="px-5 py-5 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex items-start gap-2.5 mb-4">
+              <span className="h-8 w-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0">
+                <Activity size={16} strokeWidth={2.5} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[9.5px] font-bold uppercase tracking-wider text-slate-400">04 · Delivery Profile</p>
+                <h3 className="text-[14px] font-bold text-slate-900 dark:text-white">Configure the rate of messages sent to contacts</h3>
+              </div>
+            </div>
+            {/* Preset cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+              {([
+                { key: "conservative", label: "Conservative", desc: "Safest, slowest", Icon: CheckCircle2, iconBg: "bg-sky-500", batch: 5, pause: 120, interval: "5-15s" },
+                { key: "standard",     label: "Standard",     desc: "Recommended",    Icon: CheckCircle2, iconBg: "bg-emerald-500", batch: 10, pause: 60, interval: "2-7s" },
+                { key: "aggressive",   label: "Aggressive",   desc: "Fastest, riskier", Icon: Zap,        iconBg: "bg-orange-500", batch: 25, pause: 20, interval: "1-3s" },
+                { key: "custom",       label: "Custom",       desc: "Set it yourself",  Icon: Activity,   iconBg: "bg-violet-500", batch: composerBatchSize, pause: composerBatchPause, interval: `${composerIntervalMin}-${composerIntervalMax}s` },
+              ] as const).map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => applyDeliveryPreset(p.key)}
+                  className={cn(
+                    "text-left p-3 rounded-xl border-2 transition-all",
+                    composerDeliveryPreset === p.key
+                      ? "border-primary bg-primary/[0.04] shadow-sm"
+                      : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40",
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className={cn("h-7 w-7 rounded-lg flex items-center justify-center text-white", p.iconBg)}>
+                      <p.Icon size={13} strokeWidth={2.5} />
+                    </span>
+                    <span className={cn(
+                      "h-4 w-4 rounded-full border-2 flex items-center justify-center",
+                      composerDeliveryPreset === p.key ? "border-primary bg-primary" : "border-slate-300 dark:border-slate-600",
+                    )}>
+                      {composerDeliveryPreset === p.key && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                    </span>
+                  </div>
+                  <p className="text-[13px] font-bold text-slate-900 dark:text-white">{p.label}</p>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 mb-2">{p.desc}</p>
+                  <div className="space-y-0.5 text-[10.5px]">
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Batch</span><span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{p.batch}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Pause</span><span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{p.pause}s</span></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Interval</span><span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{p.interval}</span></div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {/* Number inputs */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <NumberStepper
+                label="Batch size"
+                suffix="msgs / batch"
+                value={composerBatchSize}
+                onChange={(v) => { setComposerBatchSize(v); setComposerDeliveryPreset("custom"); }}
+                min={1} max={100}
+                hint="Messages sent before pausing."
+              />
+              <NumberStepper
+                label="Pause between batches"
+                suffix="seconds"
+                value={composerBatchPause}
+                onChange={(v) => { setComposerBatchPause(v); setComposerDeliveryPreset("custom"); }}
+                min={1} max={600}
+                hint="How long to wait between batches."
+              />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">Interval per message</label>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider">Random range</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <StepperInput value={composerIntervalMin} onChange={(v) => { setComposerIntervalMin(v); setComposerDeliveryPreset("custom"); }} min={1} max={60} />
+                  <StepperInput value={composerIntervalMax} onChange={(v) => { setComposerIntervalMax(v); setComposerDeliveryPreset("custom"); }} min={1} max={60} />
+                </div>
+                <p className="text-[10.5px] text-slate-400">Random delay between each message.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sticky bottom bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-4 text-[11.5px] text-slate-500 dark:text-slate-400">
+            <span className="flex items-center gap-1.5"><UsersRound size={13} /> <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">{audienceCount}</span> contacts</span>
+            <span className="flex items-center gap-1.5"><Clock size={13} /> <span className="font-semibold text-slate-800 dark:text-slate-200">{estDuration}</span> to deliver</span>
+            <span className="flex items-center gap-1.5"><Zap size={13} /> Starts <span className="font-semibold text-slate-800 dark:text-slate-200">
+              {composerScheduleMode === "now"
+                ? "Now"
+                : composerScheduleDate
+                  ? `${composerScheduleDate.toLocaleDateString()} ${composerScheduleHour}:${composerScheduleMinute}`
+                  : "—"}
+            </span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={closeComposer} className="h-9 px-4 text-[12.5px]">Cancel</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleComposerSaveDraft}
+              disabled={isSubmitting}
+              className="h-9 px-4 text-[12.5px] border-slate-200 dark:border-slate-800"
+            >
+              {createBroadcastMutation.isPending && <Loader2 size={12} className="mr-1.5 animate-spin" />}
+              Save as draft
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleComposerSend}
+              disabled={isSubmitting || readyCount < 3}
+              className="h-9 px-5 text-[12.5px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20 disabled:opacity-60"
+            >
+              {sendBroadcastMutation.isPending
+                ? <Loader2 size={12} className="mr-1.5 animate-spin" />
+                : <Send size={13} strokeWidth={2.5} className="mr-1.5" />}
+              {composerScheduleMode === "now" ? "Send broadcast" : "Schedule"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Condition picker modal — opens from "+ Add condition" in the
+            Audience column. Grids the pickable fields into sections
+            (General / System / Opportunity / Custom / per-channel) so
+            users can browse or search. Selecting a card hands off to
+            the Configure modal for operator + value selection. */}
+        <ConditionPickerModal
+          open={conditionModalOpen}
+          onOpenChange={setConditionModalOpen}
+          search={conditionSearch}
+          onSearchChange={setConditionSearch}
+          channels={channels}
+          customFields={workspaceCustomFields}
+          workspaceTags={workspaceTags}
+          onPick={(cond) => {
+            // Hand off to the Configure modal — pre-seed with a
+            // reasonable default operator per field type so the user
+            // sees a valid "preview" line the moment the modal opens.
+            setConfigureField({
+              fieldId: cond.id,
+              fieldLabel: cond.label,
+              category: cond.category,
+              icon: cond.icon,
+              fieldType: cond.fieldType,
+              enumOptions: cond.enumOptions,
+            });
+            setConfigureOperator(
+              cond.fieldType === "boolean" ? "is_true"
+              : cond.fieldType === "date" ? "is"
+              : cond.fieldType === "number" ? "has_value"
+              : cond.fieldType === "text" ? "is"
+              : "is",
+            );
+            setConfigureValue("");
+            setConfigureValueLabel("");
+            setConditionModalOpen(false);
+            setConditionSearch("");
+          }}
+        />
+
+        {/* Configure condition modal — operator + value inputs for the
+            just-picked field. Saving appends a fully-configured filter to
+            composerConditions; Back re-opens the picker so the user can
+            switch fields without losing their place. */}
+        <ConfigureConditionModal
+          field={configureField}
+          operator={configureOperator}
+          value={configureValue}
+          valueLabel={configureValueLabel}
+          onOperatorChange={setConfigureOperator}
+          onValueChange={setConfigureValue}
+          onValueLabelChange={setConfigureValueLabel}
+          onBack={() => {
+            setConfigureField(null);
+            setConditionModalOpen(true);
+          }}
+          onClose={() => setConfigureField(null)}
+          onSave={() => {
+            if (!configureField) return;
+            setComposerConditions([
+              ...composerConditions,
+              {
+                id: `cond_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                fieldId: configureField.fieldId,
+                fieldLabel: configureField.fieldLabel,
+                category: configureField.category,
+                icon: configureField.icon,
+                fieldType: configureField.fieldType,
+                operator: configureOperator,
+                value: configureValue,
+                valueLabel: configureValueLabel || configureValue,
+              },
+            ]);
+            setConfigureField(null);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="px-6 py-6 animate-in fade-in duration-700" data-testid="campaign-manager">
         {/* Unified Main Card */}
@@ -1121,7 +2185,9 @@ export default function CampaignManager() {
                 that slice. Four labeled dropdowns: Date Range, Status,
                 Channel, Agent — each with a small icon inside the label. */}
             <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Date Range */}
+                {/* Date Range — the leading "All Time" option acts as the
+                    clear-selection sentinel; onChange filters it out so
+                    downstream code keeps the empty-array semantics. */}
                 <div className="space-y-1.5">
                     <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5" />
@@ -1129,13 +2195,14 @@ export default function CampaignManager() {
                     </label>
                     <CustomDropdown
                         options={[
+                            { id: "", name: "All Time" },
                             { id: "today", name: "Today" },
                             { id: "last7", name: "Last 7 days" },
                             { id: "last30", name: "Last 30 days" },
                             { id: "thisMonth", name: "This month" },
                         ]}
                         selected={dateRangeFilter}
-                        onChange={setDateRangeFilter}
+                        onChange={(ids) => setDateRangeFilter(ids[0] === "" ? [] : ids)}
                         placeholder="All Time"
                         width="100%"
                         showSelectedOption={true}
@@ -1161,6 +2228,7 @@ export default function CampaignManager() {
                     </label>
                     <CustomDropdown
                         options={[
+                            { id: "", name: "All" },
                             { id: "draft", name: "Draft" },
                             { id: "scheduled", name: "Scheduled" },
                             { id: "sent", name: "Sent" },
@@ -1168,7 +2236,7 @@ export default function CampaignManager() {
                             { id: "archived", name: "Archived" },
                         ]}
                         selected={selectedStatus}
-                        onChange={setSelectedStatus}
+                        onChange={(ids) => setSelectedStatus(ids[0] === "" ? [] : ids)}
                         placeholder="All"
                         width="100%"
                         showSelectedOption={true}
@@ -1194,6 +2262,7 @@ export default function CampaignManager() {
                     </label>
                     <CustomDropdown
                         options={[
+                            { id: "", name: "All" },
                             { id: "whatsapp", name: "WhatsApp" },
                             { id: "telegram", name: "Telegram" },
                             { id: "messenger", name: "Messenger" },
@@ -1202,7 +2271,7 @@ export default function CampaignManager() {
                             { id: "twilio_sms", name: "SMS" },
                         ]}
                         selected={selectedChannels}
-                        onChange={setSelectedChannels}
+                        onChange={(ids) => setSelectedChannels(ids[0] === "" ? [] : ids)}
                         placeholder="All"
                         width="100%"
                         showSelectedOption={true}
@@ -1220,17 +2289,38 @@ export default function CampaignManager() {
                     />
                 </div>
 
-                {/* Agent — new. Placeholder until an agents endpoint is wired
-                    up; the trigger shows how many workspace agents exist. */}
+                {/* Agent — filter broadcasts by owning user. Options load
+                    from workspace users; when multiple are picked the
+                    trigger shows the count ("3 agents") like replyagent. */}
                 <div className="space-y-1.5">
                     <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                         <UsersRound className="h-3.5 w-3.5" />
                         Agent
                     </label>
-                    <div className="flex items-center justify-between px-3 h-8 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-[12px] text-slate-500 dark:text-slate-400 cursor-not-allowed" title="Agent filter coming soon">
-                        <span>All Agents</span>
-                        <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
-                    </div>
+                    <CustomDropdown
+                        options={[
+                            { id: "", name: "All Agents" },
+                            ...workspaceUsers.map((u) => ({ id: u.id, name: u.name })),
+                        ]}
+                        selected={selectedAgents}
+                        onChange={(ids) => setSelectedAgents(ids[0] === "" ? [] : ids)}
+                        placeholder="All Agents"
+                        width="100%"
+                        showSelectedOption={true}
+                        showSearch={workspaceUsers.length > 6}
+                        triggerContent={
+                            <>
+                                <span className={cn("truncate text-[12px]", selectedAgents.length > 0 ? "text-slate-900 dark:text-white font-medium" : "text-slate-500 dark:text-slate-400")}>
+                                    {selectedAgents.length === 0
+                                        ? "All Agents"
+                                        : selectedAgents.length === 1
+                                            ? workspaceUsers.find((u) => u.id === selectedAgents[0])?.name ?? "1 agent"
+                                            : `${selectedAgents.length} agents`}
+                                </span>
+                                <ChevronDown className="h-3.5 w-3.5 text-slate-400/50 shrink-0" />
+                            </>
+                        }
+                    />
                 </div>
             </div>
 
@@ -1439,35 +2529,25 @@ export default function CampaignManager() {
                                         <div className="flex items-center justify-end gap-1">
                                             {canManageBroadcasts && (
                                                 <button
-                                                    onClick={() => {
-                                                        setEditingCampaignId(campaign.id);
-                                                        setCreateOpen(true);
-                                                    }}
+                                                    onClick={() => openComposerForCampaign(campaign)}
                                                     title="Edit broadcast"
                                                     className="p-1.5 rounded-md text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                                                 >
                                                     <Edit2 size={14} />
                                                 </button>
                                             )}
-                                            {(canDeleteBroadcasts || canManageBroadcasts) && (
+                                            {canDeleteBroadcasts && (
                                                 <button
-                                                    onClick={() =>
-                                                        campaign.status === "archived"
-                                                            ? handleOpenDeleteModal(campaign)
-                                                            : handleOpenArchiveModal(campaign)
-                                                    }
-                                                    title={campaign.status === "archived" ? "Delete broadcast" : "Archive broadcast"}
+                                                    onClick={() => handleOpenDeleteModal(campaign)}
+                                                    title="Delete broadcast"
                                                     className="p-1.5 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
                                                 >
                                                     <Trash2 size={14} />
                                                 </button>
                                             )}
                                             <button
-                                                onClick={() => {
-                                                    setSelectedCampaignForPerformance(campaign);
-                                                    setDetailsOpen(true);
-                                                }}
-                                                title="View details"
+                                                onClick={() => openComposerForCampaign(campaign)}
+                                                title="View broadcast"
                                                 className="p-1.5 rounded-md text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                                             >
                                                 <Eye size={14} />
@@ -1585,68 +2665,78 @@ export default function CampaignManager() {
           setEditingCampaignId(null); // Reset editingCampaignId when dialog Cancels
         }
       }}>
-        <DialogContent className={campaignCreationStep === "apiTriggeredForm" || campaignCreationStep === "broadcastForm" ? "max-w-3xl" : "max-w-lg"} data-testid="dialog-create-campaign">
+        <DialogContent className={cn(
+          campaignCreationStep === "apiTriggeredForm" || campaignCreationStep === "broadcastForm"
+            ? "max-w-3xl"
+            : "max-w-[520px] p-6 rounded-2xl shadow-2xl",
+        )} data-testid="dialog-create-campaign">
           {campaignCreationStep === "selectType" && (
             <>
-              {/* Replyagent-parity "Create a Broadcast" modal — ask for a
-                  name + a channel up front, then jump into the full
-                  broadcast composer. EZCONN's design system (slate
-                  palette, rounded cards, primary accent) is preserved
-                  rather than copying replyagent's chromatic styling. */}
-              <DialogHeader className="mb-3">
+              {/* Replyagent-parity "Create a Broadcast" modal — refined
+                  premium look: filled primary megaphone tile, chunky
+                  step-number badges, brand-tinted channel cards with
+                  soft washed backgrounds so the panel feels airy rather
+                  than dense. Theme-aware primary token drives the accent
+                  so any workspace theme flows through. */}
+              {/* Header sits in its own edge-to-edge band — negative
+                  horizontal margins cancel the DialogContent p-6 so the
+                  divider under the title spans the full modal width, and
+                  border-slate-200 (over 100) makes the seam clearly
+                  visible instead of blending into the background. */}
+              <DialogHeader className="-mx-6 -mt-6 px-6 pt-6 pb-4 mb-5 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-start gap-3">
-                  {/* Filled-emerald megaphone tile matches replyagent's
-                      Create-a-Broadcast header — signals "broadcast" more
-                      clearly than the previous Send arrow. */}
-                  <div className="shrink-0 h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm">
-                    <Megaphone size={18} className="text-white" strokeWidth={2.5} />
+                  <div className="shrink-0 h-11 w-11 rounded-xl bg-primary flex items-center justify-center shadow-sm shadow-primary/25">
+                    <Megaphone size={20} className="text-primary-foreground" strokeWidth={2.5} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <DialogTitle className="text-[16px] font-bold">Create a Broadcast</DialogTitle>
-                    <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    <DialogTitle className="text-[17px] font-bold text-slate-900 dark:text-white">Create a Broadcast</DialogTitle>
+                    <p className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-0.5">
                       Name it and pick the channel you'll send from.
                     </p>
                   </div>
                 </div>
               </DialogHeader>
 
-              <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="space-y-6 max-h-[62vh] overflow-y-auto pr-1 -mr-1">
                 {/* Step 1: Name */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">1</span>
-                    <label className="text-[13px] font-semibold text-slate-900 dark:text-white">Name</label>
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-[11px] font-bold shadow-sm">1</span>
+                    <label className="text-[14px] font-semibold text-slate-900 dark:text-white">Name</label>
                   </div>
                   <Input
                     placeholder="e.g. June launch - Brasil list"
                     value={campaignName}
                     onChange={(e) => setCampaignName(e.target.value.slice(0, 512))}
-                    className="h-9 text-[13px]"
+                    className="h-10 text-[13px] rounded-lg border-slate-200 dark:border-slate-800 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0 focus-visible:border-primary/50 transition-shadow"
                   />
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  <p className="text-[11.5px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                    <Info size={11} className="shrink-0" />
                     Only you and your team will see this name.
                   </p>
                 </div>
 
                 {/* Step 2: Select a channel */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">2</span>
-                    <label className="text-[13px] font-semibold text-slate-900 dark:text-white">Select a channel</label>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-[11px] font-bold shadow-sm">2</span>
+                    <label className="text-[14px] font-semibold text-slate-900 dark:text-white">Select a channel</label>
                   </div>
 
                   {channels.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-6 text-center">
-                      <MessageSquare size={20} className="mx-auto text-slate-400 mb-2" />
-                      <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+                    <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-8 text-center bg-slate-50/50 dark:bg-slate-900/30">
+                      <div className="mx-auto h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-2">
+                        <MessageSquare size={18} className="text-slate-400" />
+                      </div>
+                      <p className="text-[12.5px] font-semibold text-slate-700 dark:text-slate-200">
                         No channels connected yet
                       </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
+                      <p className="text-[11.5px] text-slate-400 mt-1 max-w-xs mx-auto">
                         Connect a WhatsApp / Telegram / Messenger channel from Settings to start broadcasting.
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {Object.entries(
                         channels.reduce((acc: Record<string, any[]>, c: any) => {
                           const key = String(c.channel_type ?? "whatsapp");
@@ -1663,72 +2753,61 @@ export default function CampaignManager() {
                           twilio_sms: "SMS",
                           twilio_call: "Call",
                         } as Record<string, string>)[type] ?? type;
-                        // Coloured group heading matching replyagent — a solid
-                        // brand-tinted circular icon next to a same-hue bold
-                        // sentence-case label ("WhatsApp" / "Messenger" /
-                        // "Telegram") rather than an all-caps subhead.
-                        const headingTextClass = ({
-                          whatsapp: "text-emerald-600",
-                          telegram: "text-sky-600",
-                          messenger: "text-blue-600",
-                          instagram: "text-fuchsia-600",
-                          webchat: "text-orange-600",
-                          twilio_sms: "text-amber-600",
-                          twilio_call: "text-rose-600",
-                        } as Record<string, string>)[type] ?? "text-slate-700";
-                        const headingIconBg = ({
-                          whatsapp: "bg-emerald-500",
-                          telegram: "bg-sky-500",
-                          messenger: "bg-blue-500",
-                          instagram: "bg-gradient-to-tr from-fuchsia-500 to-orange-400",
-                          webchat: "bg-orange-500",
-                          twilio_sms: "bg-amber-500",
-                          twilio_call: "bg-rose-500",
-                        } as Record<string, string>)[type] ?? "bg-slate-400";
+                        // Brand palette per channel type. Each ships four
+                        // tokens — heading text colour, filled heading-tile
+                        // bg, soft card background wash, and card border —
+                        // so rows read as one coherent brand block and
+                        // groups visually separate at a glance.
+                        const brand = ({
+                          whatsapp:  { text: "text-emerald-600", tile: "bg-emerald-500", cardBg: "bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30", cardBorder: "border-emerald-100 dark:border-emerald-900/40", iconBg: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400" },
+                          telegram:  { text: "text-sky-600",     tile: "bg-sky-500",     cardBg: "bg-sky-50/50 hover:bg-sky-50 dark:bg-sky-950/20 dark:hover:bg-sky-950/30",             cardBorder: "border-sky-100 dark:border-sky-900/40",         iconBg: "bg-sky-100 text-sky-600 dark:bg-sky-900/40 dark:text-sky-400" },
+                          messenger: { text: "text-blue-600",    tile: "bg-blue-500",    cardBg: "bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-950/20 dark:hover:bg-blue-950/30",         cardBorder: "border-blue-100 dark:border-blue-900/40",       iconBg: "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400" },
+                          instagram: { text: "text-fuchsia-600", tile: "bg-gradient-to-tr from-fuchsia-500 to-orange-400", cardBg: "bg-fuchsia-50/50 hover:bg-fuchsia-50 dark:bg-fuchsia-950/20 dark:hover:bg-fuchsia-950/30", cardBorder: "border-fuchsia-100 dark:border-fuchsia-900/40", iconBg: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-900/40 dark:text-fuchsia-400" },
+                          webchat:   { text: "text-orange-600",  tile: "bg-orange-500",  cardBg: "bg-orange-50/50 hover:bg-orange-50 dark:bg-orange-950/20 dark:hover:bg-orange-950/30", cardBorder: "border-orange-100 dark:border-orange-900/40",   iconBg: "bg-orange-100 text-orange-600 dark:bg-orange-900/40 dark:text-orange-400" },
+                          twilio_sms:  { text: "text-amber-600", tile: "bg-amber-500",   cardBg: "bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/20 dark:hover:bg-amber-950/30",     cardBorder: "border-amber-100 dark:border-amber-900/40",     iconBg: "bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400" },
+                          twilio_call: { text: "text-rose-600",  tile: "bg-rose-500",    cardBg: "bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-950/30",         cardBorder: "border-rose-100 dark:border-rose-900/40",       iconBg: "bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400" },
+                        } as Record<string, { text: string; tile: string; cardBg: string; cardBorder: string; iconBg: string }>)[type] ?? {
+                          text: "text-slate-700", tile: "bg-slate-400", cardBg: "bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/40", cardBorder: "border-slate-200 dark:border-slate-800", iconBg: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+                        };
                         return (
-                          <div key={type} className="space-y-1.5">
-                            <div className="flex items-center gap-2 px-1">
-                              <span className={cn("h-5 w-5 rounded-full flex items-center justify-center text-white shrink-0", headingIconBg)}>
-                                <ChannelChipIcon channel={type} size={10} />
+                          <div key={type} className="space-y-2">
+                            <div className="flex items-center gap-2 px-0.5">
+                              <span className={cn("h-[22px] w-[22px] rounded-md flex items-center justify-center text-white shrink-0", brand.tile)}>
+                                <ChannelChipIcon channel={type} size={12} />
                               </span>
-                              <span className={cn("text-[13px] font-semibold", headingTextClass)}>
+                              <span className={cn("text-[13.5px] font-bold", brand.text)}>
                                 {typeLabel}
                               </span>
                             </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               {list.map((c: any) => {
                                 const key = `${c.channel_type}:${c.channelable_id}`;
                                 const isSelected = newBroadcastChannelKey === key;
                                 return (
+                                  <div key={key} className="space-y-2">
                                   <button
                                     type="button"
-                                    key={key}
                                     onClick={() => setNewBroadcastChannelKey(key)}
                                     className={cn(
-                                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg border transition-all text-left",
+                                      "w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border-2 text-left transition-all duration-150",
                                       isSelected
-                                        ? "border-primary bg-primary/5 dark:bg-primary/10"
-                                        : "border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40",
+                                        ? "border-primary bg-primary/[0.06] shadow-sm shadow-primary/10"
+                                        : cn(brand.cardBorder, brand.cardBg, "hover:shadow-sm"),
                                     )}
                                   >
-                                    {/* Filled brand-coloured tile — reuses the
-                                        heading's colour token so each row's
-                                        icon reads at a glance without a
-                                        second class variable. */}
-                                    <span className={cn("h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-white", headingIconBg)}>
-                                      <ChannelChipIcon channel={type} size={14} />
+                                    {/* Soft-tinted rounded square icon tile —
+                                        light background + brand-coloured
+                                        glyph so the row feels premium and
+                                        readable instead of shouting with a
+                                        solid brand fill. */}
+                                    <span className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", brand.iconBg)}>
+                                      <ChannelChipIcon channel={type} size={16} />
                                     </span>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-[12px] font-semibold text-slate-900 dark:text-white truncate">
+                                      <p className="text-[13px] font-semibold text-slate-900 dark:text-white truncate leading-tight">
                                         {c.name ?? `#${c.channelable_id}`}
                                       </p>
                                       {(() => {
-                                        // Per-channel subtitle matching replyagent:
-                                        //   WhatsApp   → phone number
-                                        //   Messenger  → "Facebook Page"
-                                        //   Telegram   → bot @username or "Bot"
-                                        //   Instagram  → "Instagram Account"
-                                        //   Webchat    → domain / label
                                         const sub =
                                           type === "whatsapp"
                                             ? c.phone_number ?? c.display_phone_number ?? ""
@@ -1746,7 +2825,7 @@ export default function CampaignManager() {
                                                       ? c.phone_number ?? "SMS"
                                                       : "";
                                         return sub ? (
-                                          <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                          <p className="text-[11.5px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                                             {sub}
                                           </p>
                                         ) : null;
@@ -1754,15 +2833,30 @@ export default function CampaignManager() {
                                     </div>
                                     <span
                                       className={cn(
-                                        "shrink-0 h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all",
+                                        "shrink-0 h-[18px] w-[18px] rounded-full border-2 flex items-center justify-center transition-all",
                                         isSelected
                                           ? "border-primary bg-primary"
-                                          : "border-slate-300 dark:border-slate-600",
+                                          : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900",
                                       )}
                                     >
-                                      {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                                      {isSelected && <span className="h-2 w-2 rounded-full bg-white" />}
                                     </span>
                                   </button>
+                                  {/* Yellow WhatsApp payment-method warning
+                                      appears directly under the selected
+                                      WhatsApp account. Matches replyagent's
+                                      inline advisory — the broadcast will
+                                      silently fail if Meta hasn't been
+                                      given a payment method. */}
+                                  {isSelected && type === "whatsapp" && (
+                                    <div className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20">
+                                      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-amber-500" strokeWidth={2.5} />
+                                      <p className="text-[11.5px] text-amber-800 dark:text-amber-200 leading-snug">
+                                        Make sure a payment method is added to your WhatsApp account in Meta Business Manager, otherwise the broadcast may fail.
+                                      </p>
+                                    </div>
+                                  )}
+                                  </div>
                                 );
                               })}
                             </div>
@@ -1774,10 +2868,11 @@ export default function CampaignManager() {
                 </div>
               </div>
 
-              {/* Footer — replyagent shows the helper hint inline next to the
-                  buttons; mirror that without restyling everything. */}
-              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 mt-3">
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              {/* Footer — edge-to-edge divider mirrors the header seam so
+                  the modal reads as three distinct bands (header / body /
+                  actions) instead of a single flat surface. */}
+              <div className="flex items-center justify-between gap-2 pt-4 -mx-6 -mb-6 px-6 pb-6 border-t border-slate-200 dark:border-slate-800 mt-5">
+                <p className="text-[11.5px] text-slate-400 dark:text-slate-500">
                   {newBroadcastChannelKey
                     ? "Ready — click Create broadcast to continue."
                     : "Choose a channel to continue."}
@@ -1790,16 +2885,25 @@ export default function CampaignManager() {
                       setCreateOpen(false);
                       resetCreateCampaignForm();
                     }}
+                    className="h-9 px-4 rounded-lg font-semibold text-[12.5px] border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
                   >
                     Cancel
                   </Button>
                   <Button
                     size="sm"
                     disabled={!campaignName.trim() || !newBroadcastChannelKey}
-                    onClick={() => setCampaignCreationStep("broadcastForm")}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={() => {
+                      // Close the "Create a Broadcast" modal and open the
+                      // full-page composer. The composer picks up
+                      // campaignName + newBroadcastChannelKey from state.
+                      // Fresh open = clean validation slate.
+                      setComposerSendAttempted(false);
+                      setCreateOpen(false);
+                      setComposerOpen(true);
+                    }}
+                    className="h-9 px-4 rounded-lg font-semibold text-[12.5px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20 disabled:shadow-none disabled:opacity-60"
                   >
-                    <Plus size={14} className="mr-1" />
+                    <Plus size={14} className="mr-1.5" strokeWidth={2.5} />
                     Create broadcast
                   </Button>
                 </div>
@@ -1807,1270 +2911,9 @@ export default function CampaignManager() {
             </>
           )}
 
-          {campaignCreationStep === "apiTriggeredForm" && (
-            <>
-              <DialogHeader className="mb-2">
-                <div className="flex items-center gap-3 mb-2">
-                  {!editingCampaignId && (
-                    <ArrowLeft size={18} className="cursor-pointer" onClick={() => setCampaignCreationStep("selectType")} />
-                  )}
-                  <DialogTitle>{editingCampaignId ? "Edit API Triggered Campaign" : "Create API Triggered Campaign"}</DialogTitle>
-                </div>
-              </DialogHeader>
-
-              <div className="flex gap-4">
-                {/* Left: Form */}
-                <div className="flex-1 !max-h-[62vh] overflow-y-auto pr-2 -ml-1">
-                  <div className="space-y-6 pl-1 pb-1">
-                    <div>
-                      <h3 className="font-semibold text-lg mb-1">Campaign Details</h3>
-                      <p className="text-sm text-muted-foreground">Give your campaign a name and choose when you want to schedule your campaign.</p>
-                    </div>
-
-                    {/* Campaign Name */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-foreground">Campaign name<span className="text-red-500 pl-0.5">*</span></label>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          placeholder="Enter campaign name..."
-                          value={campaignName}
-                          onChange={(e) => setCampaignName(e.target.value.slice(0, 512))}
-                          className="pr-12 border border-input [border-color:hsl(var(--input))] hover-elevate"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                          {campaignName.length}/512
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Campaign Start and End Date */}
-                    <div className="flex flex-col gap-6">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-foreground">Campaign start date<span className="text-red-500 pl-0.5">*</span></label>
-                        <Popover open={startDatePickerOpen} onOpenChange={setStartDatePickerOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={"outline"}
-                              className="w-full justify-between text-left font-normal border-input [border-color:hsl(var(--input))] hover-elevate"
-                            >
-                              <div className="flex items-center">
-                                <Calendar size={14} className="mr-2" />
-                                {campaignStartDate ? campaignStartDate.toLocaleDateString() : <span>Pick a date</span>}
-                              </div>
-                              <ChevronDown size={14} className="text-muted-foreground" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <CalendarComponent
-                              mode="single"
-                              selected={campaignStartDate}
-                              onSelect={(date) => {
-                                setCampaignStartDate(date);
-                                if (campaignEndDate && date && date > campaignEndDate) {
-                                  setCampaignEndDate(undefined);
-                                }
-                                setStartDatePickerOpen(false);
-                              }}
-                              disabled={campaignEndDate ? { after: campaignEndDate } : undefined}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div className="flex flex-col space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-sm font-medium text-foreground">Campaign end date<span className="text-red-500 pl-0.5">*</span></label>
-                          <div className="flex items-end space-x-2 mt-2">
-                            <Checkbox id="never-ends" checked={neverEnds} onCheckedChange={(checked) => {
-                              setNeverEnds(checked as boolean);
-                              if (checked) {
-                                setCampaignEndDate(undefined);
-                              }
-                            }} />
-                            <label
-                              htmlFor="never-ends"
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                              Never end
-                            </label>
-                          </div>
-                        </div>
-                        <Popover open={endDatePickerOpen} onOpenChange={setEndDatePickerOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant={"outline"}
-                              className="w-full justify-between text-left font-normal border-input [border-color:hsl(var(--input))] hover-elevate"
-                              disabled={neverEnds}
-                            >
-                              <div className="flex items-center">
-                                <Calendar size={14} className="mr-2" />
-                                {campaignEndDate ? campaignEndDate.toLocaleDateString() : <span>Pick a date</span>}
-                              </div>
-                              <ChevronDown size={14} className="text-muted-foreground" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <CalendarComponent
-                              mode="single"
-                              selected={campaignEndDate}
-                              onSelect={(date) => {
-                                setCampaignEndDate(date);
-                                if (campaignStartDate && date && date < campaignStartDate) {
-                                  setCampaignStartDate(undefined);
-                                }
-                                setEndDatePickerOpen(false);
-                              }}
-                              disabled={campaignStartDate ? { before: campaignStartDate } : undefined}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </div>
-
-                    {/* WhatsApp Template Dropdown */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">WhatsApp Template<span className="text-red-500 pl-0.5">*</span></label>
-                      <Select
-                        value={selectedWhatsAppTemplate || ""}
-                        onValueChange={(value) => {
-                          setSelectedWhatsAppTemplate(value);
-                          setSelectedTemplate(whatsappTemplates.find(t => t.name === value) || null);
-                        }}
-                      >
-                        <SelectTrigger className="border border-input [border-color:hsl(var(--input))] hover-elevate">
-                          <SelectValue placeholder="Select a template" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {whatsappTemplates.map(template => (
-                            <SelectItem key={template.id} value={template.name}>{template.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Template Preview */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Template Preview</h3>
-                  <div className="flex flex-col items-center h-full max-h-[62vh] w-full max-w-[31vh]">
-                    <PreviewV2
-                      mode="chat"
-                      headerText={selectedTemplate?.header || ""}
-                      bodyText={selectedTemplate?.body || ""}
-                      footerText={selectedTemplate?.footer || ""}
-                      selectedMediaFile={null}
-                      templateButtons={selectedTemplate?.buttons || []}
-                      variableSamples={selectedTemplate?.variableSamples || {}}
-                    />
-                    <p className="text-[10px] py-1">Preview may not reflect the exact WhatsApp interface</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-4">
-                {editingCampaignId ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => { setCreateOpen(false); setEditingCampaignId(null); }}
-                    className="border-input [border-color:hsl(var(--input))] font-normal"
-                  >
-                    Cancel
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={() => setCampaignCreationStep("selectType")}
-                    className="border-input [border-color:hsl(var(--input))] font-normal"
-                  >
-                    Back
-                  </Button>
-                )}
-                <div className="flex gap-2">
-                  {!editingCampaignId && (
-                    <Button
-                      variant="outline"
-                      className="btn-outline-primary font-normal"
-                      disabled={!campaignName}
-                      onClick={() => handleCreateCampaign("draft")}
-                    >
-                      Save Draft
-                    </Button>
-                  )}
-                  <Button
-                    className="gap-2 font-normal btn-outline-primary"
-                    variant="outline"
-                    disabled={
-                      !campaignName ||
-                      // Same EDIT-lenient gate as the broadcast form: in
-                      // create mode all fields are required; in edit mode
-                      // a name change alone is enough to keep Save enabled.
-                      (!editingCampaignId && (
-                        !campaignStartDate ||
-                        (!campaignEndDate && !neverEnds) ||
-                        !selectedWhatsAppTemplate
-                      ))
-                    }
-                    onClick={() => handleCreateCampaign("scheduled")}
-                  >
-                    {editingCampaignId ? "Save Campaign" : "Set Live"}
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-
-          {campaignCreationStep === "broadcastForm" && (
-            <>
-              <DialogHeader className="mb-2">
-                <div className="flex items-center gap-3 mb-2">
-                  {!editingCampaignId && (
-                    <ArrowLeft size={18} className="cursor-pointer" onClick={() => setCampaignCreationStep("selectType")} />
-                  )}
-                  <DialogTitle>{editingCampaignId ? "Edit Broadcast Campaign" : "Create Broadcast Campaign"}</DialogTitle>
-                </div>
-              </DialogHeader>
-
-              <div className="flex gap-4">
-                {/* Left: Form */}
-                <div className="flex-1 !max-h-[62vh] overflow-y-auto pr-2 -ml-1">
-                  <div className="space-y-6 pl-1 pb-1">
-                    <div>
-                      <h3 className="font-semibold text-lg mb-1">Campaign Details</h3>
-                      <p className="text-sm text-muted-foreground">Give your campaign a name and choose its type.</p>
-                    </div>
-
-                    {/* Campaign Name */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium text-foreground">Campaign name<span className="text-red-500 pl-0.5">*</span></label>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          placeholder="Enter campaign name..."
-                          value={campaignName}
-                          onChange={(e) => setCampaignName(e.target.value.slice(0, 512))}
-                          className="pr-12 border border-input [border-color:hsl(var(--input))] hover-elevate"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                          {campaignName.length}/512
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Campaign Type */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Campaign Type<span className="text-red-500 pl-0.5">*</span></label>
-                      <Select value={broadcastCampaignType} onValueChange={setBroadcastCampaignType}>
-                        <SelectTrigger className="border border-input [border-color:hsl(var(--input))] hover-elevate">
-                          <SelectValue placeholder="Select a type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Immediate">Immediate</SelectItem>
-                          <SelectItem value="Scheduled">Scheduled</SelectItem>
-                          <SelectItem value="Recurring">Recurring</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      {broadcastCampaignType === 'Scheduled' && (
-                        <div className="space-y-4 pt-2">
-                          {schedules.map((schedule, index) => (
-                            <div key={schedule.id} className="flex flex-col gap-6 p-4 border rounded-lg border border-input [border-color:hsl(var(--input))]">
-                              <div className="flex items-start justify-between">
-                                <div className="space-y-2 flex-1">
-                                  <div className="flex justify-between items-end">
-                                    <label className="text-sm font-medium text-foreground">Campaign schedule date<span className="text-red-500 pl-0.5">*</span></label>
-                                    {schedules.length > 1 && (
-                                      <button onClick={() => removeSchedule(schedule.id)} className="text-muted-foreground hover:text-foreground transition-colors ml-4 mt-1">
-                                        <X size={16} />
-                                      </button>
-                                    )}
-                                  </div>
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button
-                                        variant={"outline"}
-                                        className="w-full justify-between text-left font-normal border-input [border-color:hsl(var(--input))] hover-elevate"
-                                      >
-                                        <div className="flex items-center">
-                                          <Calendar size={14} className="mr-2" />
-                                          {schedule.date ? schedule.date.toLocaleDateString() : <span>Pick a date</span>}
-                                        </div>
-                                        <ChevronDown size={14} className="text-muted-foreground" />
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                      <CalendarComponent
-                                        mode="single"
-                                        selected={schedule.date}
-                                        onSelect={(date) => handleScheduleChange(index, 'date', date)}
-                                        initialFocus
-                                      />
-                                    </PopoverContent>
-                                  </Popover>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-sm font-medium text-foreground">Campaign schedule time<span className="text-red-500 pl-0.5">*</span></label>
-                                <div className="flex gap-2">
-                                  <Select value={schedule.hour} onValueChange={(value) => handleScheduleChange(index, 'hour', value)}>
-                                    <SelectTrigger className="w-[80px] border border-input [border-color:hsl(var(--input))] hover-elevate">
-                                      <SelectValue placeholder="HH" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {Array.from({ length: 12 }, (_, i) => `${i + 1}`.padStart(2, '0')).map(hour => (
-                                        <SelectItem key={hour} value={hour}>{hour}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Select value={schedule.minute} onValueChange={(value) => handleScheduleChange(index, 'minute', value)}>
-                                    <SelectTrigger className="w-[80px] border border-input [border-color:hsl(var(--input))] hover-elevate">
-                                      <SelectValue placeholder="MM" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {Array.from({ length: 60 }, (_, i) => `${i}`.padStart(2, '0')).map(minute => (
-                                        <SelectItem key={minute} value={minute}>{minute}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Select value={schedule.period} onValueChange={(value) => handleScheduleChange(index, 'period', value)}>
-                                    <SelectTrigger className="w-[95px] border border-input [border-color:hsl(var(--input))] hover-elevate">
-                                      <SelectValue placeholder="AM/PM" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="AM">AM</SelectItem>
-                                      <SelectItem value="PM">PM</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mt-2 text-xs"
-                            disabled={isSchedulesInvalid || schedules.length >= 5}
-                            onClick={addSchedule}
-                          >
-                            <Plus size={14} className="mr-1" />
-                            Add another schedule
-                          </Button>
-
-                          {/* Timezone Checkbox */}
-                          <div className="flex items-center space-x-2">
-                            <Checkbox id="timezone-delivery" checked={deliverInTimezone} onCheckedChange={(checked) => setDeliverInTimezone(checked as boolean)} />
-                            <label htmlFor="timezone-delivery" className="text-sm font-medium leading-none">Deliver in user's timezone</label>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Info className="h-4 w-4" />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="break-normal w-[16rem] whitespace-normal">You can send campaign messages to the user as per their local time zone. i.e. If you schedule your campaign for 9:30 am Singapore time, we will deliver to users in Singapore at 9:30 am (UTC/GMT +8 hours) and to users in Dubai at 9:30 am (UTC/GMT +4 hours). Note that the Campaign Start Time is always the timezone of your Digital Connect Account.</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
-                      )}
-
-                      {broadcastCampaignType === 'Recurring' && (() => {
-                        const weekDays = [
-                          { display: 'M', value: 'mon' },
-                          { display: 'T', value: 'tue' },
-                          { display: 'W', value: 'wed' },
-                          { display: 'T', value: 'thu' },
-                          { display: 'F', value: 'fri' },
-                          { display: 'S', value: 'sat' },
-                          { display: 'S', value: 'sun' }
-                        ];
-                        return (
-                          <div className="space-y-4 pt-2">
-                            {/* Start and End Date */}
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-foreground">Start date<span className="text-red-500 pl-0.5">*</span></label>
-                              <Popover open={recurringStartPickerOpen} onOpenChange={setRecurringStartPickerOpen}>
-                                <PopoverTrigger asChild>
-                                  <Button variant={"outline"} className="w-full justify-between text-left font-normal border-input [border-color:hsl(var(--input))] hover-elevate">
-                                    <div className="flex items-center">
-                                      <Calendar size={14} className="mr-2" />
-                                      {recurringStartDate ? recurringStartDate.toLocaleDateString() : <span>Pick a date</span>}
-                                    </div>
-                                    <ChevronDown size={14} className="text-muted-foreground" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                  <CalendarComponent
-                                    mode="single"
-                                    selected={recurringStartDate}
-                                    onSelect={(date) => {
-                                      setRecurringStartDate(date);
-                                      if (recurringEndDate && date && date > recurringEndDate) setRecurringEndDate(undefined);
-                                      setRecurringStartPickerOpen(false);
-                                    }}
-                                    disabled={recurringEndDate ? { after: recurringEndDate } : undefined}
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-foreground">End date<span className="text-red-500 pl-0.5">*</span></label>
-                              <Popover open={recurringEndPickerOpen} onOpenChange={setRecurringEndPickerOpen}>
-                                <PopoverTrigger asChild>
-                                  <Button variant={"outline"} className="w-full justify-between text-left font-normal border-input [border-color:hsl(var(--input))] hover-elevate">
-                                    <div className="flex items-center">
-                                      <Calendar size={14} className="mr-2" />
-                                      {recurringEndDate ? recurringEndDate.toLocaleDateString() : <span>Pick a date</span>}
-                                    </div>
-                                    <ChevronDown size={14} className="text-muted-foreground" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                  <CalendarComponent
-                                    mode="single"
-                                    selected={recurringEndDate}
-                                    onSelect={(date) => {
-                                      setRecurringEndDate(date);
-                                      if (recurringStartDate && date && date < recurringStartDate) setRecurringStartDate(undefined);
-                                      setRecurringEndPickerOpen(false);
-                                    }}
-                                    disabled={recurringStartDate ? { before: recurringStartDate } : undefined}
-                                    initialFocus
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-
-                            {/* Time Picker */}
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-foreground">At<span className="text-red-500 pl-0.5">*</span></label>
-                              <div className="flex gap-2">
-                                <Select value={recurringTime.hour} onValueChange={(value) => setRecurringTime(t => ({ ...t, hour: value }))}>
-                                  <SelectTrigger className="w-[80px] border border-input [border-color:hsl(var(--input))] hover-elevate">
-                                    <SelectValue placeholder="HH" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {Array.from({ length: 12 }, (_, i) => `${i + 1}`.padStart(2, '0')).map(hour => (
-                                      <SelectItem key={hour} value={hour}>{hour}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Select value={recurringTime.minute} onValueChange={(value) => setRecurringTime(t => ({ ...t, minute: value }))}>
-                                  <SelectTrigger className="w-[80px] border border-input [border-color:hsl(var(--input))] hover-elevate">
-                                    <SelectValue placeholder="MM" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {Array.from({ length: 60 }, (_, i) => `${i}`.padStart(2, '0')).map(minute => (
-                                      <SelectItem key={minute} value={minute}>{minute}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Select value={recurringTime.period} onValueChange={(value) => setRecurringTime(t => ({ ...t, period: value }))}>
-                                  <SelectTrigger className="w-[95px] border border-input [border-color:hsl(var(--input))] hover-elevate">
-                                    <SelectValue placeholder="AM/PM" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="AM">AM</SelectItem>
-                                    <SelectItem value="PM">PM</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-
-                            {/* Repeat Row */}
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium text-foreground">Repeat<span className="text-red-500 pl-0.5">*</span></label>
-                              <div className="flex items-center gap-2">
-                                <Select value={repeatFrequency} onValueChange={setRepeatFrequency}>
-                                  <SelectTrigger className="border border-input [border-color:hsl(var(--input))] hover-elevate flex-1">
-                                    <SelectValue placeholder="Select frequency" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="daily">Daily</SelectItem>
-                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                {repeatFrequency && (
-                                  <>
-                                    <span className="text-sm text-muted-foreground">every</span>
-                                    <Select
-                                      value={repeatFrequency === 'daily' ? dailyRepeatInterval : ''}
-                                      onValueChange={setDailyRepeatInterval}
-                                      disabled={repeatFrequency !== 'daily'}
-                                    >
-                                      <SelectTrigger className="border border-input [border-color:hsl(var(--input))] hover-elevate flex-1">
-                                        <SelectValue placeholder={
-                                          repeatFrequency === 'weekly' ? "Single Week" :
-                                            repeatFrequency === 'monthly' ? "Single Month" :
-                                              "Select interval"
-                                        } />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="1">Single Day</SelectItem>
-                                        {Array.from({ length: 5 }, (_, i) => i + 2).map(day => (
-                                          <SelectItem key={day} value={String(day)}>{day} Days</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Conditional Multi-select */}
-                            {repeatFrequency === 'weekly' && (
-                              <div className="space-y-2">
-                                <div className="flex gap-1">
-                                  {weekDays.map(day => (
-                                    <Button
-                                      key={day.value}
-                                      variant={weeklyRepeatDays.includes(day.value) ? "default" : "outline"}
-                                      size="sm"
-                                      onClick={() => toggleWeeklyDay(day.value)}
-                                      className="flex-1"
-                                    >
-                                      {day.display}
-                                    </Button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {repeatFrequency === 'monthly' && (
-                              <div className="space-y-2">
-                                <div className="grid grid-cols-7 gap-1">
-                                  {Array.from({ length: 31 }, (_, i) => i + 1).map(date => (
-                                    <Button
-                                      key={date}
-                                      variant={monthlyRepeatDates.includes(date) ? "default" : "outline"}
-                                      size="sm"
-                                      onClick={() => toggleMonthlyDate(date)}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      {date}
-                                    </Button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Timezone Checkbox */}
-                            <div className="flex items-center space-x-2 pt-2">
-                              <Checkbox id="timezone-delivery-Recurring" checked={deliverInTimezone} onCheckedChange={(checked) => setDeliverInTimezone(checked as boolean)} />
-                              <label htmlFor="timezone-delivery-Recurring" className="text-sm font-medium leading-none">Deliver in user's timezone</label>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Info className="h-4 w-4" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="break-normal w-[16rem] whitespace-normal">You can send campaign messages to the user as per their local time zone. i.e. If you schedule your campaign for 9:30 am Singapore time, we will deliver to users in Singapore at 9:30 am (UTC/GMT +8 hours) and to users in Dubai at 9:30 am (UTC/GMT +4 hours). Note that the Campaign Start Time is always the timezone of your Digital Connect Account.</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          </div>
-                        )
-                      })()}
-                    </div>
-
-                    {/* WhatsApp Template Dropdown */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">WhatsApp Template<span className="text-red-500 pl-0.5">*</span></label>
-                      <Select
-                        value={selectedWhatsAppTemplate || ""}
-                        onValueChange={(value) => {
-                          setSelectedWhatsAppTemplate(value);
-                          setSelectedTemplate(whatsappTemplates.find(t => t.name === value) || null);
-                        }}
-                      >
-                        <SelectTrigger className="border border-input [border-color:hsl(var(--input))] hover-elevate">
-                          <SelectValue placeholder="Select a template" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {whatsappTemplates.map(template => (
-                            <SelectItem key={template.id} value={template.name}>{template.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* CSV Upload */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Contact List (CSV)<span className="text-red-500 pl-0.5">*</span></label>
-                      <p className="text-xs text-muted-foreground">Upload a CSV with 'name' and 'number' columns.</p>
-                      <input type="file" id="csv-upload" accept=".csv" className="hidden" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        setCsvFile(file);
-                        setCsvData([]);
-                        setCsvError(null);
-
-                        if (!file.name.endsWith(".csv")) {
-                          setCsvError("Invalid file type. Please upload a .csv file.");
-                          setCsvFile(null);
-                          return;
-                        }
-
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          const text = event.target?.result as string;
-                          if (!text) {
-                            setCsvError("Could not read the file.");
-                            setCsvFile(null);
-                            return;
-                          }
-
-                          const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
-                          if (lines.length < 2) {
-                            setCsvError("CSV must have a header and at least one data row.");
-                            setCsvFile(null);
-                            return;
-                          }
-
-                          const header = lines[0].split(",").map(h => h.trim());
-                          if (header.includes("name") && header.includes("number")) {
-                            const data = lines.slice(1).map(line => {
-                              const values = line.split(",");
-                              const obj: { [key: string]: string } = {};
-                              header.forEach((h, i) => {
-                                obj[h] = values[i] || "";
-                              });
-                              return obj;
-                            });
-                            setCsvData(data);
-                          } else {
-                            setCsvError("Invalid CSV format. Header must include 'name' and 'number' columns.");
-                            setCsvFile(null);
-                            setCsvData([]);
-                          }
-                        };
-                        reader.onerror = () => {
-                          setCsvError("Error reading file.");
-                          setCsvFile(null);
-                          setCsvData([]);
-                        };
-                        reader.readAsText(file);
-
-                        if (e.target) {
-                          e.target.value = ''
-                        }
-                      }} />
-                      {!csvFile ? (
-                        <Button className="btn-outline-primary font-normal" variant="outline" onClick={() => document.getElementById('csv-upload')?.click()}>
-                          Browse
-                        </Button>
-                      ) : (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded border border-input [border-color:hsl(var(--input))]">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <Paperclip size={14} className="text-muted-foreground flex-shrink-0" />
-                            <span className="truncate text-foreground text-sm">{csvFile.name}</span>
-                            <span className="text-xs text-muted-foreground flex-shrink-0">({(csvFile.size / 1024).toFixed(1)}KB)</span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setLocalCsvData(JSON.parse(JSON.stringify(csvData))); // Deep copy
-                              setIsViewCsvModalOpen(true);
-                            }}
-                            className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => setCsvFile(null)}
-                            className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      )}
-                      {csvError && <p className="text-sm text-red-500">{csvError}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right: Template Preview */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">Template Preview</h3>
-                  <div className="h-full max-h-[62vh] w-full max-w-[31vh] flex flex-col items-center">
-                    <PreviewV2
-                      mode="chat"
-                      headerText={selectedTemplate?.header || ""}
-                      bodyText={selectedTemplate?.body || ""}
-                      footerText={selectedTemplate?.footer || ""}
-                      selectedMediaFile={null}
-                      templateButtons={selectedTemplate?.buttons || []}
-                      variableSamples={selectedTemplate?.variableSamples || {}}
-                    />
-                    <p className="text-[10px] py-1">Preview may not reflect the exact WhatsApp interface</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-4">
-                {editingCampaignId ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => { setCreateOpen(false); setEditingCampaignId(null); }}
-                    className="border-input [border-color:hsl(var(--input))] font-normal"
-                  >
-                    Cancel
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={() => setCampaignCreationStep("selectType")}
-                    className="border-input [border-color:hsl(var(--input))] font-normal"
-                  >
-                    Back
-                  </Button>
-                )}
-                <div className="flex gap-2">
-                  {!editingCampaignId && (
-                    <Button
-                      variant="outline"
-                      className="btn-outline-primary font-normal"
-                      disabled={!campaignName}
-                      onClick={() => handleCreateBroadcastCampaign("draft")}
-                    >
-                      Save Draft
-                    </Button>
-                  )}
-                  <Button
-                    className="gap-2 font-normal btn-outline-primary"
-                    variant="outline"
-                    disabled={
-                      !campaignName ||
-                      // CREATE flow asks for the full payload up front.
-                      // EDIT flow is more lenient — template / CSV / schedule
-                      // are already persisted on the broadcast and the inputs
-                      // aren't re-hydrated on open, so requiring them would
-                      // keep the Save button perma-disabled even when the
-                      // user has made a legitimate change.
-                      (!editingCampaignId && (
-                        !broadcastCampaignType ||
-                        !selectedWhatsAppTemplate ||
-                        !csvFile ||
-                        (broadcastCampaignType === 'Scheduled' && isSchedulesInvalid) ||
-                        (broadcastCampaignType === 'Recurring' && isRecurringInvalid)
-                      ))
-                    }
-                    onClick={() => handleCreateBroadcastCampaign("scheduled")}
-                  >
-                    {editingCampaignId ? "Save Campaign" : "Set Live"}
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
         </DialogContent>
       </Dialog>
 
-      {/* View CSV Modal */}
-      <Dialog open={isViewCsvModalOpen} onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          setCsvSort(null);
-        }
-        setIsViewCsvModalOpen(isOpen);
-      }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>CSV Editor</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="max-h-[60vh] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="select-none">
-                  <tr className="border-b border-gray-300">
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30" onClick={() => handleCsvColumnSort("name")}>
-                      <div className="flex items-center gap-2">
-                        Name
-                        {renderCsvSortIcon("name")}
-                      </div>
-                    </th>
-                    <th className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30" onClick={() => handleCsvColumnSort("number")}>
-                      <div className="flex items-center gap-2">
-                        Number
-                        {renderCsvSortIcon("number")}
-                      </div>
-                    </th>
-                    <th className="w-10">
-                      <Button variant="ghost" size="sm" onClick={() => setLocalCsvData([...localCsvData, { name: "", number: "" }])}><Plus /></Button>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {getSortedLocalCsvData().map((row, index) => (
-                    <tr key={index} className="border-b border-gray-300">
-                      <td>
-                        <Input
-                          value={row.name}
-                          onChange={(e) => {
-                            const newData = localCsvData.map(originalRow =>
-                              originalRow === row ? { ...originalRow, name: e.target.value } : originalRow
-                            );
-                            setLocalCsvData(newData);
-                          }}
-                          className="border-none rounded-none focus-visible:ring-0"
-                        />
-                      </td>
-                      <td>
-                        <Input
-                          value={row.number}
-                          onChange={(e) => {
-                            const newData = localCsvData.map(originalRow =>
-                              originalRow === row ? { ...originalRow, number: e.target.value } : originalRow
-                            );
-                            setLocalCsvData(newData);
-                          }}
-                          className="border-none rounded-none focus-visible:ring-0"
-                        />
-                      </td>
-                      <td>
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          setLocalCsvData(localCsvData.filter(originalRow => originalRow !== row));
-                        }}><X /></Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-between">
-              <Button
-                variant="outline"
-                onClick={() => setIsViewCsvModalOpen(false)}
-                className="border-input [border-color:hsl(var(--input))] font-normal"
-              >
-                Cancel
-              </Button>
-              <Button
-                className="btn-outline-primary"
-                variant="outline"
-                onClick={() => {
-                  const filteredData = localCsvData.filter(row => row.name?.trim() || row.number?.trim());
-                  setCsvData(filteredData);
-                  setIsViewCsvModalOpen(false);
-                }}
-                disabled={isCsvSaveDisabled}
-              >
-                Save
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Details Dialog */}
-      <Dialog open={detailsOpen} onOpenChange={(isOpen) => {
-        setDetailsOpen(isOpen);
-        if (!isOpen) {
-          setSelectedCampaignForPerformance(null);
-        }
-      }}>
-        <DialogContent className={`max-w-5xl ${activeDetailsTab === "details" ? "max-w-2xl" :
-          activeDetailsTab === "performance" ? "max-w-4xl" :
-            activeDetailsTab === "recipients" ? "max-w-3xl" : ""
-          }`} data-testid="dialog-details">
-          <DialogHeader className="mb-2">
-            <DialogTitle>Campaign Performance - {selectedCampaignForPerformance?.name}</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Tabs */}
-            <div className="flex items-center space-x-1 bg-slate-200/75 dark:bg-slate-800 rounded-lg p-1 w-fit">
-              <button
-                onClick={() => setActiveDetailsTab("details")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeDetailsTab === "details"
-                  ? "bg-background text-foreground shadow-[0_-3px_6px_rgba(0,0,0,0.00),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.02)]"
-                  : "text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
-                data-testid="tab-details"
-              >
-                Details
-              </button>
-              <button
-                onClick={() => setActiveDetailsTab("performance")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeDetailsTab === "performance"
-                  ? "bg-background text-foreground shadow-[0_-3px_6px_rgba(0,0,0,0.00),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.02)]"
-                  : "text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
-                data-testid="tab-performance"
-              >
-                Performance
-              </button>
-              <button
-                onClick={() => setActiveDetailsTab("recipients")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeDetailsTab === "recipients"
-                  ? "bg-background text-foreground shadow-[0_-3px_6px_rgba(0,0,0,0.00),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.02)]"
-                  : "text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-slate-200"
-                  }`}
-                data-testid="tab-recipients"
-              >
-                Recipients
-              </button>
-            </div>
-
-            {/* Details Tab */}
-            {activeDetailsTab === "details" && (() => {
-              const selectedTemplate = whatsappTemplates.find(t => t.name === selectedCampaignForPerformance?.whatsAppTemplateName);
-              return (
-                <div className="flex gap-4">
-                  {/* Left: Details */}
-                  <div className="flex-1 space-y-4 !max-h-[62vh] overflow-y-auto">
-                    <div className="flex flex-col gap-x-4 gap-y-6">
-                      <div>
-                        <label className="text-sm font-medium text-foreground">Campaign Name</label>
-                        <p className="mt-1 text-sm">{selectedCampaignForPerformance?.name}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-foreground">Campaign Type</label>
-                        <p className="mt-1 text-sm">{selectedCampaignForPerformance?.type}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-foreground">Message Type</label>
-                        <p className="mt-1 text-sm">{selectedCampaignForPerformance?.messageType}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-foreground">Status</label>
-                        <p className="mt-1 text-sm capitalize">{selectedCampaignForPerformance?.status}</p>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium text-foreground">WhatsApp Template</label>
-                        <p className="mt-1 text-sm">{selectedCampaignForPerformance?.whatsAppTemplateName}</p>
-                      </div>
-
-                      {/* API Triggered Fields */}
-                      {selectedCampaignForPerformance?.type === 'API Triggered' && (
-                        <>
-                          {selectedCampaignForPerformance?.startDate && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Start Date</label>
-                              <p className="mt-1 text-sm">{new Date(selectedCampaignForPerformance.startDate).toLocaleDateString()}</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.endDate ? (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">End Date</label>
-                              <p className="mt-1 text-sm">{new Date(selectedCampaignForPerformance.endDate).toLocaleDateString()}</p>
-                            </div>
-                          ) : selectedCampaignForPerformance?.neverEnds ? (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">End Date</label>
-                              <p className="mt-1 text-sm">Never</p>
-                            </div>
-                          ) : null}
-                        </>
-                      )}
-
-                      {/* Broadcast Fields */}
-                      {selectedCampaignForPerformance?.type === 'Broadcast' && (
-                        <>
-                          {selectedCampaignForPerformance?.csvContent && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Number of contacts</label>
-                              <p className="mt-1 text-sm">{selectedCampaignForPerformance.csvContent.length} contacts</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.deliverInTimezone && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Deliver in User's Timezone</label>
-                              <p className="mt-1 text-sm">Yes</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.schedules && selectedCampaignForPerformance.schedules.length > 0 && (
-                            <div className="col-span-2">
-                              <label className="text-sm font-medium text-foreground">Schedules</label>
-                              <ul className="mt-1 space-y-1 text-sm">
-                                {selectedCampaignForPerformance.schedules.map(s => (
-                                  <li key={s.id}>{s.date ? new Date(s.date).toLocaleDateString() : ''} at {s.hour}:{s.minute} {s.period}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.recurringStartDate && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Recurring Start Date</label>
-                              <p className="mt-1 text-sm">{new Date(selectedCampaignForPerformance.recurringStartDate).toLocaleDateString()}</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.recurringEndDate && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Recurring End Date</label>
-                              <p className="mt-1 text-sm">{new Date(selectedCampaignForPerformance.recurringEndDate).toLocaleDateString()}</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.recurringTime && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Recurring Time</label>
-                              <p className="mt-1 text-sm">{selectedCampaignForPerformance.recurringTime.hour}:{selectedCampaignForPerformance.recurringTime.minute} {selectedCampaignForPerformance.recurringTime.period}</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.repeatFrequency && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Repeat Frequency</label>
-                              <p className="mt-1 text-sm capitalize">{selectedCampaignForPerformance.repeatFrequency}</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.dailyRepeatInterval && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Daily Repeat Interval</label>
-                              <p className="mt-1 text-sm">{selectedCampaignForPerformance.dailyRepeatInterval} days</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.weeklyRepeatDays && selectedCampaignForPerformance.weeklyRepeatDays.length > 0 && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Weekly Repeat Days</label>
-                              <p className="mt-1 text-sm">{selectedCampaignForPerformance.weeklyRepeatDays.join(', ')}</p>
-                            </div>
-                          )}
-                          {selectedCampaignForPerformance?.monthlyRepeatDates && selectedCampaignForPerformance.monthlyRepeatDates.length > 0 && (
-                            <div>
-                              <label className="text-sm font-medium text-foreground">Monthly Repeat Dates</label>
-                              <p className="mt-1 text-sm">{selectedCampaignForPerformance.monthlyRepeatDates.join(', ')}</p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right: Template Preview */}
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-1">Template Preview</label>
-                    <div className="h-full max-h-[62vh] w-full max-w-[31vh] flex flex-col items-center">
-                      <PreviewV2
-                        mode="chat"
-                        headerText={selectedTemplate?.header || ""}
-                        bodyText={selectedTemplate?.body || ""}
-                        footerText={selectedTemplate?.footer || ""}
-                        selectedMediaFile={null}
-                        templateButtons={selectedTemplate?.buttons || []}
-                        variableSamples={selectedTemplate?.variableSamples || {}}
-                      />
-                      <p className="text-[10px] py-1">Preview may not reflect the exact WhatsApp interface</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Performance Tab */}
-            {activeDetailsTab === "performance" && (
-              <div className="space-y-6">
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Sent</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-semibold">15,420</div>
-                      <p className="text-xs text-muted-foreground mt-1">Total messages</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Delivered</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-semibold">14,892</div>
-                      <p className="text-xs text-muted-foreground mt-1">96.6% delivery rate</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Failed</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-semibold">528</div>
-                      <p className="text-xs text-muted-foreground mt-1">3.4% failure rate</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Viewed</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-semibold">12,453</div>
-                      <p className="text-xs text-muted-foreground mt-1">83.6% view rate</p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Chart */}
-                <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="text-sm">Engagement Over Time</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer
-                      config={{
-                        delivered: {
-                          label: "Delivered",
-                          color: "hsl(var(--primary))",
-                        },
-                        viewed: {
-                          label: "Viewed",
-                          color: "hsl(var(--chart-2))",
-                        },
-                      }}
-                      className="h-[300px] w-full"
-                    >
-                      <AreaChart data={selectedCampaignForPerformance?.engagementData || []}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                        <XAxis dataKey="hour" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                        <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                        <RechartsTooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-                        <Area type="monotone" dataKey="delivered" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.2} strokeWidth={2} />
-                        <Area type="monotone" dataKey="viewed" stroke="hsl(var(--chart-2))" fill="hsl(var(--chart-2))" fillOpacity={0.2} strokeWidth={2} />
-                      </AreaChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {/* Recipients Tab */}
-            {activeDetailsTab === "recipients" && (() => {
-              const sortedRecipients = getSortedRecipients();
-              const paginatedRecipients = sortedRecipients.slice((recipientPage - 1) * recipientRowsPerPage, recipientPage * recipientRowsPerPage);
-              const totalRecipientPages = Math.ceil(sortedRecipients.length / recipientRowsPerPage);
-
-              const recipientStatusOptions = [
-                { id: "Sent", name: "Sent" },
-                { id: "Delivered", name: "Delivered" },
-                { id: "Viewed", name: "Viewed" },
-                { id: "Failed", name: "Failed" },
-              ];
-
-              return (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3"> {/* New flex container */}
-                    <div className="relative w-80">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                      <Input
-                        placeholder="Search recipients..."
-                        value={recipientSearchQuery}
-                        onChange={(e) => {
-                          setRecipientSearchQuery(e.target.value);
-                          setRecipientPage(1); // Reset to first page on search
-                        }}
-                        className="pl-10 text-sm w-full border border-input rounded-md bg-background focus:outline-none transition-color"
-                        data-testid="input-search-recipients"
-                      />
-                    </div>
-                    <CustomDropdown
-                      options={recipientStatusOptions}
-                      selected={selectedRecipientStatus}
-                      onChange={(values) => {
-                        setSelectedRecipientStatus(values);
-                        setRecipientPage(1); // Reset to first page on filter change
-                      }}
-                      placeholder="Status"
-                      width="160px"
-                    />
-                  </div>
-                  <Card className="shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0">
-                    <CardContent className="pt-2">
-                      <ScrollArea className="h-104">
-                        <div className="overflow-x-auto mt-6">
-                          <table className="w-full text-xs">
-                            <thead className="select-none">
-                              <tr className="border-b">
-                                <th className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30" onClick={() => handleRecipientSort('name')}>
-                                  <div className="flex items-center gap-2">
-                                    Name
-                                    {renderRecipientSortIcon('name')}
-                                  </div>
-                                </th>
-                                <th className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30" onClick={() => handleRecipientSort('phone')}>
-                                  <div className="flex items-center gap-2">
-                                    Phone
-                                    {renderRecipientSortIcon('phone')}
-                                  </div>
-                                </th>
-                                <th className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30" onClick={() => handleRecipientSort('status')}>
-                                  <div className="flex items-center gap-2">
-                                    Status
-                                    {renderRecipientSortIcon('status')}
-                                  </div>
-                                </th>
-                                <th className="text-left py-2 px-3 font-medium text-muted-foreground cursor-pointer hover:bg-muted/30" onClick={() => handleRecipientSort('time')}>
-                                  <div className="flex items-center gap-2">
-                                    Time
-                                    {renderRecipientSortIcon('time')}
-                                  </div>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {paginatedRecipients.map((recipient) => (
-                                <tr key={recipient.id} className="border-b hover:bg-muted/50" data-testid={`recipient-${recipient.id}`}>
-                                  <td className="py-2 px-3 font-medium">{recipient.name}</td>
-                                  <td className="py-2 px-3">{recipient.phone}</td>
-                                  <td className="py-2 px-3">
-                                    <span className={`px-2 py-1 rounded text-xs font-medium ${recipient.status === "Viewed" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
-                                      recipient.status === "Delivered" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
-                                        recipient.status === "Sent" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300" :
-                                          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                                      }`}>
-                                      {recipient.status}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-3 text-muted-foreground">{recipient.time}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </ScrollArea>
-                      {/* Pagination */}
-                      <div className="flex items-center justify-between mt-4 text-xs">
-                        <span className="text-muted-foreground">{sortedRecipients.length} results</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground">Rows per page:</span>
-                          <Select value={String(recipientRowsPerPage)} onValueChange={(value) => {
-                            setRecipientRowsPerPage(Number(value));
-                            setRecipientPage(1);
-                          }}>
-                            <SelectTrigger className="w-16 h-7 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="5">5</SelectItem>
-                              <SelectItem value="10">10</SelectItem>
-                              <SelectItem value="20">20</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <span className="text-muted-foreground">Page {recipientPage} of {totalRecipientPages || 1}</span>
-                          <div className="flex gap-1">
-                            <button className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors" disabled={recipientPage === 1} onClick={() => setRecipientPage(1)}>
-                              <ChevronsLeft size={16} />
-                            </button>
-                            <button className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors" disabled={recipientPage === 1} onClick={() => setRecipientPage(p => p - 1)}>
-                              <ChevronLeft size={16} />
-                            </button>
-                            <button className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors" disabled={recipientPage === totalRecipientPages} onClick={() => setRecipientPage(p => p + 1)}>
-                              <ChevronRight size={16} />
-                            </button>
-                            <button className="p-1 hover:bg-muted dark:hover:bg-slate-700 rounded disabled:opacity-50 transition-colors" disabled={recipientPage === totalRecipientPages} onClick={() => setRecipientPage(totalRecipientPages)}>
-                              <ChevronsRight size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )
-            })()}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Clone Campaign Dialog */}
       <Dialog open={cloneDialogOpen} onOpenChange={handleCancelCloneDialog}>
@@ -3110,37 +2953,6 @@ export default function CampaignManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Archive Campaign Modal */}
-      <Dialog open={showArchiveModal} onOpenChange={setShowArchiveModal}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader className="mb-2">
-            <DialogTitle>Archive Campaign</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <p className="text-sm text-foreground">
-              Are you sure you want to archive <span className="font-semibold break-all">{campaignToArchive?.name}</span>? You can restore it from the Archived tab.
-            </p>
-          </div>
-
-          {/* Modal Footer */}
-          <div className="flex gap-2 justify-end mt-2">
-            <Button
-              onClick={() => setShowArchiveModal(false)}
-              variant="outline"
-              className="border-input [border-color:hsl(var(--input))]"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmArchive}
-              className="bg-orange-500 hover:bg-orange-600 border-orange-600 text-white"
-            >
-              Archive
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Campaign Modal */}
       <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
@@ -3173,69 +2985,6 @@ export default function CampaignManager() {
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Archive Modal */}
-      <Dialog open={showBulkArchiveModal} onOpenChange={setShowBulkArchiveModal}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader className="mb-2">
-            <DialogTitle>Archive Campaigns</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <p className="text-sm text-foreground">
-              Are you sure you want to archive <span className="font-semibold">{getArchivableCampaigns().length} campaign(s)</span>? You can restore them from the Archived tab.
-            </p>
-          </div>
-
-          {/* Modal Footer */}
-          <div className="flex gap-2 justify-end mt-2">
-            <Button
-              onClick={() => setShowBulkArchiveModal(false)}
-              variant="outline"
-              className="border-input [border-color:hsl(var(--input))]"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkArchive}
-              className="bg-orange-500 hover:bg-orange-600 border-orange-600 text-white"
-            >
-              Archive
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bulk Delete Modal */}
-      <Dialog open={showBulkDeleteModal} onOpenChange={setShowBulkDeleteModal}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader className="mb-2">
-            <DialogTitle>Delete Campaigns</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <p className="text-sm text-foreground">
-              Are you sure you want to delete <span className="font-semibold">{getDeletableCampaigns().length} campaign(s)</span>? This action cannot be undone.
-            </p>
-          </div>
-
-          {/* Modal Footer */}
-          <div className="flex gap-2 justify-end mt-2">
-            <Button
-              onClick={() => setShowBulkDeleteModal(false)}
-              variant="outline"
-              className="border-input [border-color:hsl(var(--input))]"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkDelete}
-              className="bg-red-500 hover:bg-red-600 border-red-600 text-white"
-            >
-              Delete
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -3292,6 +3041,592 @@ function ChannelChipIcon({
     default:
       return <MessageSquare className={klass} strokeWidth={2.5} />;
   }
+}
+
+// ─── Audience condition picker ─────────────────────────────────────────
+// Full-modal grid of pickable audience filters. Sections are:
+//   • General     — Tag / Opportunity Tag
+//   • System      — the built-in contact fields
+//   • Opportunity — pipeline opportunity fields
+//   • Custom      — workspace's custom fields (fetched at parent)
+//   • [channel]   — per-channel-account fields (Last Interaction, ID, …)
+// Each card is a green-tinted rounded panel; hovering lifts it, and
+// selecting fires onPick with the chosen field so the parent can append
+// it to the composer's condition list.
+
+interface ConditionOption {
+  id: string;
+  label: string;
+  category: string;
+  icon: string;
+  fieldType: "enum" | "text" | "number" | "date" | "boolean";
+  // Enum-only: options for the Configure-condition value dropdown. For
+  // Tag / Opportunity Tag we pass the workspace tags; for Status we hard-
+  // code the pipeline stage labels.
+  enumOptions?: Array<{ id: string; label: string }>;
+}
+
+function ConditionPickerModal({
+  open,
+  onOpenChange,
+  search,
+  onSearchChange,
+  channels,
+  customFields,
+  workspaceTags,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+  channels: any[];
+  customFields: Array<{ id: string; name: string }>;
+  workspaceTags: Array<{ id: string; name: string }>;
+  onPick: (cond: ConditionOption) => void;
+}) {
+  // Icon glyph per option — kept as a lookup so the option list can stay
+  // pure-data.
+  const glyph = (name: string, size = 13): React.ReactNode => {
+    switch (name) {
+      case "tag": return <Tag size={size} strokeWidth={2.5} />;
+      case "hash": return <Hash size={size} strokeWidth={2.5} />;
+      case "user": return <User size={size} strokeWidth={2.5} />;
+      case "phone": return <PhoneIcon size={size} strokeWidth={2.5} />;
+      case "link": return <Link2 size={size} strokeWidth={2.5} />;
+      case "message": return <MessageSquare size={size} strokeWidth={2.5} />;
+      case "mail": return <Mail size={size} strokeWidth={2.5} />;
+      case "clock": return <Clock size={size} strokeWidth={2.5} />;
+      case "check": return <CheckCircle2 size={size} strokeWidth={2.5} />;
+      case "dollar": return <DollarSign size={size} strokeWidth={2.5} />;
+      case "calendar": return <Calendar size={size} />;
+      case "percent": return <Percent size={size} strokeWidth={2.5} />;
+      case "globe": return <Globe size={size} strokeWidth={2.5} />;
+      case "check-square": return <CheckSquare size={size} strokeWidth={2.5} />;
+      case "message-circle": return <MessageCircle size={size} strokeWidth={2.5} />;
+      default: return <Filter size={size} strokeWidth={2.5} />;
+    }
+  };
+
+  const tagEnum = workspaceTags.map((t) => ({ id: t.id, label: t.name }));
+  const statusEnum = [
+    { id: "open", label: "Open" },
+    { id: "won", label: "Won" },
+    { id: "lost", label: "Lost" },
+  ];
+  // Build sections dynamically so channel accounts appear inline.
+  const sections: Array<{ title: string; options: ConditionOption[] }> = [
+    {
+      title: "General",
+      options: [
+        { id: "tag", label: "Tag", category: "General", icon: "tag", fieldType: "enum", enumOptions: tagEnum },
+        { id: "opportunity_tag", label: "Opportunity Tag", category: "General", icon: "tag", fieldType: "enum", enumOptions: tagEnum },
+      ],
+    },
+    {
+      title: "System",
+      options: [
+        { id: "contact_id", label: "Contact ID", category: "System", icon: "hash", fieldType: "number" },
+        { id: "full_name", label: "Full name", category: "System", icon: "user", fieldType: "text" },
+        { id: "first_name", label: "First Name", category: "System", icon: "user", fieldType: "text" },
+        { id: "last_name", label: "Last Name", category: "System", icon: "user", fieldType: "text" },
+        { id: "title", label: "Title", category: "System", icon: "user", fieldType: "text" },
+        { id: "source", label: "Source", category: "System", icon: "link", fieldType: "text" },
+        { id: "phone", label: "Phone", category: "System", icon: "phone", fieldType: "text" },
+        { id: "whatsapp_number", label: "WhatsApp number", category: "System", icon: "phone", fieldType: "text" },
+        { id: "phone_country_code", label: "Phone Country Code", category: "System", icon: "message", fieldType: "text" },
+        { id: "email", label: "Email", category: "System", icon: "mail", fieldType: "text" },
+        { id: "created_on", label: "Created on", category: "System", icon: "clock", fieldType: "date" },
+      ],
+    },
+    {
+      title: "Opportunity",
+      options: [
+        { id: "opp_status", label: "Status", category: "Opportunity", icon: "check", fieldType: "enum", enumOptions: statusEnum },
+        { id: "opp_value", label: "Opportunity value", category: "Opportunity", icon: "dollar", fieldType: "number" },
+        { id: "opp_closing_date", label: "Closing date", category: "Opportunity", icon: "calendar", fieldType: "date" },
+        { id: "opp_confidence", label: "Confidence", category: "Opportunity", icon: "percent", fieldType: "number" },
+        { id: "opp_assigned_to", label: "Assigned to", category: "Opportunity", icon: "user", fieldType: "text" },
+      ],
+    },
+    ...(customFields.length > 0
+      ? [{
+          title: "Custom Fields",
+          options: customFields.map((f) => ({
+            id: `cf_${f.id}`,
+            label: f.name,
+            category: "Custom Fields",
+            icon: "check-square",
+            fieldType: "text" as const,
+          })),
+        }]
+      : []),
+    // Per channel account — replyagent groups by channel type + account
+    // name so the user can filter on channel-specific attributes.
+    ...channels.map((c: any) => {
+      const type = String(c.channel_type ?? "");
+      const acctName = c.name ?? `#${c.channelable_id}`;
+      const typeLabel = ({
+        whatsapp: "WhatsApp",
+        telegram: "Telegram",
+        messenger: "Messenger",
+        instagram: "Instagram",
+        webchat: "Webchat",
+      } as Record<string, string>)[type] ?? type;
+      const commonOpts: ConditionOption[] = [
+        { id: `${type}_${c.channelable_id}_last_interaction`, label: "Last Interaction", category: `${typeLabel} (${acctName})`, icon: "clock", fieldType: "date" },
+        { id: `${type}_${c.channelable_id}_opted_in`, label: "Opted-in", category: `${typeLabel} (${acctName})`, icon: "check-square", fieldType: "boolean" },
+      ];
+      const typeSpecific: ConditionOption[] = type === "telegram"
+        ? [
+            { id: `${type}_${c.channelable_id}_tg_id`, label: "Telegram ID", category: `${typeLabel} (${acctName})`, icon: "hash", fieldType: "text" },
+            { id: `${type}_${c.channelable_id}_tg_username`, label: "Telegram Username", category: `${typeLabel} (${acctName})`, icon: "user", fieldType: "text" },
+          ]
+        : type === "whatsapp"
+        ? [
+            { id: `${type}_${c.channelable_id}_wa_number`, label: "Whatsapp Phone Number", category: `${typeLabel} (${acctName})`, icon: "hash", fieldType: "text" },
+            { id: `${type}_${c.channelable_id}_wa_country`, label: "Whatsapp Country Code", category: `${typeLabel} (${acctName})`, icon: "message", fieldType: "text" },
+          ]
+        : type === "messenger"
+        ? [
+            { id: `${type}_${c.channelable_id}_msg_window`, label: "Message window (Inside 24h)", category: `${typeLabel} (${acctName})`, icon: "message-circle", fieldType: "boolean" },
+            { id: `${type}_${c.channelable_id}_locale`, label: "Locale", category: `${typeLabel} (${acctName})`, icon: "globe", fieldType: "text" },
+            { id: `${type}_${c.channelable_id}_language`, label: "Language", category: `${typeLabel} (${acctName})`, icon: "message", fieldType: "text" },
+          ]
+        : [];
+      return {
+        title: `${typeLabel} (${acctName})`,
+        options: [commonOpts[0], ...typeSpecific, commonOpts[1]],
+      };
+    }),
+  ];
+
+  // Search filter — matches label OR category.
+  const q = search.trim().toLowerCase();
+  const filteredSections = q
+    ? sections
+        .map((s) => ({
+          ...s,
+          options: s.options.filter(
+            (o) => o.label.toLowerCase().includes(q) || o.category.toLowerCase().includes(q),
+          ),
+        }))
+        .filter((s) => s.options.length > 0)
+    : sections;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[560px] p-0 rounded-2xl overflow-hidden">
+        {/* Header with filter tile + title + close X */}
+        <DialogHeader className="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 h-11 w-11 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm shadow-emerald-500/25">
+              <Filter size={18} className="text-white" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-[16px] font-bold text-slate-900 dark:text-white">
+                Select a condition
+              </DialogTitle>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Pick a field to filter your audience.
+              </p>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {/* Search */}
+        <div className="px-5 pt-4 pb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <Input
+              placeholder="Search"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-9 h-10 rounded-lg border-slate-200 dark:border-slate-800 text-[13px]"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* Sections */}
+        <div className="px-5 py-3 max-h-[52vh] overflow-y-auto space-y-5">
+          {filteredSections.length === 0 ? (
+            <div className="py-10 text-center text-[12px] text-slate-400">
+              No fields match "{search}"
+            </div>
+          ) : (
+            filteredSections.map((section) => (
+              <div key={section.title} className="space-y-2">
+                <h4 className="text-[13px] font-bold text-slate-800 dark:text-slate-200">
+                  {section.title}
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {section.options.map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => onPick(opt)}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all"
+                    >
+                      <span className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400">
+                        {glyph(opt.icon)}
+                      </span>
+                      <span className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 truncate">
+                        {opt.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Operator vocab per field type ─────────────────────────────────────
+// Kept small and human — matches the operators visible in replyagent's
+// Configure-condition modal. Each entry gives us both the machine value
+// (persisted into the broadcast metadata) and the past-tense label used
+// in the live preview line.
+const CONDITION_OPERATORS: Record<
+  "enum" | "text" | "number" | "date" | "boolean",
+  Array<{ value: string; label: string; preview: string }>
+> = {
+  enum: [
+    { value: "is", label: "Is", preview: "is" },
+    { value: "is_not", label: "Is not", preview: "is not" },
+  ],
+  text: [
+    { value: "has_value", label: "Has value", preview: "has value" },
+    { value: "is_null", label: "Is Null", preview: "is null" },
+    { value: "is", label: "Is", preview: "is" },
+    { value: "is_not", label: "Is not", preview: "is not" },
+    { value: "contains", label: "Contains", preview: "contains" },
+    { value: "does_not_contain", label: "Does not contain", preview: "does not contain" },
+    { value: "begins_with", label: "Begins with", preview: "begins with" },
+  ],
+  number: [
+    { value: "has_value", label: "Has value", preview: "has value" },
+    { value: "is_null", label: "Is Null", preview: "is null" },
+    { value: "is", label: "Is", preview: "is" },
+    { value: "is_not", label: "Is not", preview: "is not" },
+    { value: "greater_than", label: "Greater than", preview: "is greater than" },
+    { value: "less_than", label: "Less than", preview: "is less than" },
+  ],
+  date: [
+    { value: "is", label: "Is", preview: "is" },
+    { value: "before", label: "Before", preview: "is before" },
+    { value: "after", label: "After", preview: "is after" },
+  ],
+  boolean: [
+    { value: "is_true", label: "Is true", preview: "is true" },
+    { value: "is_false", label: "Is false", preview: "is false" },
+  ],
+};
+
+// Returns the past-tense preview verb for a given (fieldType, operator).
+function conditionOperatorPreview(fieldType: keyof typeof CONDITION_OPERATORS, op: string): string {
+  return CONDITION_OPERATORS[fieldType].find((o) => o.value === op)?.preview ?? op;
+}
+
+// True when the operator itself carries the whole meaning (no value input
+// needed) — has_value / is_null / boolean ops.
+function operatorSkipsValue(op: string): boolean {
+  return op === "has_value" || op === "is_null" || op === "is_true" || op === "is_false";
+}
+
+// ─── Configure condition modal ──────────────────────────────────────────
+// Second-step of the audience-condition flow. Renders a compact "field
+// picked" breadcrumb card, an operator dropdown, an appropriate value
+// input (enum dropdown / text / number / date), and a live emerald
+// preview strip so the user sees the sentence build in real time.
+
+function ConfigureConditionModal({
+  field,
+  operator,
+  value,
+  valueLabel,
+  onOperatorChange,
+  onValueChange,
+  onValueLabelChange,
+  onBack,
+  onClose,
+  onSave,
+}: {
+  field: null | {
+    fieldId: string;
+    fieldLabel: string;
+    category: string;
+    icon: string;
+    fieldType: "enum" | "text" | "number" | "date" | "boolean";
+    enumOptions?: Array<{ id: string; label: string }>;
+  };
+  operator: string;
+  value: string;
+  valueLabel: string;
+  onOperatorChange: (v: string) => void;
+  onValueChange: (v: string) => void;
+  onValueLabelChange: (v: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  if (!field) return null;
+  const operators = CONDITION_OPERATORS[field.fieldType];
+  const skipValue = operatorSkipsValue(operator);
+  // Preview line — quoted for text/enum, bare for numbers, empty when
+  // the operator (has_value / is_null) subsumes the value.
+  const previewVerb = conditionOperatorPreview(field.fieldType, operator);
+  const previewValue = skipValue
+    ? ""
+    : field.fieldType === "enum"
+      ? (valueLabel ? `"${valueLabel}"` : `""`)
+      : field.fieldType === "text"
+        ? `"${value}"`
+        : value || `""`;
+  const previewLine = `${field.fieldLabel} ${previewVerb}${previewValue ? " " + previewValue : ""}`;
+  // Save gate — enum needs a picked value, text/number need a non-empty
+  // input UNLESS the operator skips the value.
+  const canSave = skipValue
+    ? true
+    : field.fieldType === "enum"
+      ? !!value
+      : field.fieldType === "date"
+        ? !!value
+        : String(value).trim().length > 0;
+
+  return (
+    <Dialog open={!!field} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-[520px] p-0 rounded-2xl overflow-hidden">
+        {/* Header */}
+        <DialogHeader className="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-start gap-3">
+            <div className="shrink-0 h-11 w-11 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm shadow-emerald-500/25">
+              <Filter size={18} className="text-white" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-[16px] font-bold text-slate-900 dark:text-white">
+                Configure condition
+              </DialogTitle>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Set how this field should be matched.
+              </p>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Field breadcrumb card */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 px-3 py-2.5 flex items-center gap-2.5">
+            <span className="h-8 w-8 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0">
+              <ConditionGlyph name={field.icon} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-bold text-slate-900 dark:text-white truncate">{field.fieldLabel}</p>
+              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">{field.category}</p>
+            </div>
+          </div>
+
+          {/* Operator */}
+          <div className="space-y-1.5">
+            <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
+              {field.fieldType === "enum" ? "Where" : "When"}
+            </label>
+            <Select value={operator} onValueChange={onOperatorChange}>
+              <SelectTrigger className="h-9 rounded-lg text-[12.5px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {operators.map((op) => (
+                  <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Value input — hidden when the operator skips it */}
+          {!skipValue && (
+            <div className="space-y-1.5">
+              <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
+                {field.fieldType === "enum" ? field.fieldLabel : "Where"}
+              </label>
+              {field.fieldType === "enum" ? (
+                <Select
+                  value={value}
+                  onValueChange={(v) => {
+                    onValueChange(v);
+                    const found = field.enumOptions?.find((o) => o.id === v);
+                    onValueLabelChange(found?.label ?? v);
+                  }}
+                >
+                  <SelectTrigger className="h-9 rounded-lg text-[12.5px]">
+                    <SelectValue placeholder={`Select ${field.fieldLabel.toLowerCase()}`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(field.enumOptions ?? []).length === 0 ? (
+                      <SelectItem value="__none__" disabled>No options available</SelectItem>
+                    ) : (
+                      (field.enumOptions ?? []).map((o) => (
+                        <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              ) : field.fieldType === "date" ? (
+                <Input
+                  type="date"
+                  value={value}
+                  onChange={(e) => onValueChange(e.target.value)}
+                  className="h-9 rounded-lg text-[12.5px]"
+                />
+              ) : field.fieldType === "number" ? (
+                <Input
+                  type="number"
+                  value={value}
+                  onChange={(e) => onValueChange(e.target.value)}
+                  placeholder="Enter a number"
+                  className="h-9 rounded-lg text-[12.5px]"
+                />
+              ) : (
+                <Input
+                  value={value}
+                  onChange={(e) => onValueChange(e.target.value)}
+                  placeholder={`Enter ${field.fieldLabel.toLowerCase()}`}
+                  className="h-9 rounded-lg text-[12.5px]"
+                />
+              )}
+            </div>
+          )}
+
+          {/* Live preview */}
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-950/20">
+            <CheckSquare size={13} strokeWidth={2.5} className="text-emerald-600 shrink-0" />
+            <p className="text-[12px] font-medium text-emerald-800 dark:text-emerald-200 truncate">
+              {previewLine}
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBack}
+            className="h-9 px-3 text-[12.5px] border-slate-200 dark:border-slate-800"
+          >
+            <ChevronLeft size={13} className="mr-1" />
+            Back
+          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onClose} className="h-9 px-4 text-[12.5px]">Close</Button>
+            <Button
+              size="sm"
+              onClick={onSave}
+              disabled={!canSave}
+              className="h-9 px-4 text-[12.5px] font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-500/20 disabled:opacity-60"
+            >
+              <CheckCircle2 size={13} strokeWidth={2.5} className="mr-1.5" />
+              Save condition
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Extracted glyph switch used by both modals so the same icon vocabulary
+// stays in one place.
+function ConditionGlyph({ name, size = 13 }: { name: string; size?: number }) {
+  switch (name) {
+    case "tag": return <Tag size={size} strokeWidth={2.5} />;
+    case "hash": return <Hash size={size} strokeWidth={2.5} />;
+    case "user": return <User size={size} strokeWidth={2.5} />;
+    case "phone": return <PhoneIcon size={size} strokeWidth={2.5} />;
+    case "link": return <Link2 size={size} strokeWidth={2.5} />;
+    case "message": return <MessageSquare size={size} strokeWidth={2.5} />;
+    case "mail": return <Mail size={size} strokeWidth={2.5} />;
+    case "clock": return <Clock size={size} strokeWidth={2.5} />;
+    case "check": return <CheckCircle2 size={size} strokeWidth={2.5} />;
+    case "dollar": return <DollarSign size={size} strokeWidth={2.5} />;
+    case "calendar": return <Calendar size={size} />;
+    case "percent": return <Percent size={size} strokeWidth={2.5} />;
+    case "globe": return <Globe size={size} strokeWidth={2.5} />;
+    case "check-square": return <CheckSquare size={size} strokeWidth={2.5} />;
+    case "message-circle": return <MessageCircle size={size} strokeWidth={2.5} />;
+    default: return <Filter size={size} strokeWidth={2.5} />;
+  }
+}
+
+// ─── Composer number stepper primitives ─────────────────────────────────
+// A tidy "− [value] +" input group used in the Delivery Profile section.
+// Same-height buttons + tabular-nums keep the row visually clean across
+// the four fields.
+function StepperInput({
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+}) {
+  const bump = (delta: number) => onChange(Math.max(min, Math.min(max, value + delta)));
+  return (
+    <div className="flex items-stretch h-9 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => bump(-1)}
+        className="px-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+      >
+        <Minus size={12} strokeWidth={2.5} />
+      </button>
+      <div className="flex-1 flex items-center justify-center text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums border-x border-slate-200 dark:border-slate-800">
+        {value}
+      </div>
+      <button
+        type="button"
+        onClick={() => bump(1)}
+        className="px-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+      >
+        <Plus size={12} strokeWidth={2.5} />
+      </button>
+    </div>
+  );
+}
+
+function NumberStepper({
+  label,
+  suffix,
+  value,
+  onChange,
+  min,
+  max,
+  hint,
+}: {
+  label: string;
+  suffix?: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  hint?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">{label}</label>
+        {suffix && <span className="text-[10px] text-slate-400 uppercase tracking-wider">{suffix}</span>}
+      </div>
+      <StepperInput value={value} onChange={onChange} min={min} max={max} />
+      {hint && <p className="text-[10.5px] text-slate-400">{hint}</p>}
+    </div>
+  );
 }
 
 // ─── BroadcastStatsRow ──────────────────────────────────────────────────

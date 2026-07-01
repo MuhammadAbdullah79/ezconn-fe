@@ -175,7 +175,7 @@ export default function CSATDetails() {
                   { l: "Poor",    k: "poor" },
                   { l: "Total",   k: "total" },
                 ].map((h) => (
-                  <th key={h.k} onClick={() => handleAgentSort(h.k)} className={cn("pb-2 px-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer", thCls)}>
+                  <th key={h.k} onClick={() => handleAgentSort(h.k)} className={cn("pb-2 px-3 text-[10px] font-bold cursor-pointer", thCls)}>
                     <div className="flex items-center gap-1.5">{h.l} {renderSortIcon(h.k, agentSort)}</div>
                   </th>
                 ))}
@@ -218,7 +218,7 @@ export default function CSATDetails() {
                   { l: "Feedback",     k: "rating" },
                   { l: "Date",         k: "date" },
                 ].map((h) => (
-                  <th key={h.k} onClick={() => handleFeedbackSort(h.k)} className={cn("pb-2 px-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer", thCls)}>
+                  <th key={h.k} onClick={() => handleFeedbackSort(h.k)} className={cn("pb-2 px-3 text-[10px] font-bold cursor-pointer", thCls)}>
                     <div className="flex items-center gap-1.5">{h.l} {renderSortIcon(h.k, feedbackSort)}</div>
                   </th>
                 ))}

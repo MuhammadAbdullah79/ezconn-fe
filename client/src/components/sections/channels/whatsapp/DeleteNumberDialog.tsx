@@ -117,7 +117,7 @@ export default function DeleteNumberDialog({ open, number, onClose }: Props) {
             <button
               onClick={onClose}
               className={cn(
-                "h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all",
+                "h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all",
                 dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400",
               )}
             >
@@ -126,7 +126,7 @@ export default function DeleteNumberDialog({ open, number, onClose }: Props) {
             <button
               onClick={() => mutation.mutate()}
               disabled={!valid || mutation.isPending}
-              className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Trash2 size={12} /> {mutation.isPending ? "Deleting…" : "Delete"}
             </button>

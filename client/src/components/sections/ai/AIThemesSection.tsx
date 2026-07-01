@@ -119,17 +119,17 @@ export default function AIThemesSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   // ── Helpers ──────────────────────────────────────────────────
   const renderIcon = (iconType: string, size: "sm" | "md" = "md") => {
@@ -212,7 +212,7 @@ export default function AIThemesSection() {
                 <Sparkles className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>{headerTitle}</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>{headerTitle}</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>{headerSub}</p>
               </div>
             </div>
@@ -277,7 +277,7 @@ export default function AIThemesSection() {
                             key={idx}
                             variant="outline"
                             className={cn(
-                              "h-5 px-2 rounded-md text-[9px] font-black uppercase tracking-widest",
+                              "h-5 px-2 rounded-md text-[10px] font-semibold",
                               badge.variant === "beta"
                                 ? "border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400"
                                 : "border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400"
@@ -295,7 +295,7 @@ export default function AIThemesSection() {
                         <button
                           disabled
                           className={cn(
-                            "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest cursor-not-allowed opacity-50",
+                            "h-10 px-6 rounded-xl border text-[11px] font-semibold cursor-not-allowed opacity-50",
                             dark ? "border-slate-800 text-slate-500" : "border-slate-200 text-slate-400"
                           )}
                         >
@@ -333,12 +333,12 @@ export default function AIThemesSection() {
                     <table className="w-full">
                       <thead>
                         <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>
                             <div className="flex items-center gap-2">
                               <FileText size={12} /> Name
                             </div>
                           </th>
-                          <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                          <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -379,7 +379,7 @@ export default function AIThemesSection() {
                     </table>
                   </div>
 
-                  <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                  <div className={cn("px-6 py-3 border-t text-[11px] font-semibold", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
                     Showing {themeItems.length} of {themeItems.length} items
                   </div>
                 </div>
@@ -394,7 +394,7 @@ export default function AIThemesSection() {
                 <div className="max-w-3xl space-y-6">
                   {/* Name */}
                   <div className="space-y-2">
-                    <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Name</label>
+                    <label className={cn("block text-[11px] font-semibold", sub)}>Name</label>
                     <input
                       type="text"
                       value={formData.name}
@@ -406,7 +406,7 @@ export default function AIThemesSection() {
 
                   {/* Subtitle */}
                   <div className="space-y-2">
-                    <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Subtitle</label>
+                    <label className={cn("block text-[11px] font-semibold", sub)}>Subtitle</label>
                     <input
                       type="text"
                       value={formData.subtitle}
@@ -418,10 +418,10 @@ export default function AIThemesSection() {
 
                   {/* TRIGGER SECTION */}
                   <div className="pt-2 space-y-4">
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-primary">Trigger Section</h3>
+                    <h3 className="text-[12px] font-semibold text-primary">Trigger Section</h3>
 
                     <div className="space-y-2">
-                      <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Smart Flow</label>
+                      <label className={cn("block text-[11px] font-semibold", sub)}>Smart Flow</label>
                       <select
                         value={formData.smartFlow}
                         onChange={(e) => setFormData({ ...formData, smartFlow: e.target.value })}
@@ -434,7 +434,7 @@ export default function AIThemesSection() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Channel</label>
+                      <label className={cn("block text-[11px] font-semibold", sub)}>Channel</label>
                       <select
                         value={formData.channel}
                         onChange={(e) => setFormData({ ...formData, channel: e.target.value })}
@@ -447,7 +447,7 @@ export default function AIThemesSection() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Payload</label>
+                      <label className={cn("block text-[11px] font-semibold", sub)}>Payload</label>
                       <input
                         type="text"
                         value={formData.payload}
@@ -460,10 +460,10 @@ export default function AIThemesSection() {
 
                   {/* BASEROW.IO SECTION */}
                   <div className="pt-2 space-y-4">
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-primary">Baserow.io Section</h3>
+                    <h3 className="text-[12px] font-semibold text-primary">Baserow.io Section</h3>
 
                     <div className="space-y-2">
-                      <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Select a Spreadsheet</label>
+                      <label className={cn("block text-[11px] font-semibold", sub)}>Select a Spreadsheet</label>
                       <select
                         value={formData.spreadsheet}
                         onChange={(e) => setFormData({ ...formData, spreadsheet: e.target.value })}
@@ -505,7 +505,7 @@ export default function AIThemesSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Item?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Item?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{itemToDelete?.name || "This item"}</span> will be permanently removed.
                 </p>
@@ -515,7 +515,7 @@ export default function AIThemesSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDeleteItem}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>

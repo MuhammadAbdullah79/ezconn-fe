@@ -119,7 +119,7 @@ export default function WhatsAppSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
 
@@ -423,14 +423,14 @@ export default function WhatsAppSection() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                  <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                     {view === "list" && "WhatsApp"}
                     {view === "coex_manage" && 'WhatsApp Business App "Coex"'}
                     {view === "api_manage" && "WhatsApp Business API"}
                     {view === "qr_manage" && "WhatsApp QR Code"}
                   </h1>
                   {view === "coex_manage" && (
-                    <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                    <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                       Coexistence
                     </Badge>
                   )}
@@ -451,7 +451,7 @@ export default function WhatsAppSection() {
                 <button
                   onClick={() => openEmbeddedSignup(view === "coex_manage" ? "aka" : "api")}
                   disabled={isConnecting}
-                  className="h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isConnecting ? (
                     <span className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full" />
@@ -486,7 +486,7 @@ export default function WhatsAppSection() {
                   <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                     <Smartphone size={20} />
                   </div>
-                  <Badge variant="outline" className="h-6 px-2.5 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                  <Badge variant="outline" className="h-6 px-2.5 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                     Popular
                   </Badge>
                 </div>
@@ -515,7 +515,7 @@ export default function WhatsAppSection() {
 
                   {/* Prerequisites box — orange warning */}
                   <div className="mt-4 rounded-lg p-3 text-[11px] leading-relaxed bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/50 text-amber-800 dark:text-amber-300">
-                    <div className="font-black uppercase tracking-widest text-[10px] mb-1.5 flex items-center gap-1.5">
+                    <div className="font-semibold text-[10px] mb-1.5 flex items-center gap-1.5">
                       <AlertCircle size={11} /> Prerequisites
                     </div>
                     <ul className="space-y-1">
@@ -530,7 +530,7 @@ export default function WhatsAppSection() {
                 <div className="mt-auto space-y-3">
                   <button
                     onClick={() => setView("coex_manage")}
-                    className="w-full h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
+                    className="w-full h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
                   >
                     Manage
                   </button>
@@ -589,7 +589,7 @@ export default function WhatsAppSection() {
                   </ul>
 
                   <div className="mt-4 rounded-lg p-3 text-[11px] leading-relaxed bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/50 text-amber-800 dark:text-amber-300">
-                    <div className="font-black uppercase tracking-widest text-[10px] mb-1.5 flex items-center gap-1.5">
+                    <div className="font-semibold text-[10px] mb-1.5 flex items-center gap-1.5">
                       <AlertCircle size={11} /> Prerequisites
                     </div>
                     <ul className="space-y-1">
@@ -601,7 +601,7 @@ export default function WhatsAppSection() {
                 <div className="mt-auto space-y-3">
                   <button
                     onClick={() => setView("api_manage")}
-                    className="w-full h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
+                    className="w-full h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
                   >
                     Manage
                   </button>
@@ -625,10 +625,10 @@ export default function WhatsAppSection() {
                     <QrCode size={20} />
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="h-6 px-2.5 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                    <Badge variant="outline" className="h-6 px-2.5 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                       Popular
                     </Badge>
-                    <Badge variant="outline" className="h-6 px-2.5 rounded-md border-blue-500/20 bg-blue-500/5 text-blue-600 dark:text-blue-400 text-[9px] font-black uppercase tracking-widest">
+                    <Badge variant="outline" className="h-6 px-2.5 rounded-md border-blue-500/20 bg-blue-500/5 text-blue-600 dark:text-blue-400 text-[10px] font-semibold">
                       Quickest
                     </Badge>
                   </div>
@@ -658,7 +658,7 @@ export default function WhatsAppSection() {
                 <div className="mt-auto space-y-3">
                   <button
                     onClick={() => setView("qr_manage")}
-                    className="w-full h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
+                    className="w-full h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
                   >
                     Manage
                   </button>
@@ -751,14 +751,14 @@ export default function WhatsAppSection() {
                 <Plus size={16} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Add Phone Number</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Add Phone Number</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>Account: {selectedAccount?.name}</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Phone Number (International Format)
                 </label>
                 <Input
@@ -770,7 +770,7 @@ export default function WhatsAppSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>Purpose</label>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>Purpose</label>
                 <RadioGroup
                   value={newNumberData.purposeType}
                   onValueChange={(v: any) => setNewNumberData({ ...newNumberData, purposeType: v })}
@@ -823,7 +823,7 @@ export default function WhatsAppSection() {
                       "Add Phone Number via Meta is initiated from Embedded Signup — use the 'Add new' button at the top to launch the Meta flow for this account.",
                   })
                 }
-                className="h-11 px-7 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
               >
                 <Plus size={12} /> Add Number
               </button>
@@ -847,7 +847,7 @@ export default function WhatsAppSection() {
                 <Phone size={16} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Connect WhatsApp Manually</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Connect WhatsApp Manually</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                   Paste credentials from Meta dashboard. Account will register as PENDING and turn ACTIVE once verified.
                 </p>
@@ -856,7 +856,7 @@ export default function WhatsAppSection() {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Account Name <span className="text-rose-500">*</span>
                 </label>
                 <Input
@@ -870,7 +870,7 @@ export default function WhatsAppSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   WABA ID <span className="text-rose-500">*</span>
                 </label>
                 <Input
@@ -887,7 +887,7 @@ export default function WhatsAppSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Phone Number ID <span className="text-rose-500">*</span>
                 </label>
                 <Input
@@ -906,7 +906,7 @@ export default function WhatsAppSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Display Phone Number <span className="text-rose-500">*</span>
                 </label>
                 <Input
@@ -922,7 +922,7 @@ export default function WhatsAppSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Verified Name <span className="opacity-60 normal-case font-bold">(optional)</span>
                 </label>
                 <Input
@@ -935,7 +935,7 @@ export default function WhatsAppSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Access Token <span className="text-rose-500">*</span>
                 </label>
                 <Textarea
@@ -965,7 +965,7 @@ export default function WhatsAppSection() {
               <button
                 onClick={submitManualOnboard}
                 disabled={manualOnboardMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
               >
                 {manualOnboardMutation.isPending ? (
                   <>
@@ -1097,7 +1097,7 @@ function AccountCard(props: {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className={cn("text-[13px] font-black truncate", text)}>{account.name}</p>
-              <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[9px] font-black uppercase tracking-widest", accountBadgeTone)}>
+              <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[10px] font-semibold", accountBadgeTone)}>
                 {account.status}
               </Badge>
               {account.business_verification_status === "verified" && (
@@ -1117,7 +1117,7 @@ function AccountCard(props: {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[9px] font-black uppercase tracking-widest", reviewTone)}>
+                      <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[10px] font-semibold", reviewTone)}>
                         Review: {reviewStatus}
                       </Badge>
                     </TooltipTrigger>
@@ -1127,7 +1127,7 @@ function AccountCard(props: {
               )}
               {/* Gap 4 — ownership type (CLIENT_OWNED / SHARED / SELF) */}
               {ownershipType && (
-                <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[9px] font-black uppercase tracking-widest", dark ? "border-slate-700 text-slate-300" : "border-slate-200 text-slate-600")}>
+                <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[10px] font-semibold", dark ? "border-slate-700 text-slate-300" : "border-slate-200 text-slate-600")}>
                   {ownershipType.replace(/_/g, " ")}
                 </Badge>
               )}
@@ -1155,7 +1155,7 @@ function AccountCard(props: {
                 <TooltipTrigger asChild>
                   <button
                     onClick={props.onSetupCapi}
-                    className="h-11 px-5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                    className="h-11 px-5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold flex items-center gap-2"
                   >
                     <Sparkles size={12} /> CAPI ✓
                   </button>
@@ -1212,7 +1212,7 @@ function AccountCard(props: {
 
           <button
             onClick={props.onDeleteAccount}
-            className={cn("h-11 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2", "border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500")}
+            className={cn("h-11 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2", "border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500")}
           >
             <Trash2 size={12} /> Delete
           </button>
@@ -1224,7 +1224,7 @@ function AccountCard(props: {
         <div className="mx-5 mt-4 rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-3 flex items-start gap-3">
           <ShieldAlert size={15} className="text-rose-500 mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <p className="text-[11px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400">
+            <p className="text-[12px] font-semibold text-rose-600 dark:text-rose-400">
               Action needed
             </p>
             <p className={cn("text-[11px] font-medium opacity-80 mt-0.5", sub)}>
@@ -1246,7 +1246,7 @@ function AccountCard(props: {
 
       {/* Phone Numbers */}
       <div className="p-5 space-y-3">
-        <h4 className={cn("text-[10px] font-black uppercase tracking-widest ml-1", sub)}>Phone numbers</h4>
+        <h4 className={cn("text-[11px] font-semibold ml-1", sub)}>Phone numbers</h4>
         {(account.phone_numbers ?? []).length === 0 ? (
           <p className={cn("text-[12px] py-4 text-center", sub)}>No phone numbers attached to this account yet.</p>
         ) : (
@@ -1309,13 +1309,13 @@ function PhoneNumberRow(props: {
   })();
 
   let statusBadge = (
-    <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+    <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
       Active
     </span>
   );
   if (isPending) {
     statusBadge = (
-      <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+      <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
         Pending
       </span>
     );
@@ -1326,7 +1326,7 @@ function PhoneNumberRow(props: {
         href="https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes"
         target="_blank"
         rel="noopener noreferrer"
-        className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+        className="px-2 py-1 rounded-md text-[11px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
       >
         {blockedLabel}
         {number.error_code ? ` (${number.error_code})` : ""}
@@ -1334,7 +1334,7 @@ function PhoneNumberRow(props: {
     );
   } else if (isDisconnected) {
     statusBadge = (
-      <span className="px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+      <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
         Disconnected
       </span>
     );
@@ -1387,7 +1387,7 @@ function PhoneNumberRow(props: {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={cn("inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border", dark ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500")}>
+                      <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border", dark ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500")}>
                         <Gauge size={9} /> {limitTier}/24h
                       </span>
                     </TooltipTrigger>
@@ -1399,7 +1399,7 @@ function PhoneNumberRow(props: {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={cn("inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border", dark ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500")}>
+                      <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border", dark ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500")}>
                         <Activity size={9} /> {throughputLevel}
                       </span>
                     </TooltipTrigger>
@@ -1465,7 +1465,7 @@ function PhoneNumberRow(props: {
         )}
 
         <div className="flex items-center gap-2">
-          <span className={cn("text-[9px] font-black uppercase tracking-widest hidden sm:inline", sub)}>AI Feeder</span>
+          <span className={cn("text-[10px] font-semibold hidden sm:inline", sub)}>AI Feeder</span>
           <Switch
             checked={!!number.allow_in_feeder}
             onCheckedChange={() => props.onToggleFeeder()}
@@ -1595,7 +1595,7 @@ function CapiSetupDialog({
               <Sparkles size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[13px] font-black uppercase tracking-widest", dark ? "text-white" : "text-slate-900")}>Conversions API</div>
+              <div className={cn("text-[14px] font-semibold", dark ? "text-white" : "text-slate-900")}>Conversions API</div>
               <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", dark ? "text-slate-400" : "text-slate-600")}>
                 Forward WhatsApp events to Meta's Conversions API to attribute ad spend and improve audience
                 optimization. Find your dataset ID + token in Meta Events Manager.
@@ -1607,7 +1607,7 @@ function CapiSetupDialog({
             <div className={cn("p-4 rounded-xl border", dark ? "bg-slate-950/40 border-slate-800" : "bg-slate-50 border-slate-200")}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className={cn("text-[11px] font-black uppercase tracking-widest opacity-60", dark ? "text-slate-400" : "text-slate-600")}>
+                  <div className={cn("text-[12px] font-semibold opacity-60", dark ? "text-slate-400" : "text-slate-600")}>
                     Dataset ID
                   </div>
                   <div className={cn("text-[13px] font-bold font-mono truncate", dark ? "text-white" : "text-slate-900")}>{existing.dataset_id}</div>
@@ -1616,7 +1616,7 @@ function CapiSetupDialog({
                 <button
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
-                  className="h-9 px-4 rounded-lg border text-[10px] font-black uppercase tracking-widest border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all"
+                  className="h-9 px-4 rounded-lg border text-[11px] font-semibold border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all"
                 >
                   Remove
                 </button>
@@ -1625,7 +1625,7 @@ function CapiSetupDialog({
           ) : (
             <div className="space-y-4">
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>
+                <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>
                   Dataset ID <span className="text-rose-500">*</span>
                 </label>
                 <Input
@@ -1636,7 +1636,7 @@ function CapiSetupDialog({
                 />
               </div>
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>Name</label>
+                <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>Name</label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -1645,7 +1645,7 @@ function CapiSetupDialog({
                 />
               </div>
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>
+                <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>
                   Access Token <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
@@ -1670,7 +1670,7 @@ function CapiSetupDialog({
           <div className="flex justify-end gap-3 pt-2">
             <button
               onClick={onClose}
-              className={cn("h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
+              className={cn("h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
             >
               Close
             </button>
@@ -1678,7 +1678,7 @@ function CapiSetupDialog({
               <button
                 onClick={() => saveMutation.mutate()}
                 disabled={!datasetId.trim() || !token.trim() || saveMutation.isPending}
-                className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saveMutation.isPending ? "Saving…" : "Save"}
               </button>
@@ -1749,7 +1749,7 @@ function RegisterPinDialog({
               <ShieldCheck size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[13px] font-black uppercase tracking-widest", dark ? "text-white" : "text-slate-900")}>
+              <div className={cn("text-[14px] font-semibold", dark ? "text-white" : "text-slate-900")}>
                 Register / 2-step PIN
               </div>
               <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", dark ? "text-slate-400" : "text-slate-600")}>
@@ -1761,7 +1761,7 @@ function RegisterPinDialog({
 
           {issuedPin ? (
             <div className={cn("p-4 rounded-xl border text-center", dark ? "bg-slate-950/40 border-slate-800" : "bg-slate-50 border-slate-200")}>
-              <div className={cn("text-[10px] font-black uppercase tracking-widest opacity-60", dark ? "text-slate-400" : "text-slate-600")}>Your 2-step PIN</div>
+              <div className={cn("text-[11px] font-semibold opacity-60", dark ? "text-slate-400" : "text-slate-600")}>Your 2-step PIN</div>
               <div className={cn("text-[28px] font-black tracking-[0.3em] font-mono mt-1", dark ? "text-white" : "text-slate-900")}>{issuedPin}</div>
               <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-2">Save this PIN now — it won't be shown again.</p>
             </div>
@@ -1773,7 +1773,7 @@ function RegisterPinDialog({
               </label>
               {!autoGenerate && (
                 <div className="space-y-2">
-                  <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>
+                  <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>
                     6-digit PIN <span className="text-rose-500">*</span>
                   </label>
                   <Input
@@ -1791,7 +1791,7 @@ function RegisterPinDialog({
           <div className="flex justify-end gap-3 pt-1">
             <button
               onClick={onClose}
-              className={cn("h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
+              className={cn("h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
             >
               {issuedPin ? "Done" : "Cancel"}
             </button>
@@ -1799,7 +1799,7 @@ function RegisterPinDialog({
               <button
                 onClick={() => registerMutation.mutate()}
                 disabled={!pinValid || registerMutation.isPending}
-                className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {registerMutation.isPending ? "Registering…" : "Register"}
               </button>
@@ -1841,7 +1841,7 @@ function EmptyIntegrationState({
       </div>
       <button
         onClick={onConnect}
-        className="h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
+        className="h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white"
       >
         Connect now
       </button>

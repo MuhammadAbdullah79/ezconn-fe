@@ -81,7 +81,7 @@ export default function AgentPerformanceMain() {
 
   const tableHeaders = (cols: string[]) => (
     <tr className={cn("border-b text-left", divider)}>
-      {cols.map(h => <th key={h} className={cn("pb-2 px-3 text-[10px] font-bold uppercase tracking-widest", thCls)}>{h}</th>)}
+      {cols.map(h => <th key={h} className={cn("pb-2 px-3 text-[10px] font-bold", thCls)}>{h}</th>)}
     </tr>
   );
 
@@ -121,7 +121,7 @@ export default function AgentPerformanceMain() {
           {/* Status Bars */}
           <div className="space-y-3">
             <div className="flex justify-between mb-2">
-              <span className={cn("text-[11px] font-bold uppercase tracking-widest", sub)}>Agent Status</span>
+              <span className={cn("text-[11px] font-bold", sub)}>Agent Status</span>
               <span className={cn("text-[11px] font-bold", sub)}>Total: {totalAgents}</span>
             </div>
             {statusBars.map((s, i) => (

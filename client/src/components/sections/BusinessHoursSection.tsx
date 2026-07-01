@@ -83,9 +83,9 @@ const BusinessHoursSection: React.FC = () => {
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   const { isLoading, data: fetchedData } = useQuery<BusinessHoursState | null>({
     queryKey: ["/api/workspaces/business-hours"],
@@ -171,7 +171,7 @@ const BusinessHoursSection: React.FC = () => {
       <div className={cn("w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0", current === value ? "border-primary" : sub)}>
         {current === value && <div className="w-2 h-2 rounded-full bg-primary" />}
       </div>
-      <span className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{label}</span>
+      <span className={cn("text-[13px] font-semibold", text)}>{label}</span>
     </div>
   );
 
@@ -195,8 +195,8 @@ const BusinessHoursSection: React.FC = () => {
               <Clock className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Business Hours</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Business hours</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60 max-w-2xl", sub)}>
                 Set the working hours of your company.
               </p>
             </div>
@@ -241,7 +241,7 @@ const BusinessHoursSection: React.FC = () => {
 
               {state.allDaysSelected ? (
                 <div className={cn("rounded-[1.5rem] border p-6 space-y-5 max-w-md", softBg, softBorder)}>
-                  <p className={cn("text-[11px] font-black uppercase tracking-widest text-primary")}>All Days</p>
+                  <p className={cn("text-[12px] font-semibold text-primary")}>All Days</p>
                   <div className="space-y-2">
                     <label className={labelCls}>Start Time</label>
                     <TimePicker hours={state.allDays} onChange={handleAllDaysHoursChange} prefix="start" />
@@ -272,7 +272,7 @@ const BusinessHoursSection: React.FC = () => {
                             onChange={(e) => handlePerDayEnabledChange(day, e.target.checked)}
                             className="rounded accent-[hsl(var(--primary))] w-4 h-4"
                           />
-                          <label htmlFor={`cb-${day}`} className={cn("text-[12px] font-black uppercase tracking-widest cursor-pointer", text)}>
+                          <label htmlFor={`cb-${day}`} className={cn("text-[13px] font-semibold cursor-pointer", text)}>
                             {day}
                           </label>
                         </div>

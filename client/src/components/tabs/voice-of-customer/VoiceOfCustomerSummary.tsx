@@ -80,7 +80,7 @@ export default function VoiceOfCustomerSummary() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {item.icon}
-                    <span className={cn("text-[11px] font-bold uppercase tracking-widest opacity-60", sub)}>{item.name}</span>
+                    <span className={cn("text-[11px] font-bold opacity-60", sub)}>{item.name}</span>
                   </div>
                   <span className={cn("text-[11px] font-black", text)}>{item.percentage}%</span>
                 </div>

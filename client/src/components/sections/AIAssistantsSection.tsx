@@ -33,12 +33,12 @@ const AIAssistantsSection = () => {
   const softBorder = dark ? "border-slate-800" : "border-slate-100";
 
   const outlineBtn = cn(
-    "h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { isLoading, data: fetchedData } = useQuery<AIAssistantSettings>({
     queryKey: ["/api/workspaces/ai-assistant-settings"],
@@ -88,8 +88,8 @@ const AIAssistantsSection = () => {
               <Sparkles className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>AI Assistants</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>AI assistants</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60 max-w-2xl", sub)}>
                 These settings apply to the entire account.
               </p>
             </div>
@@ -164,14 +164,14 @@ const AIAssistantsSection = () => {
             </div>
 
             <div className={cn("pt-4 border-t", softBorder)}>
-              <p className={cn("text-[11px] font-bold uppercase tracking-widest opacity-60", sub)}>
+              <p className={cn("text-[11px] font-bold opacity-60", sub)}>
                 Available in these modules
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
                 {["Chat Manager", "Insights"].map((m) => (
                   <span
                     key={m}
-                    className="inline-flex h-6 px-3 items-center rounded-md border border-primary/20 bg-primary/5 text-primary text-[10px] font-black uppercase tracking-widest"
+                    className="inline-flex h-6 px-3 items-center rounded-md border border-primary/20 bg-primary/5 text-primary text-[11px] font-semibold"
                   >
                     {m}
                   </span>

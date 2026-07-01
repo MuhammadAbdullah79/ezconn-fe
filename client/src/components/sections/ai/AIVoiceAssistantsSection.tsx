@@ -121,17 +121,17 @@ export default function AIVoiceAssistantsSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { data: agents } = useQuery({
     queryKey: ["/api/ai/voice-assistants"],
@@ -245,7 +245,7 @@ export default function AIVoiceAssistantsSection() {
                 <Mic className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Select Assistant Type</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Select Assistant Type</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
                   Choose how this agent will interact.
                 </p>
@@ -269,7 +269,7 @@ export default function AIVoiceAssistantsSection() {
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
                   <item.icon size={22} />
                 </div>
-                <h4 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>{item.title}</h4>
+                <h4 className={cn("text-[14px] font-semibold", text)}>{item.title}</h4>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-1.5 mb-5 leading-relaxed flex-1", sub)}>{item.desc}</p>
                 <button onClick={() => handleSetType(item.type)} className={cn(primaryOutlineBtn, "w-full")}>
                   Select
@@ -301,7 +301,7 @@ export default function AIVoiceAssistantsSection() {
                   <Mic className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                  <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                     {formData.id ? "Edit Voice Assistant" : "New Voice Assistant"}
                   </h1>
                   <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 capitalize", sub)}>
@@ -333,7 +333,7 @@ export default function AIVoiceAssistantsSection() {
                       key={tab.value}
                       value={tab.value}
                       className={cn(
-                        "flex items-center gap-2 px-1 py-5 rounded-none text-[11px] font-black uppercase tracking-widest transition-all shadow-none bg-transparent border-b-2 border-transparent",
+                        "flex items-center gap-2 px-1 py-5 rounded-none text-[12px] font-semibold transition-all shadow-none bg-transparent border-b-2 border-transparent",
                         "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-primary",
                         "hover:text-primary",
                         dark ? "text-slate-500" : "text-slate-400"
@@ -512,7 +512,7 @@ export default function AIVoiceAssistantsSection() {
               <TabsContent value="transfer" className="p-8 outline-none space-y-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h4 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>Call Transfer Rules</h4>
+                    <h4 className={cn("text-[13px] font-semibold", text)}>Call Transfer Rules</h4>
                     <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                       Define when to transfer calls to a human agent.
                     </p>
@@ -531,7 +531,7 @@ export default function AIVoiceAssistantsSection() {
                 <div className="p-4 rounded-[1.25rem] bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
                   <AlertTriangle size={14} className="text-amber-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Attention Needed</p>
+                    <p className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">Attention Needed</p>
                     <p className="text-[11px] font-medium text-amber-700/80 dark:text-amber-300/80 mt-1 leading-relaxed">
                       Ensure your Twilio account is configured to handle SIP transfers if required.
                     </p>
@@ -587,7 +587,7 @@ export default function AIVoiceAssistantsSection() {
                 ) : (
                   <div className={cn("py-12 text-center rounded-[1.5rem] border-2 border-dashed", softBorder, softBg)}>
                     <PhoneForwarded size={24} className="mx-auto text-primary/40 mb-3" />
-                    <p className={cn("text-[11px] font-bold opacity-60 uppercase tracking-widest", sub)}>No transfer rules configured.</p>
+                    <p className={cn("text-[11px] font-bold opacity-60", sub)}>No transfer rules configured.</p>
                   </div>
                 )}
               </TabsContent>
@@ -599,7 +599,7 @@ export default function AIVoiceAssistantsSection() {
                     <Wand2 size={22} />
                   </div>
                   <div className="space-y-1 max-w-md">
-                    <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Function Calling</h3>
+                    <h3 className={cn("text-[14px] font-semibold", text)}>Function Calling</h3>
                     <p className={cn("text-[11px] font-medium opacity-60 leading-relaxed", sub)}>
                       Define custom functions that the AI can call to interact with your business logic or external APIs.
                     </p>
@@ -654,7 +654,7 @@ export default function AIVoiceAssistantsSection() {
               <TabsContent value="design" className="p-8 outline-none">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-5">
-                    <h4 className={cn("text-[12px] font-black uppercase tracking-widest pb-2 border-b", text, softBorder)}>Widget Appearance</h4>
+                    <h4 className={cn("text-[13px] font-semibold pb-2 border-b", text, softBorder)}>Widget Appearance</h4>
 
                     <div className="space-y-2">
                       <FieldLabel dark={dark}>Title</FieldLabel>
@@ -676,7 +676,7 @@ export default function AIVoiceAssistantsSection() {
                               key={t}
                               onClick={() => setFormData({ ...formData, design: { ...formData.design, bg_type: t } })}
                               className={cn(
-                                "h-9 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all capitalize",
+                                "h-9 px-4 rounded-lg text-[11px] font-semibold border transition-all capitalize",
                                 active
                                   ? "border-primary text-primary bg-primary/5"
                                   : dark ? "border-slate-800 text-slate-400 hover:border-primary/40" : "border-slate-200 text-slate-500 hover:border-primary/40"
@@ -731,7 +731,7 @@ export default function AIVoiceAssistantsSection() {
               {/* ── EMBED ── */}
               <TabsContent value="embed" className="p-8 outline-none space-y-5">
                 <div className={cn("p-5 rounded-[1.25rem] border", softBg, softBorder)}>
-                  <h4 className={cn("text-[12px] font-black uppercase tracking-widest mb-3", text)}>Embed Code</h4>
+                  <h4 className={cn("text-[13px] font-semibold mb-3", text)}>Embed Code</h4>
                   <pre className={cn("text-[11px] font-mono p-4 rounded-xl whitespace-pre-wrap mb-4 overflow-x-auto", dark ? "bg-slate-950 text-slate-200 border border-slate-800" : "bg-slate-900 text-slate-100")}>
 {`<script>
   window.voiceWidgetSettings = {
@@ -789,14 +789,14 @@ export default function AIVoiceAssistantsSection() {
                 <Mic className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>AI Voice Assistants</h1>
-                <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>AI voice assistants</h1>
+                <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
                   Manage your voice assistants.
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <div className={cn("flex items-center gap-2 px-3 h-10 rounded-xl border text-[10px] font-black uppercase tracking-widest", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
+              <div className={cn("flex items-center gap-2 px-3 h-10 rounded-xl border text-[11px] font-semibold", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
                 <span className="opacity-60">Credits:</span>
                 <span className={text}>{availableCredits}</span>
                 <span className="opacity-60">mins/secs</span>
@@ -831,12 +831,12 @@ export default function AIVoiceAssistantsSection() {
                 <table className="w-full">
                   <thead>
                     <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/30" : "bg-white/60")}>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Model</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Phone</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Type</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
-                      <th className={cn("py-4 px-6 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Name</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Model</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Phone</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Type</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Status</th>
+                      <th className={cn("py-4 px-6 text-right text-[11px] font-semibold", sub)}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -844,7 +844,7 @@ export default function AIVoiceAssistantsSection() {
                       <tr key={agent.id} className={cn("border-b last:border-0 transition-colors", softBorder, dark ? "hover:bg-slate-900/40" : "hover:bg-white/60")}>
                         <td className={cn("py-3 px-6 text-[12px] font-black", text)}>{agent.name}</td>
                         <td className="py-3 px-6">
-                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold">
                             {agent.model}
                           </Badge>
                         </td>
@@ -854,7 +854,7 @@ export default function AIVoiceAssistantsSection() {
                             {agent.type === "incoming" && <PhoneIncoming size={12} className="text-blue-500" />}
                             {agent.type === "outgoing" && <PhoneOutgoing size={12} className="text-emerald-500" />}
                             {agent.type === "widget"   && <AppWindow size={12} className="text-purple-500" />}
-                            <span className={cn("text-[11px] font-black uppercase tracking-widest capitalize", text)}>{agent.type}</span>
+                            <span className={cn("text-[12px] font-semibold capitalize", text)}>{agent.type}</span>
                           </div>
                         </td>
                         <td className="py-3 px-6">
@@ -937,7 +937,7 @@ export default function AIVoiceAssistantsSection() {
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>{children}</label>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>{children}</label>
   );
 }
 
@@ -979,8 +979,8 @@ function SliderRow({
         className="w-full accent-primary"
       />
       <div className="flex justify-between">
-        <span className={cn("text-[10px] font-black uppercase tracking-widest opacity-60", sub)}>{leftLabel}</span>
-        <span className={cn("text-[10px] font-black uppercase tracking-widest opacity-60", sub)}>{rightLabel}</span>
+        <span className={cn("text-[11px] font-semibold opacity-60", sub)}>{leftLabel}</span>
+        <span className={cn("text-[11px] font-semibold opacity-60", sub)}>{rightLabel}</span>
       </div>
     </div>
   );
@@ -1016,7 +1016,7 @@ function DeleteDialog({
               <AlertCircle size={18} />
             </div>
             <div>
-              <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Voice Assistant?</h2>
+              <h2 className={cn("text-[14px] font-semibold", text)}>Delete Voice Assistant?</h2>
               <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                 <span className="text-rose-500 font-black">"{agent?.name}"</span> will be permanently removed and the associated phone number will be disconnected.
               </p>
@@ -1026,7 +1026,7 @@ function DeleteDialog({
             <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={onConfirm}
-              className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+              className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
             >
               <Trash2 size={12} /> Delete
             </AlertDialogAction>

@@ -128,21 +128,21 @@ export default function AIProductsSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark
       ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary"
       : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // ─── Data fetches ─────────────────────────────────────────────────
   const { data: themesData, isLoading: themesLoading } = useQuery<any>({
@@ -535,7 +535,7 @@ export default function AIProductsSection() {
                 <Cpu className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>{headerTitle}</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>{headerTitle}</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>{headerSub}</p>
               </div>
             </div>
@@ -569,7 +569,7 @@ export default function AIProductsSection() {
                 </DropdownMenu>
               )}
               {viewMode === "list" && isPrivileged && !hasBaserow && !hasSupabase && (
-                <p className={cn("text-[10px] font-bold uppercase tracking-widest opacity-60", sub)}>
+                <p className={cn("text-[10px] font-bold opacity-60", sub)}>
                   Connect Baserow or Supabase first
                 </p>
               )}
@@ -637,7 +637,7 @@ export default function AIProductsSection() {
                   minimal but real (sources from the actual list length). */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className={cn("rounded-[1.5rem] border p-5", softBg, softBorder)}>
-                  <p className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Total databases</p>
+                  <p className={cn("text-[11px] font-semibold", sub)}>Total databases</p>
                   <p className={cn("text-[28px] font-black mt-2", text)}>{themes.length}</p>
                 </div>
               </div>
@@ -755,10 +755,10 @@ export default function AIProductsSection() {
                     <table className="w-full">
                       <thead>
                         <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>External ID</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Trigger URL</th>
-                          <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Name</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>External ID</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Trigger URL</th>
+                          <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -837,7 +837,7 @@ export default function AIProductsSection() {
                   </div>
                   <div
                     className={cn(
-                      "px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest",
+                      "px-6 py-3 border-t text-[11px] font-semibold",
                       softBorder,
                       sub,
                       dark ? "bg-slate-900/40" : "bg-white/60",
@@ -1183,9 +1183,9 @@ export default function AIProductsSection() {
                     <table className="w-full">
                       <thead>
                         <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Member</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Role</th>
-                          <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Access</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Member</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Role</th>
+                          <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Access</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1239,12 +1239,12 @@ export default function AIProductsSection() {
                                     </div>
                                   </div>
                                 </td>
-                                <td className={cn("px-6 py-4 text-[11px] font-bold uppercase tracking-widest", sub)}>
+                                <td className={cn("px-6 py-4 text-[11px] font-bold", sub)}>
                                   {roleLabel}
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                   {isAlwaysOn ? (
-                                    <span className={cn("text-[10px] font-black uppercase tracking-widest", "text-emerald-500")}>
+                                    <span className={cn("text-[11px] font-semibold", "text-emerald-500")}>
                                       Always on
                                     </span>
                                   ) : (
@@ -1278,7 +1278,7 @@ export default function AIProductsSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete theme?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete theme?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{selectedTheme?.name ?? "This theme"}</span> and all
                   associated products + user access entries will be permanently removed.
@@ -1289,7 +1289,7 @@ export default function AIProductsSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => selectedTheme && deleteThemeMutation.mutate(selectedTheme.id)}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>
@@ -1307,7 +1307,7 @@ export default function AIProductsSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete product?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete product?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{productToDelete?.name ?? "This product"}</span> will be
                   permanently removed.
@@ -1318,7 +1318,7 @@ export default function AIProductsSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => productToDelete?.id && deleteProductMutation.mutate(productToDelete.id)}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>

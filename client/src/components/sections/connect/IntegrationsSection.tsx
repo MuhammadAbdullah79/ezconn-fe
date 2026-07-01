@@ -62,12 +62,12 @@ export default function IntegrationsSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { data: integrationsData, isLoading } = useQuery({
     queryKey: ["/api/integrations"],
@@ -251,7 +251,7 @@ export default function IntegrationsSection() {
                 <Plug className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Integrations</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Integrations</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
                   Connect external applications to unlock your account's full potential.
                 </p>
@@ -259,10 +259,10 @@ export default function IntegrationsSection() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <Badge variant="outline" className="h-7 px-3 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+              <Badge variant="outline" className="h-7 px-3 rounded-md border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold">
                 {visibleIntegrations.length} Available
               </Badge>
-              <Badge variant="outline" className="h-7 px-3 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+              <Badge variant="outline" className="h-7 px-3 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                 <Check size={10} className="mr-1" /> {connectedCount} Connected
               </Badge>
             </div>
@@ -291,7 +291,7 @@ export default function IntegrationsSection() {
                         <img src={item.icon} alt={item.name} className="h-7 w-7 object-contain" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[9px] font-black uppercase tracking-widest", dark ? "border-slate-700 bg-slate-800/50 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500")}>
+                        <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[10px] font-semibold", dark ? "border-slate-700 bg-slate-800/50 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-500")}>
                           {item.category}
                         </Badge>
                         <button
@@ -311,7 +311,7 @@ export default function IntegrationsSection() {
                       <h3 className={cn("text-[14px] font-black tracking-tight flex items-center gap-2", text)}>
                         {item.name}
                         {connected && (
-                          <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active
                           </span>
                         )}
@@ -330,14 +330,14 @@ export default function IntegrationsSection() {
                           disabled={!canToggle}
                           className="data-[state=checked]:bg-primary"
                         />
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                        <span className={cn("text-[11px] font-semibold", sub)}>
                           {connected ? "On" : "Off"}
                         </span>
                       </div>
                       <button
                         onClick={() => handleConnect(item)}
                         className={cn(
-                          "h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                          "h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
                           connected
                             ? "border-primary bg-primary text-white hover:bg-primary/90"
                             : "border-primary text-primary hover:bg-primary hover:text-white"
@@ -365,7 +365,7 @@ export default function IntegrationsSection() {
                   <ShieldCheck size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     Connect {currentConnecting?.name}
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -378,7 +378,7 @@ export default function IntegrationsSection() {
             <div className="space-y-4">
               {currentConnecting?.fields?.map((field: any) => (
                 <div key={field.key} className="space-y-2">
-                  <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>
+                  <label className={cn("block text-[11px] font-semibold", sub)}>
                     {field.label}
                   </label>
                   <div className="relative">

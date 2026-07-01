@@ -69,17 +69,17 @@ export default function AIKnowledgeBaseSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { data: knowledgeBases } = useQuery({
     queryKey: ["/api/ai/knowledge-bases"],
@@ -229,7 +229,7 @@ export default function AIKnowledgeBaseSection() {
                 <Book className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {formData.id ? "Edit Knowledge Base" : "Create Knowledge Base"}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
@@ -272,7 +272,7 @@ export default function AIKnowledgeBaseSection() {
                     key={t.value}
                     value={t.value}
                     className={cn(
-                      "h-9 px-5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                      "h-9 px-5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-2",
                       "data-[state=active]:!bg-primary data-[state=active]:!text-white data-[state=active]:shadow-md data-[state=active]:shadow-primary/20",
                       dark ? "text-slate-400" : "text-slate-500"
                     )}
@@ -290,7 +290,7 @@ export default function AIKnowledgeBaseSection() {
                   <div className="flex gap-2">
                     <div className={cn("flex border rounded-xl overflow-hidden h-11 items-center transition-all flex-1",
                       dark ? "bg-slate-950/50 border-slate-800 focus-within:border-primary/40" : "bg-white border-slate-200 focus-within:border-primary/40")}>
-                      <span className={cn("px-3 text-[10px] font-black uppercase tracking-widest border-r h-full flex items-center",
+                      <span className={cn("px-3 text-[11px] font-semibold border-r h-full flex items-center",
                         dark ? "text-slate-500 border-slate-800 bg-slate-900/40" : "text-slate-400 border-slate-200 bg-slate-50")}>https://</span>
                       <input
                         value={formData.website}
@@ -321,7 +321,7 @@ export default function AIKnowledgeBaseSection() {
                             checked={formData.selected_pages.length === formData.web_pages.length && formData.web_pages.length > 0}
                             onCheckedChange={(c) => toggleAllPages(c as boolean)}
                           />
-                          <label htmlFor="select-all" className={cn("text-[10px] font-black uppercase tracking-widest cursor-pointer", text)}>
+                          <label htmlFor="select-all" className={cn("text-[11px] font-semibold cursor-pointer", text)}>
                             Select All
                           </label>
                         </div>
@@ -336,10 +336,10 @@ export default function AIKnowledgeBaseSection() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={cn("h-6 px-2.5 rounded-md text-[9px] font-black uppercase tracking-widest", dark ? "border-slate-800 bg-slate-900 text-slate-300" : "border-slate-200 bg-white text-slate-600")}>
+                        <Badge variant="outline" className={cn("h-6 px-2.5 rounded-md text-[10px] font-semibold", dark ? "border-slate-800 bg-slate-900 text-slate-300" : "border-slate-200 bg-white text-slate-600")}>
                           Total: {formData.web_pages.length}
                         </Badge>
-                        <Badge className="h-6 px-2.5 rounded-md bg-primary/10 text-primary border-primary/20 text-[9px] font-black uppercase tracking-widest">
+                        <Badge className="h-6 px-2.5 rounded-md bg-primary/10 text-primary border-primary/20 text-[10px] font-semibold">
                           Selected: {formData.selected_pages.length}
                         </Badge>
                       </div>
@@ -401,7 +401,7 @@ export default function AIKnowledgeBaseSection() {
                   <div className="p-3 rounded-2xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
                     <Upload size={18} />
                   </div>
-                  <p className="text-[12px] font-black uppercase tracking-widest text-primary">Click to add PDF files</p>
+                  <p className="text-[13px] font-semibold text-primary">Click to add PDF files</p>
                   <p className={cn("text-[10px] font-medium opacity-60", sub)}>Upload documents from your gallery</p>
                 </button>
 
@@ -478,8 +478,8 @@ export default function AIKnowledgeBaseSection() {
                 <Book className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Knowledge Base</h1>
-                <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Knowledge base</h1>
+                <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
                   Manage knowledge bases for your AI agents.
                 </p>
               </div>
@@ -515,10 +515,10 @@ export default function AIKnowledgeBaseSection() {
                 <table className="w-full">
                   <thead>
                     <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/30" : "bg-white/60")}>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
-                      <th className={cn("py-4 px-6 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Type</th>
-                      <th className={cn("py-4 px-6 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Name</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Status</th>
+                      <th className={cn("py-4 px-6 text-left text-[11px] font-semibold", sub)}>Type</th>
+                      <th className={cn("py-4 px-6 text-right text-[11px] font-semibold", sub)}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -533,7 +533,7 @@ export default function AIKnowledgeBaseSection() {
                           <Badge
                             variant="outline"
                             className={cn(
-                              "h-5 px-2 rounded-md text-[9px] font-black uppercase tracking-widest",
+                              "h-5 px-2 rounded-md text-[10px] font-semibold",
                               kb.status === "PUBLISHED"
                                 ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400"
                                 : dark ? "border-slate-700 bg-slate-900 text-slate-400" : "border-slate-200 bg-slate-100 text-slate-600"
@@ -543,7 +543,7 @@ export default function AIKnowledgeBaseSection() {
                           </Badge>
                         </td>
                         <td className="py-3 px-6">
-                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+                          <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold">
                             {kb.source_type}
                           </Badge>
                         </td>
@@ -576,7 +576,7 @@ export default function AIKnowledgeBaseSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Knowledge Base?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Knowledge Base?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">"{kbToDelete?.name}"</span> will be permanently removed. This action cannot be undone.
                 </p>
@@ -586,7 +586,7 @@ export default function AIKnowledgeBaseSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={confirmDelete}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>
@@ -602,6 +602,6 @@ export default function AIKnowledgeBaseSection() {
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>{children}</label>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>{children}</label>
   );
 }

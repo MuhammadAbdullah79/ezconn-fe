@@ -234,16 +234,16 @@ export default function QuickRepliesSection() {
     dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900",
   );
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // ── Handlers ─────────────────────────────────────────────────────
   const resetCollectionForm = () =>
@@ -472,7 +472,7 @@ export default function QuickRepliesSection() {
     <div className={cn("rounded-xl border p-4 space-y-3", softBg, softBorder)}>
       <div className="flex items-center gap-2">
         <Users size={14} className="text-primary" />
-        <span className={cn("text-[11px] font-black uppercase tracking-widest", text)}>
+        <span className={cn("text-[12px] font-semibold", text)}>
           Pick agents ({collectionForm.bindings.length} selected)
         </span>
       </div>
@@ -527,7 +527,7 @@ export default function QuickRepliesSection() {
                 <Bot className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {headerTitle}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
@@ -567,8 +567,8 @@ export default function QuickRepliesSection() {
             <div className="p-8">
               <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
                 <div className={cn("px-6 py-4 border-b flex items-center justify-between", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Collection Name</span>
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Action</span>
+                  <span className={cn("text-[11px] font-semibold", sub)}>Collection Name</span>
+                  <span className={cn("text-[11px] font-semibold", sub)}>Action</span>
                 </div>
                 {isLoading ? (
                   <div className="py-12 flex justify-center">
@@ -606,7 +606,7 @@ export default function QuickRepliesSection() {
                             {collection.name}
                           </span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className={cn("text-[10px] font-medium opacity-60 uppercase tracking-widest", sub)}>
+                            <span className={cn("text-[10px] font-medium opacity-60", sub)}>
                               {collection.share}
                             </span>
                             <span className={cn("text-[10px] font-medium opacity-60", sub)}>
@@ -839,7 +839,7 @@ export default function QuickRepliesSection() {
                           </option>
                         ))}
                       </select>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-primary">
+                      <span className="text-[11px] font-semibold text-primary">
                         {2000 - messageForm.content.length} remaining
                       </span>
                     </div>
@@ -930,7 +930,7 @@ export default function QuickRepliesSection() {
                   <Edit2 size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     Edit Collection
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -999,7 +999,7 @@ export default function QuickRepliesSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                <h2 className={cn("text-[14px] font-semibold", text)}>
                   Delete Collection?
                 </h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
@@ -1014,7 +1014,7 @@ export default function QuickRepliesSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleDeleteCollection}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 {deleteMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 Delete

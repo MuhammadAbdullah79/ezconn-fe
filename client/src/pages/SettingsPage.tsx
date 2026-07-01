@@ -277,6 +277,29 @@ export default function SettingsPage() {
     }
   };
 
+  // Sentence-case a sidebar label for display: keep the first word's
+  // leading letter capitalised, force everything else lowercase, and
+  // preserve product names / acronyms verbatim ("AI", "WhatsApp",
+  // "ChatGPT", …). Internal state keys stay in their original casing so
+  // activeSection matchers keep working — this is display only.
+  const displayLabel = (raw: string): string => {
+    const preserve = new Set([
+      "AI", "URL", "ID", "API", "CSV", "SMS",
+      "WhatsApp", "Instagram", "Messenger", "Telegram", "Webchat",
+      "ChatGPT", "Iframe",
+    ]);
+    return raw
+      .split(/(\s+|&)/)
+      .map((tok, i) => {
+        if (/^\s+$/.test(tok) || tok === "&") return tok;
+        if (preserve.has(tok)) return tok;
+        return i === 0
+          ? tok.charAt(0).toUpperCase() + tok.slice(1).toLowerCase()
+          : tok.toLowerCase();
+      })
+      .join("");
+  };
+
   // Filter sections based on search query
   const filteredSections = sections.map(section => {
     if (!searchQuery.trim()) return section;
@@ -303,11 +326,17 @@ export default function SettingsPage() {
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-      <div className="h-[calc(100vh-4rem)] overflow-hidden" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <div className="flex h-full">
-          {/* Left Sidebar Navigation */}
-          <Card className="h-full w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 rounded-none flex-shrink-0 z-10 flex flex-col overflow-hidden">
-            <CardContent className="p-0 flex flex-col flex-1 overflow-y-auto max-h-full min-h-0">
+      {/* Outer wrapper — matches the floating header pattern: 12px gap on
+          all sides so the sidebar + content read as separate rounded
+          cards, not an edge-to-edge sheet. Height budgets 88px for the
+          floating header + 12px bottom breathing room. */}
+      <div className="h-[calc(100vh-88px)] overflow-hidden p-3" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <div className="flex h-full gap-3">
+          {/* Left Sidebar Navigation — floating rounded card, all-side
+              border + shadow so the separation from the header (and the
+              content panel to the right) reads clearly. */}
+          <Card className="h-full w-64 bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 rounded-2xl flex-shrink-0 z-10 flex flex-col overflow-hidden shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)]">
+            <CardContent className="p-0 flex flex-col flex-1 overflow-y-auto scrollbar-hide max-h-full min-h-0">
 
               {/* Search Bar */}
               <div className="p-4 border-b border-slate-200 dark:border-slate-800 relative z-10">
@@ -360,11 +389,11 @@ export default function SettingsPage() {
                             onClick={() => goToSection(item.name)}
                             className={`w-full text-left px-3 py-2 text-sm rounded-md transition-all duration-200 
           ${activeSection === item.name
-                                ? "bg-primary text-white shadow-sm transform scale-[1.02]"
-                                : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white hover:translate-x-0.5"
+                                ? "bg-primary/10 text-primary font-semibold"
+                                : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                               }`}
                           >
-                            {item.name}
+                            {displayLabel(item.name)}
                           </button>
 
                         </React.Fragment>
@@ -386,13 +415,13 @@ export default function SettingsPage() {
                         <button
                           onClick={() => setChannelsOpen(!channelsOpen)}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.name
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                             }`}
                         >
                           <div className="flex items-center gap-2.5">
                             {Icon && <Icon size={16} />}
-                            <span className="font-medium">{section.name}</span>
+                            <span className="font-medium">{displayLabel(section.name)}</span>
                           </div>
                           <ChevronDown size={14} className={`${channelsOpen ? "rotate-180" : ""}`} />
                         </button>
@@ -406,8 +435,8 @@ export default function SettingsPage() {
                                   <button
                                     onClick={() => goToSection(child.name)}
                                     className={`w-full flex items-center gap-2 text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
-                                      ? "bg-primary text-white shadow-sm"
-                                      : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                                      ? "bg-primary/10 text-primary font-semibold"
+                                      : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                                       }`}
                                   >
                                     {child.iconPath ? (
@@ -415,7 +444,7 @@ export default function SettingsPage() {
                                     ) : ChildIcon ? (
                                       <ChildIcon size={14} className={activeSection === child.name ? "text-white" : child.color} />
                                     ) : null}
-                                    {child.name}
+                                    {displayLabel(child.name)}
                                   </button>
 
                                 </React.Fragment>
@@ -434,13 +463,13 @@ export default function SettingsPage() {
                         <button
                           onClick={() => setCustomizationOpen(!customizationOpen)}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.name
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                             }`}
                         >
                           <div className="flex items-center gap-2.5">
                             {Icon && <Icon size={16} />}
-                            <span className="font-medium">{section.name}</span>
+                            <span className="font-medium">{displayLabel(section.name)}</span>
                           </div>
                           <ChevronDown size={14} className={`${customizationOpen ? "rotate-180" : ""}`} />
                         </button>
@@ -452,11 +481,11 @@ export default function SettingsPage() {
                                 <button
                                   onClick={() => goToSection(child.name)}
                                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
-                                    ? "bg-primary text-white shadow-sm"
-                                    : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                                    ? "bg-primary/10 text-primary font-semibold"
+                                    : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                                     }`}
                                 >
-                                  {child.name}
+                                  {displayLabel(child.name)}
                                 </button>
 
                               </React.Fragment>
@@ -475,13 +504,13 @@ export default function SettingsPage() {
                         <button
                           onClick={() => setChatGptOpen(!chatGptOpen)}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.name
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                             }`}
                         >
                           <div className="flex items-center gap-2.5">
                             {Icon && <Icon size={16} />}
-                            <span className="font-medium">{section.name}</span>
+                            <span className="font-medium">{displayLabel(section.name)}</span>
                           </div>
                           <ChevronDown size={14} className={`${chatGptOpen ? "rotate-180" : ""}`} />
                         </button>
@@ -493,11 +522,11 @@ export default function SettingsPage() {
                                 <button
                                   onClick={() => goToSection(child.name)}
                                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
-                                    ? "bg-primary text-white shadow-sm"
-                                    : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                                    ? "bg-primary/10 text-primary font-semibold"
+                                    : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                                     }`}
                                 >
-                                  {child.name}
+                                  {displayLabel(child.name)}
                                 </button>
 
                               </React.Fragment>
@@ -516,13 +545,13 @@ export default function SettingsPage() {
                         <button
                           onClick={() => setConnectOpen(!connectOpen)}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.name
-                            ? "bg-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                             }`}
                         >
                           <div className="flex items-center gap-2.5">
                             {Icon && <Icon size={16} />}
-                            <span className="font-medium">{section.name}</span>
+                            <span className="font-medium">{displayLabel(section.name)}</span>
                           </div>
                           <ChevronDown size={14} className={`${connectOpen ? "rotate-180" : ""}`} />
                         </button>
@@ -534,11 +563,11 @@ export default function SettingsPage() {
                                 <button
                                   onClick={() => goToSection(child.name)}
                                   className={`w-full text-left px-3 py-2 text-sm rounded-md transition-colors ${activeSection === child.name
-                                    ? "bg-primary text-white shadow-sm"
-                                    : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                                    ? "bg-primary/10 text-primary font-semibold"
+                                    : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                                     }`}
                                 >
-                                  {child.name}
+                                  {displayLabel(child.name)}
                                 </button>
 
                               </React.Fragment>
@@ -555,13 +584,13 @@ export default function SettingsPage() {
                       <button
                         onClick={() => goToSection(section.name)}
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.name
-                          ? "bg-primary text-white shadow-sm"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground dark:text-gray-300 dark:hover:bg-slate-700 dark:hover:text-white"
+                          ? "bg-primary/10 text-primary font-semibold"
+                          : "text-slate-600 hover:bg-primary/5 hover:text-primary dark:text-gray-300 dark:hover:bg-primary/10 dark:hover:text-primary"
                           }`}
                       >
                         <div className="flex items-center gap-2.5">
                           {Icon && <Icon size={16} />}
-                          <span className="font-medium">{section.name}</span>
+                          <span className="font-medium">{displayLabel(section.name)}</span>
                         </div>
                       </button>
                     </div>
@@ -572,9 +601,12 @@ export default function SettingsPage() {
 
           </Card>
 
-          {/* Right Content Area */}
-          <div className="flex-1 min-w-0 flex flex-col min-h-0 p-6 bg-slate-50/60 dark:bg-[#0b1120] settings-pane">
-            <Card className="flex-1 overflow-auto border-0 shadow-none bg-transparent dark:bg-transparent">
+          {/* Right Content Area — same floating-card treatment as the
+              sidebar so both panels read as separate rounded blocks
+              with the header floating above. Padding gives the nested
+              section cards breathing room from the outer card edge. */}
+          <div className="flex-1 min-w-0 flex flex-col min-h-0 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] settings-pane">
+            <Card className="flex-1 overflow-auto scrollbar-hide border-0 shadow-none bg-transparent dark:bg-transparent p-4">
               {activeSection === "Manage" && (
                 <ManageSection />)}
 

@@ -257,7 +257,11 @@ function AppContent() {
                 {isLoggedIn && !isBuilderRoute && <AppSidebar />}
 
                 {/* Main content area - now full width, with top padding */}
-                <main className={`flex-1 overflow-auto bg-accent/30 ${isLoggedIn && !isBuilderRoute ? "mt-16" : ""}`}>
+                {/* Main content — leaves room for the floating rounded
+                    header above (top-3 = 12px + h-16 = 64px + 8px card
+                    gap ≈ 88px, so mt-[88px]). Only applied when the top
+                    bar is visible (not on auth screens or the builder). */}
+                <main className={`flex-1 overflow-auto bg-accent/30 ${isLoggedIn && !isBuilderRoute ? "mt-[88px]" : ""}`}>
                   <Router siteType={siteType} isAgencyRoute={isAgencyRoute} />
                 </main>
               </div>

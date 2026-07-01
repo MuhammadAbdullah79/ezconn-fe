@@ -104,10 +104,10 @@ export default function ManageAgentSection() {
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
@@ -476,7 +476,7 @@ export default function ManageAgentSection() {
                 <UserPlus className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {view === "add" ? "Add Agent" : "Edit Agent"}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
@@ -521,7 +521,7 @@ export default function ManageAgentSection() {
                       key={tab.value}
                       value={tab.value}
                       className={cn(
-                        "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all text-left justify-start bg-transparent",
+                        "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-[12px] font-semibold transition-all text-left justify-start bg-transparent",
                         "data-[state=active]:!bg-primary data-[state=active]:!text-white data-[state=active]:shadow-lg data-[state=active]:shadow-primary/20",
                         "data-[state=inactive]:hover:bg-primary/5 data-[state=inactive]:hover:text-primary",
                         dark ? "text-slate-400" : "text-slate-500"
@@ -627,7 +627,7 @@ export default function ManageAgentSection() {
 
                   {/* Limits (replyagent user_limits) */}
                   <div className="pt-6 border-t space-y-4 max-w-4xl" style={{ borderColor: dark ? "rgb(30 41 59)" : "rgb(241 245 249)" }}>
-                    <h4 className={cn("text-[11px] font-black uppercase tracking-widest", text)}>Limits</h4>
+                    <h4 className={cn("text-[12px] font-semibold", text)}>Limits</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {[
                         { label: "Open conversations", enableKey: "enable_conversation", valueKey: "conversation_limit", tip: "Set a Maximum Limit of Open Conversations for this Agent." },
@@ -694,7 +694,7 @@ export default function ManageAgentSection() {
                 <TabsContent value="login" className="m-0 outline-none space-y-6">
                   <div className="flex items-center justify-between gap-4">
                     <SectionHeading dark={dark} title="Login Policy" description="Specify the allowed login hours for this agent in the Workspace." />
-                    <div className={cn("px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest shrink-0", dark ? "bg-slate-950/50 border-slate-800 text-slate-300" : "bg-slate-50 border-slate-200 text-slate-600")}>
+                    <div className={cn("px-3 py-1.5 rounded-lg border text-[11px] font-semibold shrink-0", dark ? "bg-slate-950/50 border-slate-800 text-slate-300" : "bg-slate-50 border-slate-200 text-slate-600")}>
                       <Globe className="inline w-3 h-3 mr-1" /> Timezone: {workspaceTimezone}
                     </div>
                   </div>
@@ -710,9 +710,9 @@ export default function ManageAgentSection() {
                     <Table>
                       <TableHeader>
                         <TableRow className={cn("border-b hover:bg-transparent", softBorder)}>
-                          <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Day</TableHead>
-                          <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Login allowed from</TableHead>
-                          <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Logout at</TableHead>
+                          <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Day</TableHead>
+                          <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Login allowed from</TableHead>
+                          <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Logout at</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -766,7 +766,7 @@ export default function ManageAgentSection() {
                         <Globe size={16} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={cn("text-[12px] font-black uppercase tracking-widest", text)}>Limit access by IP address</p>
+                        <p className={cn("text-[13px] font-semibold", text)}>Limit access by IP address</p>
                         {limitIp && <Input value={loginPolicy.ip || ""} disabled={editingOwner} onChange={(e) => setPolicyField("ip", e.target.value)} placeholder="Type IP Address..." className={cn(inputCls, "h-9 mt-2 max-w-xs")} />}
                       </div>
                     </div>
@@ -785,7 +785,7 @@ export default function ManageAgentSection() {
                   <TabsContent key={cfg.key} value={cfg.key} className="m-0 outline-none space-y-5">
                     <div className="flex items-start justify-between gap-4">
                       <SectionHeading dark={dark} title={cfg.title} description={cfg.desc} />
-                      <div className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest shrink-0">
+                      <div className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold shrink-0">
                         {cfg.selected.length} / {cfg.list.length}
                       </div>
                     </div>
@@ -813,7 +813,7 @@ export default function ManageAgentSection() {
                             }
                           }}
                         />
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Select All</span>
+                        <span className={cn("text-[11px] font-semibold", sub)}>Select All</span>
                       </div>
                       <div>
                         {cfg.list.length === 0 && (
@@ -851,7 +851,7 @@ export default function ManageAgentSection() {
                                 ) : (
                                   <span className={cn("text-[12px] font-bold", text)}>{item.label}</span>
                                 )}
-                                {isSelf && <span className={cn("text-[9px] font-black uppercase tracking-widest", sub)}>You</span>}
+                                {isSelf && <span className={cn("text-[10px] font-semibold", sub)}>You</span>}
                               </div>
                               {checked && <Check size={14} className="text-primary" />}
                             </div>
@@ -879,13 +879,13 @@ export default function ManageAgentSection() {
               <Users className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Manage Agents</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Manage agents</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
                 Add or edit agent details
               </p>
             </div>
           </div>
-          <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+          <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold flex items-center gap-1.5">
             <Shield size={11} /> {agents.length} Agents
           </span>
         </div>
@@ -920,10 +920,10 @@ export default function ManageAgentSection() {
             <Table>
               <TableHeader>
                 <TableRow className={cn("border-b hover:bg-transparent", softBorder)}>
-                  <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest text-left", sub)}>Agent</TableHead>
-                  <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Status</TableHead>
-                  <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest", sub)}>Role</TableHead>
-                  <TableHead className={cn("py-4 px-6 text-[10px] font-black uppercase tracking-widest text-right", sub)}>Actions</TableHead>
+                  <TableHead className={cn("py-4 px-6 text-[11px] font-semibold text-left", sub)}>Agent</TableHead>
+                  <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Status</TableHead>
+                  <TableHead className={cn("py-4 px-6 text-[11px] font-semibold", sub)}>Role</TableHead>
+                  <TableHead className={cn("py-4 px-6 text-[11px] font-semibold text-right", sub)}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -941,12 +941,12 @@ export default function ManageAgentSection() {
                       </div>
                     </TableCell>
                     <TableCell className="py-3 px-6">
-                      <Badge variant="outline" className="h-6 px-2.5 border-emerald-500/30 text-emerald-600 bg-emerald-500/5 text-[10px] font-black uppercase tracking-widest rounded-md">
+                      <Badge variant="outline" className="h-6 px-2.5 border-emerald-500/30 text-emerald-600 bg-emerald-500/5 text-[11px] font-semibold rounded-md">
                         {agent.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="py-3 px-6">
-                      <Badge variant="outline" className={cn("h-6 px-2.5 text-[10px] font-black uppercase tracking-widest rounded-md", dark ? "bg-slate-900/50 border-slate-700 text-slate-300" : "bg-slate-100 border-slate-200 text-slate-600")}>
+                      <Badge variant="outline" className={cn("h-6 px-2.5 text-[11px] font-semibold rounded-md", dark ? "bg-slate-900/50 border-slate-700 text-slate-300" : "bg-slate-100 border-slate-200 text-slate-600")}>
                         {agent.role}
                       </Badge>
                     </TableCell>
@@ -975,7 +975,7 @@ function SectionHeading({ dark, title, description }: { dark: boolean; title: st
   const sub  = dark ? "text-slate-500" : "text-slate-400";
   return (
     <div className="space-y-1.5">
-      <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>{title}</h3>
+      <h3 className={cn("text-[14px] font-semibold", text)}>{title}</h3>
       {description && (
         <p className={cn("text-[11px] font-medium leading-relaxed opacity-60 max-w-2xl", sub)}>{description}</p>
       )}
@@ -986,7 +986,7 @@ function SectionHeading({ dark, title, description }: { dark: boolean; title: st
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>{children}</label>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>{children}</label>
   );
 }
 

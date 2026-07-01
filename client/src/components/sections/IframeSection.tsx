@@ -222,16 +222,16 @@ export default function IframeSection() {
     dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900",
   );
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // ── Data ─────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery<{ iframes: IframeRow[]; menu_title: string }>({
@@ -424,7 +424,7 @@ export default function IframeSection() {
                 <Globe className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {headerTitle}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
@@ -463,18 +463,18 @@ export default function IframeSection() {
           {view === "list" && (
             <div className="p-8">
               <div className={cn("rounded-[1.5rem] border overflow-hidden", softBorder, softBg)}>
-                <div className={cn("px-6 py-3 border-b text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                <div className={cn("px-6 py-3 border-b text-[11px] font-semibold", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
                   You can create a maximum of 3 items
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                        <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                        <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Placement</th>
-                        <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Sidebar Group</th>
-                        <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Permissions</th>
-                        <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                        <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Name</th>
+                        <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Placement</th>
+                        <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Sidebar Group</th>
+                        <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Permissions</th>
+                        <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -524,7 +524,7 @@ export default function IframeSection() {
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="inline-flex h-5 px-2 items-center rounded-md border border-primary/30 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+                              <span className="inline-flex h-5 px-2 items-center rounded-md border border-primary/30 bg-primary/5 text-primary text-[10px] font-semibold">
                                 {iframe.placement === "main_menu" ? "Main menu" : "Settings menu"}
                               </span>
                             </td>
@@ -567,7 +567,7 @@ export default function IframeSection() {
                     </tbody>
                   </table>
                 </div>
-                <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                <div className={cn("px-6 py-3 border-t text-[11px] font-semibold", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
                   Showing {iframes.length} of {iframes.length} iframes
                 </div>
               </div>
@@ -768,7 +768,7 @@ export default function IframeSection() {
                   <Edit2 size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     Edit Menu Title
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -814,7 +814,7 @@ export default function IframeSection() {
                   <IconByKey iconKey={formData.icon || "globe"} size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     Pick an icon
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -894,7 +894,7 @@ export default function IframeSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Iframe?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Iframe?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{iframeToDelete?.name || "This iframe"}</span> will be permanently removed.
                 </p>
@@ -905,7 +905,7 @@ export default function IframeSection() {
               <AlertDialogAction
                 onClick={() => iframeToDelete && deleteMutation.mutate(iframeToDelete.id)}
                 disabled={deleteMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 {deleteMutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                 Delete

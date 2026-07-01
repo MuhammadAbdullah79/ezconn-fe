@@ -141,16 +141,16 @@ export default function TagsSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // ── Queries ──────────────────────────────────────────────────────
   const { data: tagsData, isLoading } = useQuery<any>({
@@ -384,7 +384,7 @@ export default function TagsSection() {
     updateMutation.mutate();
   };
 
-  const thCls = cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest cursor-pointer select-none", sub);
+  const thCls = cn("px-6 py-4 text-left text-[11px] font-semibold cursor-pointer select-none", sub);
 
   // Color picker: small grid of presets + free hex inputs.
   const ColorPicker = ({
@@ -437,7 +437,7 @@ export default function TagsSection() {
                 <TagIcon className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Tags</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Tags</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
                   Create tags to categorize your conversations.
                 </p>
@@ -549,7 +549,7 @@ export default function TagsSection() {
                       <th className={thCls} onClick={() => handleColumnSort("lastEdited")}>
                         <div className="flex items-center gap-2">Last Edited {renderSortIcon("lastEdited")}</div>
                       </th>
-                      <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                      <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -584,7 +584,7 @@ export default function TagsSection() {
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <span
-                                className="inline-flex h-7 px-3 items-center rounded-md text-[11px] font-black uppercase tracking-widest"
+                                className="inline-flex h-7 px-3 items-center rounded-md text-[12px] font-semibold"
                                 style={{ backgroundColor: item.bgColor, color: item.textColor }}
                               >
                                 {item.name}
@@ -593,11 +593,11 @@ export default function TagsSection() {
                           </td>
                           <td className="px-6 py-4">
                             {item.displayInbox ? (
-                              <span className="inline-flex h-5 px-2 items-center gap-1 rounded-md text-[9px] font-black uppercase tracking-widest border border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
+                              <span className="inline-flex h-5 px-2 items-center gap-1 rounded-md text-[10px] font-semibold border border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
                                 <Eye size={10} /> Yes
                               </span>
                             ) : (
-                              <span className="inline-flex h-5 px-2 items-center gap-1 rounded-md text-[9px] font-black uppercase tracking-widest border border-slate-500/30 bg-slate-500/5 text-slate-500">
+                              <span className="inline-flex h-5 px-2 items-center gap-1 rounded-md text-[10px] font-semibold border border-slate-500/30 bg-slate-500/5 text-slate-500">
                                 <EyeOff size={10} /> No
                               </span>
                             )}
@@ -637,11 +637,11 @@ export default function TagsSection() {
 
               {!isLoading && (
                 <div className={cn("px-6 py-3 border-t flex items-center justify-between flex-wrap gap-3", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                  <span className={cn("text-[11px] font-semibold", sub)}>
                     {totalFilteredItems} results
                   </span>
                   <div className="flex items-center gap-3">
-                    <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Rows</span>
+                    <span className={cn("text-[11px] font-semibold", sub)}>Rows</span>
                     <select
                       value={rowsPerPage}
                       onChange={(e) => {
@@ -656,7 +656,7 @@ export default function TagsSection() {
                         </option>
                       ))}
                     </select>
-                    <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                    <span className={cn("text-[11px] font-semibold", sub)}>
                       Page {page} of {totalPages}
                     </span>
                     <div className="flex gap-1">
@@ -704,7 +704,7 @@ export default function TagsSection() {
                   {showEditModal ? <Edit2 size={18} /> : <TagIcon size={18} />}
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     {showEditModal ? "Edit Tag" : "Create Tag"}
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -749,7 +749,7 @@ export default function TagsSection() {
                 <label className={labelCls}>Preview</label>
                 <div>
                   <span
-                    className="inline-flex h-8 px-3 items-center rounded-md text-[12px] font-black uppercase tracking-widest"
+                    className="inline-flex h-8 px-3 items-center rounded-md text-[13px] font-semibold"
                     style={{ backgroundColor: form.bgColor, color: form.textColor }}
                   >
                     {form.name || "Sample"}
@@ -838,7 +838,7 @@ export default function TagsSection() {
                   <Folder size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     {editingFolder ? "Rename Folder" : "Create Folder"}
                   </DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -897,7 +897,7 @@ export default function TagsSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Tag?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Tag?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black break-all">
                     {itemToDelete?.name || "This tag"}
@@ -911,7 +911,7 @@ export default function TagsSection() {
               <AlertDialogAction
                 onClick={() => itemToDelete && deleteMutation.mutate(itemToDelete.id)}
                 disabled={deleteMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 {deleteMutation.isPending ? (
                   <Loader2 size={12} className="animate-spin" />

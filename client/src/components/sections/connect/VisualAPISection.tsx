@@ -131,21 +131,21 @@ export default function VisualAPISection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark
       ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary"
       : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+  const labelCls = cn("block text-[11px] font-semibold", sub);
 
   // ── Data fetchers ────────────────────────────────────────────────
   const { data: triggers } = useQuery<any[]>({
@@ -422,7 +422,7 @@ export default function VisualAPISection() {
                 <Plug className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>{headerTitle}</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>{headerTitle}</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>{headerSub}</p>
               </div>
             </div>
@@ -475,11 +475,11 @@ export default function VisualAPISection() {
                     <table className="w-full">
                       <thead>
                         <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Name</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>URL</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Created at</th>
-                          <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Action</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Name</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>URL</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Status</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Created at</th>
+                          <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -516,11 +516,11 @@ export default function VisualAPISection() {
                             </td>
                             <td className="px-6 py-4">
                               {trigger.live ? (
-                                <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                                <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                                   Live
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="h-5 px-2 rounded-md border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[9px] font-black uppercase tracking-widest">
+                                <Badge variant="outline" className="h-5 px-2 rounded-md border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[10px] font-semibold">
                                   Test
                                 </Badge>
                               )}
@@ -576,7 +576,7 @@ export default function VisualAPISection() {
                       </tbody>
                     </table>
                   </div>
-                  <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                  <div className={cn("px-6 py-3 border-t text-[11px] font-semibold", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
                     Showing {triggers.length} of {triggers.length} triggers
                   </div>
                 </div>
@@ -605,7 +605,7 @@ export default function VisualAPISection() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", !managed.live ? "text-rose-500" : "opacity-40")}>
+                  <span className={cn("text-[11px] font-semibold", !managed.live ? "text-rose-500" : "opacity-40")}>
                     Test
                   </span>
                   <Switch
@@ -636,7 +636,7 @@ export default function VisualAPISection() {
                     }}
                     className="data-[state=checked]:bg-primary"
                   />
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", managed.live ? "text-emerald-500" : "opacity-40")}>
+                  <span className={cn("text-[11px] font-semibold", managed.live ? "text-emerald-500" : "opacity-40")}>
                     Live
                   </span>
                 </div>
@@ -822,10 +822,10 @@ export default function VisualAPISection() {
                       <table className="w-full">
                         <thead>
                           <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Created at</th>
-                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Status</th>
-                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Error Code</th>
-                            <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Error</th>
+                            <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Created at</th>
+                            <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Status</th>
+                            <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Error Code</th>
+                            <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Error</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -839,11 +839,11 @@ export default function VisualAPISection() {
                                 </td>
                                 <td className="px-6 py-4">
                                   {success ? (
-                                    <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
+                                    <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
                                       Success
                                     </Badge>
                                   ) : (
-                                    <Badge variant="outline" className="h-5 px-2 rounded-md border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[9px] font-black uppercase tracking-widest">
+                                    <Badge variant="outline" className="h-5 px-2 rounded-md border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 text-[10px] font-semibold">
                                       Failed
                                     </Badge>
                                   )}
@@ -862,7 +862,7 @@ export default function VisualAPISection() {
                     </div>
                     {logs.last_page > 1 && (
                       <div className={cn("flex items-center justify-between gap-3 px-6 py-3 border-t", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                        <span className={cn("text-[11px] font-semibold", sub)}>
                           Showing {logs.from} – {logs.to} of {logs.total}
                         </span>
                         <div className="flex items-center gap-1">
@@ -913,7 +913,7 @@ export default function VisualAPISection() {
                   <Plug size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Add</DialogTitle>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>Add</DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                     Create a new Visual API trigger.
                   </DialogDescription>
@@ -961,7 +961,7 @@ export default function VisualAPISection() {
                   <Pencil size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Rename</DialogTitle>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>Rename</DialogTitle>
                   <DialogDescription className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                     Update the trigger name.
                   </DialogDescription>
@@ -1004,7 +1004,7 @@ export default function VisualAPISection() {
                 <CircleAlert size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Are you sure?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Are you sure?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   This action can not be undone. Do you want to proceed?
                 </p>
@@ -1014,7 +1014,7 @@ export default function VisualAPISection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>No</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => deleteMutation.mutate(deleteConfirmation.id)}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Yes
               </AlertDialogAction>
@@ -1130,7 +1130,7 @@ function MappingRow(props: {
             <span className={cn("text-[12px] font-bold", text)}>
               {label}{" "}
               {primary && (
-                <span className={cn("text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ml-1", dark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600")}>
+                <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded ml-1", dark ? "bg-slate-800 text-slate-300" : "bg-slate-100 text-slate-600")}>
                   Primary
                 </span>
               )}

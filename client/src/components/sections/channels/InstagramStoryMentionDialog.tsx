@@ -94,7 +94,7 @@ export default function InstagramStoryMentionDialog({ open, account, onClose }: 
               <ImageIcon size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Story Mention</div>
+              <div className={cn("text-[14px] font-semibold", text)}>Story Mention</div>
               <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", sub)}>
                 Trigger an automation whenever someone mentions{" "}
                 <span className="font-mono">@{account.username ?? account.name}</span> in their story.
@@ -109,7 +109,7 @@ export default function InstagramStoryMentionDialog({ open, account, onClose }: 
 
           {enabled && (
             <div className="space-y-2">
-              <label className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Automation to trigger on story mention</label>
+              <label className={cn("text-[11px] font-semibold", sub)}>Automation to trigger on story mention</label>
               <select
                 value={automationId ?? ""}
                 onChange={(e) => setAutomationId(e.target.value || null)}
@@ -129,7 +129,7 @@ export default function InstagramStoryMentionDialog({ open, account, onClose }: 
                 <button
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
-                  className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+                  className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
                 >
                   <Trash2 size={12} /> {deleteMutation.isPending ? "Deleting…" : "Delete"}
                 </button>
@@ -139,14 +139,14 @@ export default function InstagramStoryMentionDialog({ open, account, onClose }: 
               <button
                 onClick={onClose}
                 disabled={saveMutation.isPending || deleteMutation.isPending}
-                className={cn("h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
+                className={cn("h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
               >
                 Close
               </button>
               <button
                 onClick={() => saveMutation.mutate()}
                 disabled={saveMutation.isPending || (enabled && !automationId)}
-                className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saveMutation.isPending ? "Saving…" : "Save"}
               </button>

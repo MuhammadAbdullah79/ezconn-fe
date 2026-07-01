@@ -63,17 +63,17 @@ export default function AIReportBuilderSection() {
   );
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const { data: reports, isLoading } = useQuery({
     queryKey: ["/api/ai/reports"],
@@ -136,7 +136,7 @@ export default function AIReportBuilderSection() {
                 <FileText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Report Builder</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Report Builder</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
                   Generate reports with Artificial Intelligence
                 </p>
@@ -180,14 +180,14 @@ export default function AIReportBuilderSection() {
                     <table className="w-full">
                       <thead>
                         <tr className={cn("border-b", softBorder, dark ? "bg-slate-900/40" : "bg-white/60")}>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>
                             <div className="flex items-center gap-2">
                               <FileText size={12} /> Name
                             </div>
                           </th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Type</th>
-                          <th className={cn("px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest", sub)}>Last Run</th>
-                          <th className={cn("px-6 py-4 text-right text-[10px] font-black uppercase tracking-widest", sub)}>Actions</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Type</th>
+                          <th className={cn("px-6 py-4 text-left text-[11px] font-semibold", sub)}>Last Run</th>
+                          <th className={cn("px-6 py-4 text-right text-[11px] font-semibold", sub)}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -205,7 +205,7 @@ export default function AIReportBuilderSection() {
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest">
+                              <Badge variant="outline" className="h-5 px-2 rounded-md border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold">
                                 {report.type}
                               </Badge>
                             </td>
@@ -261,7 +261,7 @@ export default function AIReportBuilderSection() {
                     </table>
                   </div>
 
-                  <div className={cn("px-6 py-3 border-t text-[10px] font-black uppercase tracking-widest", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
+                  <div className={cn("px-6 py-3 border-t text-[11px] font-semibold", softBorder, sub, dark ? "bg-slate-900/40" : "bg-white/60")}>
                     Showing {reports.length} of {reports.length} reports
                   </div>
                 </div>
@@ -276,7 +276,7 @@ export default function AIReportBuilderSection() {
                 <div className="max-w-3xl space-y-6">
                   {/* Name */}
                   <div className="space-y-2">
-                    <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Name</label>
+                    <label className={cn("block text-[11px] font-semibold", sub)}>Name</label>
                     <input
                       type="text"
                       value={formData.name}
@@ -288,7 +288,7 @@ export default function AIReportBuilderSection() {
 
                   {/* Report Type */}
                   <div className="space-y-2">
-                    <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Select report type</label>
+                    <label className={cn("block text-[11px] font-semibold", sub)}>Select report type</label>
                     <select
                       value={formData.reportType}
                       onChange={(e) => setFormData({ ...formData, reportType: e.target.value })}
@@ -301,7 +301,7 @@ export default function AIReportBuilderSection() {
 
                   {/* LLM Model */}
                   <div className="space-y-2">
-                    <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Select LLM model</label>
+                    <label className={cn("block text-[11px] font-semibold", sub)}>Select LLM model</label>
                     <select
                       value={formData.llmModel}
                       onChange={(e) => setFormData({ ...formData, llmModel: e.target.value })}
@@ -317,7 +317,7 @@ export default function AIReportBuilderSection() {
                   {/* Prompt */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <label className={cn("block text-[10px] font-black uppercase tracking-widest", sub)}>Prompt</label>
+                      <label className={cn("block text-[11px] font-semibold", sub)}>Prompt</label>
                       <button
                         onClick={() => toast({ title: "AI", description: "Generating suggestion..." })}
                         className={cn("w-9 h-9 rounded-lg border flex items-center justify-center transition-all", "border-primary/30 text-primary hover:bg-primary hover:text-white")}
@@ -367,7 +367,7 @@ export default function AIReportBuilderSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Report?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Report?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{reportToDelete?.name || "This report"}</span> will be permanently removed.
                 </p>
@@ -377,7 +377,7 @@ export default function AIReportBuilderSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => { deleteMutation.mutate(reportToDelete.id); setShowDeleteConfirm(false); }}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>

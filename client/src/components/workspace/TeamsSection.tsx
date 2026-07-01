@@ -78,10 +78,10 @@ export default function TeamsSection() {
   );
 
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
@@ -185,7 +185,7 @@ export default function TeamsSection() {
                 <Users2 className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {view === "add" ? "Add Team" : "Edit Team"}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
@@ -290,7 +290,7 @@ export default function TeamsSection() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <FieldLabel dark={dark}>Members</FieldLabel>
-                    <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest">
+                    <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary text-[11px] font-semibold">
                       {selectedAgents.length} Added
                     </span>
                   </div>
@@ -331,7 +331,7 @@ export default function TeamsSection() {
                       <span className="text-[10px] font-bold text-rose-500">
                         {totalPriority !== 100 ? "Priority value should be equal to 100" : ""}
                       </span>
-                      <span className={cn("text-[10px] font-black uppercase tracking-widest", totalPriority === 100 ? "text-emerald-500" : sub)}>
+                      <span className={cn("text-[11px] font-semibold", totalPriority === 100 ? "text-emerald-500" : sub)}>
                         Total: {totalPriority}%
                       </span>
                     </div>
@@ -360,7 +360,7 @@ export default function TeamsSection() {
                             <div className="flex items-center gap-2">
                               {distribution === "PRIORITY" && (
                                 <div className={cn("flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg border", dark ? "border-slate-800 bg-slate-950/50" : "border-slate-200 bg-white")}>
-                                  <span className={cn("text-[9px] font-black uppercase tracking-widest", sub)}>Priority</span>
+                                  <span className={cn("text-[10px] font-semibold", sub)}>Priority</span>
                                   {/* Range slider (replyagent) + number box — both clamped 0–100, synced. */}
                                   <input
                                     type="range"
@@ -417,7 +417,7 @@ export default function TeamsSection() {
               {/* Right — Preview */}
               <div className={cn("w-full lg:w-80 shrink-0 p-8 space-y-5", softBg)}>
                 <div className="flex items-center gap-2">
-                  <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Preview</span>
+                  <span className={cn("text-[11px] font-semibold", sub)}>Preview</span>
                   <div className="h-px flex-1 bg-slate-500/10" />
                 </div>
 
@@ -432,14 +432,14 @@ export default function TeamsSection() {
 
                   <div className="flex justify-center gap-2 mt-3 flex-wrap">
                     <span className={cn(
-                      "inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md",
+                      "inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-md",
                       distribution === "EQUAL" ? "bg-blue-500/10 text-blue-500" : "bg-violet-500/10 text-violet-500"
                     )}>
                       {distribution === "EQUAL" ? <Shuffle size={10} /> : <Target size={10} />}
                       {distribution === "EQUAL" ? "Equal" : "Priority"}
                     </span>
                     {autoAssign && (
-                      <span className="inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-500">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-500">
                         <Zap size={10} /> Auto
                       </span>
                     )}
@@ -458,7 +458,7 @@ export default function TeamsSection() {
                         <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                           {row.icon}
                         </div>
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>{row.label}</span>
+                        <span className={cn("text-[11px] font-semibold", sub)}>{row.label}</span>
                       </div>
                       <span className={cn("text-[11px] font-black", text)}>{row.value}</span>
                     </div>
@@ -467,7 +467,7 @@ export default function TeamsSection() {
 
                 {selectedAgents.length > 0 && (
                   <div className="space-y-2">
-                    <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>Members</span>
+                    <span className={cn("text-[11px] font-semibold", sub)}>Members</span>
                     <div className="flex flex-wrap gap-2">
                       {selectedAgents.slice(0, 8).map((agent) => {
                         const n = agent.full_name || agent.first_name || "?";
@@ -500,13 +500,13 @@ export default function TeamsSection() {
               <Users2 className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Teams</h1>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Teams</h1>
               <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
                 Add or edit team details
               </p>
             </div>
           </div>
-          <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+          <span className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold flex items-center gap-1.5">
             <ShieldCheck size={11} /> {teams.length} Teams
           </span>
         </div>
@@ -541,7 +541,7 @@ export default function TeamsSection() {
                   <Users2 className="w-6 h-6 text-primary" />
                 </div>
                 <div className="space-y-1">
-                  <p className={cn("text-[13px] font-black uppercase tracking-widest", text)}>No Teams Yet</p>
+                  <p className={cn("text-[14px] font-semibold", text)}>No Teams Yet</p>
                   <p className={cn("text-[11px] font-medium opacity-60 max-w-xs", sub)}>
                     Create your first team to start routing conversations.
                   </p>
@@ -600,7 +600,7 @@ export default function TeamsSection() {
                         </h4>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={cn(
-                            "inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md",
+                            "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md",
                             team.distribution === "EQUAL"
                               ? "bg-blue-500/10 text-blue-500"
                               : "bg-violet-500/10 text-violet-500"
@@ -609,7 +609,7 @@ export default function TeamsSection() {
                             {team.distribution === "EQUAL" ? "Equal" : "Priority"}
                           </span>
                           {team.auto_assign === 1 && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500">
                               <Zap size={9} /> Auto
                             </span>
                           )}
@@ -628,7 +628,7 @@ export default function TeamsSection() {
                             </div>
                           )}
                         </div>
-                        <span className={cn("text-[10px] font-black uppercase tracking-widest", sub)}>
+                        <span className={cn("text-[11px] font-semibold", sub)}>
                           {memberCount} {memberCount === 1 ? "Member" : "Members"}
                         </span>
                       </div>
@@ -651,7 +651,7 @@ export default function TeamsSection() {
                   <TriangleAlert size={20} className="text-rose-500" />
                 </div>
                 <div>
-                  <h2 className={cn("text-[14px] font-black uppercase tracking-widest", text)}>Delete Team?</h2>
+                  <h2 className={cn("text-[15px] font-semibold", text)}>Delete Team?</h2>
                   <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
                     "{deleteTarget.name}" will be permanently removed.
                   </p>
@@ -665,7 +665,7 @@ export default function TeamsSection() {
               </div>
 
               <div className="space-y-2">
-                <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
                   Type <span className="text-rose-500">{deleteTarget.name}</span> to confirm
                 </label>
                 <Input
@@ -686,7 +686,7 @@ export default function TeamsSection() {
                 <button
                   disabled={deleteConfirm !== deleteTarget.name || deleteMutation.isPending}
                   onClick={() => deleteMutation.mutate(deleteTarget.id)}
-                  className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                  className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
                 >
                   {deleteMutation.isPending ? <Activity className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                   Delete
@@ -704,7 +704,7 @@ export default function TeamsSection() {
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
       {children}
     </label>
   );

@@ -63,7 +63,7 @@ export default function LiveChatSection() {
   );
 
   const primaryBtn =
-    "h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20";
+    "h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20";
 
   const outlineBtn = cn(
     "h-11 w-11 rounded-xl border flex items-center justify-center shrink-0 transition-all hover:border-primary/40 hover:text-primary",
@@ -249,13 +249,13 @@ export default function LiveChatSection() {
               <MessageSquare className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Live Chat</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Live chat</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
                 Manage your live chat settings
               </p>
             </div>
           </div>
-          <div className={cn("px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
+          <div className={cn("px-3 py-1.5 rounded-lg border text-[10px] font-semibold flex items-center gap-1.5", dark ? "border-slate-800 bg-slate-950/50 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600")}>
             <Sparkles size={11} className="text-primary" /> v2.4 Optimized
           </div>
         </div>
@@ -270,7 +270,7 @@ export default function LiveChatSection() {
                     key={tab.value}
                     value={tab.value}
                     className={cn(
-                      "flex items-center gap-2 px-1 py-5 rounded-none text-[11px] font-black uppercase tracking-widest transition-all shadow-none bg-transparent border-b-2 border-transparent",
+                      "flex items-center gap-2 px-1 py-5 rounded-none text-[12px] font-semibold transition-all shadow-none bg-transparent border-b-2 border-transparent",
                       "data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-primary data-[state=active]:text-primary",
                       "hover:text-primary",
                       dark ? "text-slate-500" : "text-slate-400"
@@ -472,7 +472,7 @@ export default function LiveChatSection() {
                           {b.icon}
                         </div>
                         <div>
-                          <p className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{b.title}</p>
+                          <p className={cn("text-[13px] font-semibold", text)}>{b.title}</p>
                           <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", sub)}>{b.desc}</p>
                         </div>
                       </div>
@@ -488,7 +488,7 @@ export default function LiveChatSection() {
                       <AlertTriangle size={14} />
                     </div>
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                      <p className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">
                         Attention needed
                       </p>
                       <p className={cn("text-[11px] font-medium leading-relaxed mt-1 text-amber-700/80 dark:text-amber-300/80")}>
@@ -539,7 +539,7 @@ export default function LiveChatSection() {
                   <div className={cn("p-5 rounded-[1.25rem] border bg-primary/5 border-primary/20")}>
                     <div className="flex items-center gap-2 mb-3">
                       <Sparkles size={14} className="text-primary" />
-                      <h5 className="text-[10px] font-black uppercase tracking-widest text-primary">Capabilities</h5>
+                      <h5 className="text-[11px] font-semibold text-primary">Capabilities</h5>
                     </div>
                     <ul className="space-y-2">
                       {["Grammar Fix", "Tone Adjustment", "Translation", "Expansion"].map((f) => (
@@ -635,7 +635,7 @@ export default function LiveChatSection() {
                   {folderFormOpen ? (
                     <div className="flex flex-col gap-5 flex-1">
                       <div className="flex items-center justify-between">
-                        <h4 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>
+                        <h4 className={cn("text-[13px] font-semibold", text)}>
                           {editingFolderId !== null ? "Edit Folder" : "New Folder"}
                         </h4>
                         <button
@@ -667,7 +667,7 @@ export default function LiveChatSection() {
                               type="button"
                               onClick={() => changeFolderSource(src)}
                               className={cn(
-                                "px-5 h-8 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                                "px-5 h-8 rounded-lg text-[11px] font-semibold transition-all",
                                 folderSource === src
                                   ? "bg-primary text-white shadow-sm"
                                   : dark ? "text-slate-400 hover:text-slate-200" : "text-slate-500 hover:text-slate-700",
@@ -705,7 +705,7 @@ export default function LiveChatSection() {
                           <button
                             onClick={removeFolder}
                             disabled={deleteFolderMut.isPending}
-                            className="h-10 px-5 rounded-xl border border-rose-500/30 text-rose-500 text-[10px] font-black uppercase tracking-widest transition-all hover:bg-rose-500/10 disabled:opacity-50 flex items-center gap-2"
+                            className="h-10 px-5 rounded-xl border border-rose-500/30 text-rose-500 text-[11px] font-semibold transition-all hover:bg-rose-500/10 disabled:opacity-50 flex items-center gap-2"
                           >
                             <Trash2 size={13} /> Delete
                           </button>
@@ -714,7 +714,7 @@ export default function LiveChatSection() {
                         <button
                           onClick={() => setFolderFormOpen(false)}
                           className={cn(
-                            "h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all",
+                            "h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all",
                             dark
                               ? "border-slate-800 text-slate-300 hover:border-slate-700"
                               : "border-slate-200 text-slate-700 hover:border-slate-300"
@@ -747,7 +747,7 @@ export default function LiveChatSection() {
                       <button
                         onClick={openAddFolder}
                         className={cn(
-                          "h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                          "h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
                           "border-primary/40 text-primary hover:bg-primary hover:text-white"
                         )}
                       >
@@ -761,7 +761,7 @@ export default function LiveChatSection() {
 
             {/* ── PAUSE TAB ── */}
             <TabsContent value="pause" className="p-8 outline-none space-y-6">
-              <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+              <h3 className={cn("text-[14px] font-semibold", text)}>
                 Automatically pause the Smart Flow when initiating a conversation?
               </h3>
 
@@ -804,7 +804,7 @@ function SectionHeading({ dark, title, description }: { dark: boolean; title: st
   const sub  = dark ? "text-slate-500" : "text-slate-400";
   return (
     <div className="space-y-1.5">
-      <h3 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>{title}</h3>
+      <h3 className={cn("text-[14px] font-semibold", text)}>{title}</h3>
       {description && (
         <p className={cn("text-[11px] font-medium leading-relaxed opacity-60 max-w-2xl", sub)}>{description}</p>
       )}
@@ -815,7 +815,7 @@ function SectionHeading({ dark, title, description }: { dark: boolean; title: st
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (
-    <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>{children}</label>
+    <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>{children}</label>
   );
 }
 

@@ -241,6 +241,33 @@
   }
 }
 
+/* ─── Global readability bump ─────────────────────────────────────────
+ * The app leans heavily on hardcoded 10-13 px text sizes (labels,
+ * chips, table columns). At standard viewing distance those read a bit
+ * small, so we scale each of the most common Tailwind arbitrary sizes
+ * up by ~2 px via an attribute selector. This is a one-place change
+ * that lifts every text-[Xpx] usage across the codebase without
+ * touching each component — safe because it only bumps size, not
+ * layout, and Tailwind's cascade order lets our block win over the
+ * generated utility class. */
+[class*="text-[10px]"]  { font-size: 12px !important; }
+[class*="text-[10.5px]"]{ font-size: 12.5px !important; }
+[class*="text-[11px]"]  { font-size: 13px !important; }
+[class*="text-[11.5px]"]{ font-size: 13.5px !important; }
+[class*="text-[12px]"]  { font-size: 14px !important; }
+[class*="text-[12.5px]"]{ font-size: 14.5px !important; }
+[class*="text-[13px]"]  { font-size: 15px !important; }
+[class*="text-[13.5px]"]{ font-size: 15.5px !important; }
+[class*="text-[14px]"]  { font-size: 16px !important; }
+
+/* Bump the default body baseline so any element without an explicit text
+ * class inherits a slightly larger, more comfortable size. rem-based
+ * Tailwind sizes (text-xs / text-sm / text-base / text-lg) scale
+ * proportionally because they resolve against the root font-size. */
+html {
+  font-size: 17px;
+}
+
 /**
  * Using the elevate system.
  * Automatic contrast adjustment.

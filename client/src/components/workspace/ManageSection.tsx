@@ -123,7 +123,7 @@ export default function ManageSection() {
     return (
       <div className={cn("p-8 text-center rounded-[2rem] border border-rose-500/20 bg-rose-500/5")}>
         <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
-        <p className="text-rose-500 font-black text-sm uppercase tracking-widest">Failed to load workspace settings</p>
+        <p className="text-rose-500 font-black text-sm">Failed to load workspace settings</p>
       </div>
     );
   }
@@ -144,16 +144,16 @@ export default function ManageSection() {
               <Settings className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Workspace Settings</h1>
-              <p className={cn("text-[11px] font-bold mt-0.5 opacity-60", sub)}>
-                Manage your Workspace settings
+              <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Workspace settings</h1>
+              <p className={cn("text-[11px] font-medium mt-0.5 opacity-60", sub)}>
+                Manage your workspace settings
               </p>
             </div>
           </div>
           <button
             onClick={() => handleCopy(workspaceId)}
             className={cn(
-              "h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+              "h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
               dark
                 ? "border-slate-800 text-slate-200 hover:border-primary/40 hover:text-primary"
                 : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
@@ -169,14 +169,16 @@ export default function ManageSection() {
           <FieldRow
             dark={dark}
             label="Workspace ID"
+            // Kept "ID" in caps since it's an initialism — everything
+            // else in this section reads as sentence case now.
             icon={<LayoutGrid size={14} />}
-            description="Unique identifier for your Workspace"
+            description="Unique identifier for your workspace"
           >
             <div className="relative">
               <Input readOnly value={workspaceId} className={cn(inputCls, "pr-11 cursor-default opacity-90 font-black")} />
               <Lock className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-40" />
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 mt-2">
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-500 mt-2">
               <CheckCircle2 size={12} /> Configured
             </div>
           </FieldRow>
@@ -184,9 +186,9 @@ export default function ManageSection() {
           {/* Workspace Name */}
           <FieldRow
             dark={dark}
-            label="Workspace Name"
+            label="Workspace name"
             icon={<Settings size={14} />}
-            description="Your Workspace display name"
+            description="Your workspace display name"
             required
           >
             <div className="relative">
@@ -197,7 +199,7 @@ export default function ManageSection() {
                 disabled={!canManage}
                 className={cn(inputCls, "pr-14", !canManage && "opacity-60 cursor-not-allowed")}
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black uppercase tracking-widest opacity-40">
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold opacity-40">
                 {workspaceName.length}/100
               </span>
             </div>
@@ -230,18 +232,18 @@ export default function ManageSection() {
                   <Clock size={18} />
                 </div>
                 <div>
-                  <p className={cn("text-[10px] font-black uppercase tracking-widest opacity-60", sub)}>Current time</p>
+                  <p className={cn("text-[11px] font-semibold opacity-60", sub)}>Current time</p>
                   <p className={cn("text-[18px] font-black tracking-tight mt-0.5", text)}>{getCurrentTime()}</p>
                 </div>
               </div>
-              <span className={cn("text-[10px] font-black uppercase tracking-widest opacity-40", sub)}>Live</span>
+              <span className={cn("text-[11px] font-semibold opacity-40", sub)}>Live</span>
             </div>
           </FieldRow>
 
           {/* First Day of Week */}
           <FieldRow
             dark={dark}
-            label="First Day of Week"
+            label="First day of week"
             icon={<Calendar size={14} />}
             description="Recommended for business: Monday"
             required
@@ -262,7 +264,7 @@ export default function ManageSection() {
             </Select>
 
             <div className={cn("mt-4 p-5 rounded-[1.25rem] border", softBg, softBorder)}>
-              <p className={cn("text-[10px] font-black uppercase tracking-widest opacity-60 mb-3", sub)}>Calendar preview</p>
+              <p className={cn("text-[11px] font-semibold opacity-60 mb-3", sub)}>Calendar preview</p>
               <div className="flex gap-2">
                 {(() => {
                   const WEEK = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -275,7 +277,7 @@ export default function ManageSection() {
                     <div
                       key={d}
                       className={cn(
-                        "flex-1 h-9 rounded-lg flex items-center justify-center text-[10px] font-black uppercase tracking-widest transition-all",
+                        "flex-1 h-9 rounded-lg flex items-center justify-center text-[11px] font-semibold transition-all",
                         active
                           ? "bg-primary text-white shadow-lg shadow-primary/20"
                           : dark
@@ -295,8 +297,9 @@ export default function ManageSection() {
           <FieldRow
             dark={dark}
             label="Login URL"
+            // "URL" stays capitalised as an initialism.
             icon={<Globe size={14} />}
-            description="Optional — custom login URL for your Workspace"
+            description="Optional — custom login URL for your workspace"
             optional
             last
           >
@@ -305,7 +308,7 @@ export default function ManageSection() {
               <button
                 onClick={() => handleCopy(loginUrl)}
                 className={cn(
-                  "h-11 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shrink-0",
+                  "h-11 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 shrink-0",
                   dark
                     ? "border-slate-800 text-slate-200 hover:border-primary/40 hover:text-primary"
                     : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
@@ -315,11 +318,11 @@ export default function ManageSection() {
               </button>
             </div>
             {loginUrl ? (
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-500 mt-2">
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-500 mt-2">
                 <CheckCircle2 size={12} /> Configured
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-500 mt-2">
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-500 mt-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Not configured
               </div>
             )}
@@ -336,7 +339,7 @@ export default function ManageSection() {
               <button
                 onClick={handleSave}
                 disabled={updateMutation.isPending}
-                className="h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20"
+                className="h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20"
               >
                 {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </button>
@@ -367,14 +370,20 @@ function FieldRow({ dark, label, description, icon, required, optional, last, ch
   const sub    = dark ? "text-slate-500"   : "text-slate-400";
 
   return (
-    <div className={cn("grid grid-cols-1 md:grid-cols-12 gap-6 px-8 py-7", !last && "border-b", border)}>
-      <div className="md:col-span-4 space-y-1.5">
+    // Tightened row: gap-2 vertical (was gap-6) so mobile stack has no
+    // extra breathing room between label and field. Padding trimmed
+    // (py-4 instead of py-7) so the row reads compact. Label styling
+    // shifts from small-caps chip to plain sentence-case text — the
+    // treatment made every field feel like a
+    // header, which competed with the section title.
+    <div className={cn("grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-6 px-8 py-4", !last && "border-b", border)}>
+      <div className="md:col-span-4 space-y-0.5">
         <div className="flex items-center gap-2">
           {icon && <div className="p-1.5 rounded-lg bg-primary/10 text-primary">{icon}</div>}
-          <h4 className={cn("text-[12px] font-black uppercase tracking-widest", text)}>{label}</h4>
+          <h4 className={cn("text-[13px] font-semibold", text)}>{label}</h4>
           {required && <span className="text-rose-500 text-sm leading-none">*</span>}
           {optional && (
-            <span className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md", dark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500")}>
+            <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-md", dark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500")}>
               Optional
             </span>
           )}

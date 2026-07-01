@@ -105,7 +105,7 @@ export default function InstagramDefaultReplyDialog({ open, account, onClose }: 
               <Reply size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[13px] font-black uppercase tracking-widest", dark ? "text-white" : "text-slate-900")}>Instant replies</div>
+              <div className={cn("text-[14px] font-semibold", dark ? "text-white" : "text-slate-900")}>Instant replies</div>
               <p className={cn("text-[11px] font-medium opacity-60 mt-1 leading-relaxed", dark ? "text-slate-400" : "text-slate-600")}>
                 Pick a Smart Flow to run automatically whenever a contact messages{" "}
                 <span className="font-mono">@{account.username ?? account.name}</span>.
@@ -115,7 +115,7 @@ export default function InstagramDefaultReplyDialog({ open, account, onClose }: 
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 space-y-2">
-              <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>Select automation</label>
+              <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>Select automation</label>
               <select
                 value={automationId}
                 onChange={(e) => setAutomationId(e.target.value)}
@@ -136,7 +136,7 @@ export default function InstagramDefaultReplyDialog({ open, account, onClose }: 
               )}
             </div>
             <div className="space-y-2">
-              <label className={cn("text-[10px] font-black uppercase tracking-widest", dark ? "text-slate-400" : "text-slate-600")}>Trigger</label>
+              <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>Trigger</label>
               <select
                 value={interval}
                 onChange={(e) => setInterval(e.target.value)}
@@ -159,7 +159,7 @@ export default function InstagramDefaultReplyDialog({ open, account, onClose }: 
                 <button
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
-                  className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+                  className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all flex items-center gap-2 bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
                 >
                   <Trash2 size={12} /> {deleteMutation.isPending ? "Deleting…" : "Delete"}
                 </button>
@@ -169,14 +169,14 @@ export default function InstagramDefaultReplyDialog({ open, account, onClose }: 
               <button
                 onClick={onClose}
                 disabled={saveMutation.isPending || deleteMutation.isPending}
-                className={cn("h-10 px-5 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
+                className={cn("h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all", dark ? "border-slate-700 text-slate-300 hover:border-slate-500" : "border-slate-200 text-slate-700 hover:border-slate-400")}
               >
                 Close
               </button>
               <button
                 onClick={() => saveMutation.mutate()}
                 disabled={!automationId || saveMutation.isPending}
-                className="h-10 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 px-5 rounded-xl text-[11px] font-semibold transition-all bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saveMutation.isPending ? "Saving…" : "Save"}
               </button>

@@ -48,12 +48,12 @@ export default function TelegramSection() {
   const softBorder = dark ? "border-slate-800" : "border-slate-100";
 
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary"
   );
 
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white"
   );
 
@@ -114,7 +114,7 @@ export default function TelegramSection() {
                 <img src="/images/automations/telegram.svg" alt="Telegram" className="w-5 h-5" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>Telegram</h1>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>Telegram</h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
                   {view === "list"
                     ? "Connect your Telegram Bot to automate conversations."
@@ -205,11 +205,11 @@ export default function TelegramSection() {
                               <p className={cn("text-[13px] font-black truncate", text)}>{bot.name || bot.username || "Telegram Bot"}</p>
                               <div className="flex items-center gap-2 mt-0.5">
                                 {bot.username && (
-                                  <Badge variant="outline" className="h-5 px-2 rounded-md border-sky-500/20 bg-sky-500/5 text-sky-600 dark:text-sky-400 text-[9px] font-black uppercase tracking-widest">
+                                  <Badge variant="outline" className="h-5 px-2 rounded-md border-sky-500/20 bg-sky-500/5 text-sky-600 dark:text-sky-400 text-[10px] font-semibold">
                                     @{bot.username}
                                   </Badge>
                                 )}
-                                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                                <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Active
                                 </span>
                               </div>
@@ -257,7 +257,7 @@ export default function TelegramSection() {
                         {/* Bot Token */}
                         <div className="px-6 py-4">
                           <div className="space-y-2">
-                            <label className={cn("text-[10px] font-black uppercase tracking-widest pl-1 block", sub)}>Bot Token</label>
+                            <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>Bot Token</label>
                             <div className={cn("flex items-center gap-2 px-3 h-11 rounded-xl border", card, border)}>
                               <code className={cn("text-[12px] font-mono font-bold flex-1 truncate", text)}>
                                 {tokenVisible ? token : maskedToken}
@@ -298,7 +298,7 @@ export default function TelegramSection() {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>Delete Telegram Bot?</h2>
+                <h2 className={cn("text-[14px] font-semibold", text)}>Delete Telegram Bot?</h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
                   <span className="text-rose-500 font-black">{botToDelete?.name || botToDelete?.username}</span> will be permanently disconnected.
                 </p>
@@ -308,7 +308,7 @@ export default function TelegramSection() {
               <AlertDialogCancel className={cn(outlineBtn, "m-0")}>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => { deleteMutation.mutate(botToDelete.id); setShowDeleteConfirm(false); }}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2"
               >
                 <Trash2 size={12} /> Delete
               </AlertDialogAction>

@@ -145,16 +145,16 @@ const DeveloperSettingsSection = () => {
     dark ? "bg-slate-950/50 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900",
   );
   const outlineBtn = cn(
-    "h-11 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-11 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     dark ? "border-slate-800 text-slate-300 hover:border-primary/40 hover:text-primary" : "border-slate-200 text-slate-700 hover:border-primary/40 hover:text-primary",
   );
   const primaryOutlineBtn = cn(
-    "h-10 px-6 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+    "h-10 px-6 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2",
     "border-primary text-primary hover:bg-primary hover:text-white",
   );
   const primaryBtn =
-    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
-  const labelCls = cn("block text-[10px] font-black uppercase tracking-widest", sub);
+    "h-11 px-7 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[11px] font-semibold transition-all shadow-lg shadow-primary/20 flex items-center gap-2";
+  const labelCls = cn("block text-[11px] font-semibold", sub);
   const iconBtn = cn(
     "w-11 h-11 rounded-xl border flex items-center justify-center transition-all shrink-0",
     dark ? "border-slate-800 hover:border-primary/40 hover:text-primary text-slate-400" : "border-slate-200 hover:border-primary/40 hover:text-primary text-slate-500",
@@ -375,7 +375,7 @@ const DeveloperSettingsSection = () => {
                 <Code2 className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className={cn("text-[15px] font-black tracking-widest uppercase", text)}>
+                <h1 className={cn("text-[16px] font-bold tracking-tight", text)}>
                   {t("dev.title", { defaultValue: "Developer Settings" })}
                 </h1>
                 <p className={cn("text-[11px] font-bold mt-0.5 opacity-60 max-w-2xl", sub)}>
@@ -551,7 +551,7 @@ const DeveloperSettingsSection = () => {
                               return (
                                 <span
                                   key={slug}
-                                  className="inline-flex h-5 px-2 items-center rounded-md border border-primary/20 bg-primary/5 text-primary text-[9px] font-black uppercase tracking-widest"
+                                  className="inline-flex h-5 px-2 items-center rounded-md border border-primary/20 bg-primary/5 text-primary text-[10px] font-semibold"
                                 >
                                   {opt?.label ?? slug}
                                 </span>
@@ -622,7 +622,7 @@ const DeveloperSettingsSection = () => {
                   <WebhookIcon size={18} />
                 </div>
                 <div className="text-left">
-                  <DialogTitle className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                  <DialogTitle className={cn("text-[14px] font-semibold", text)}>
                     {editingWebhook
                       ? t("dev.editWebhook", { defaultValue: "Edit Webhook" })
                       : t("dev.configureWebhook", { defaultValue: "Configure Webhook" })}
@@ -693,7 +693,7 @@ const DeveloperSettingsSection = () => {
               </p>
               {(["contact", "message"] as const).map((group) => (
                 <div key={group} className="space-y-1.5 pt-2">
-                  <p className={cn("text-[10px] font-black uppercase tracking-widest opacity-70", sub)}>
+                  <p className={cn("text-[11px] font-semibold opacity-70", sub)}>
                     {group === "contact"
                       ? t("dev.contactEvents", { defaultValue: "Contact lifecycle" })
                       : t("dev.messageEvents", { defaultValue: "Message lifecycle" })}
@@ -719,7 +719,7 @@ const DeveloperSettingsSection = () => {
                             className="rounded accent-[hsl(var(--primary))] w-4 h-4 pointer-events-none mt-0.5"
                           />
                           <div className="min-w-0 flex-1">
-                            <span className={cn("text-[12px] font-black uppercase tracking-widest", text)}>
+                            <span className={cn("text-[13px] font-semibold", text)}>
                               {event.label}
                             </span>
                             <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>
@@ -768,7 +768,7 @@ const DeveloperSettingsSection = () => {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                <h2 className={cn("text-[14px] font-semibold", text)}>
                   {t("dev.deleteWebhookTitle", { defaultValue: "Delete Webhook?" })}
                 </h2>
                 <p className={cn("text-[11px] font-medium opacity-60 mt-0.5 leading-relaxed", sub)}>
@@ -787,7 +787,7 @@ const DeveloperSettingsSection = () => {
               <AlertDialogAction
                 onClick={() => webhookToDelete && deleteWebhookMutation.mutate(webhookToDelete.id)}
                 disabled={deleteWebhookMutation.isPending}
-                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2 disabled:opacity-50"
+                className="h-11 px-7 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-rose-500/20 flex items-center gap-2 disabled:opacity-50"
               >
                 {deleteWebhookMutation.isPending && <Loader2 size={12} className="animate-spin" />}
                 <Trash2 size={12} /> {t("common.delete", { defaultValue: "Delete" })}
@@ -806,7 +806,7 @@ const DeveloperSettingsSection = () => {
                 <AlertCircle size={18} />
               </div>
               <div>
-                <h2 className={cn("text-[13px] font-black uppercase tracking-widest", text)}>
+                <h2 className={cn("text-[14px] font-semibold", text)}>
                   {tokenResp?.api_token
                     ? t("dev.regenerateTitle", { defaultValue: "Regenerate API key?" })
                     : t("dev.generateTitle", { defaultValue: "Generate API key?" })}

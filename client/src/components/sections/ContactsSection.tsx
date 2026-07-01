@@ -540,6 +540,7 @@ export default function ContactsSection() {
       });
       setShowEditContactModal(false);
       setEditingContact(null);
+      setEditContactCountryIso("PK");
       setEditContactName("");
       setEditContactPhone("");
       setEditContactTags([]);
@@ -603,6 +604,9 @@ export default function ContactsSection() {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editContactName, setEditContactName] = useState("");
   const [editContactPhone, setEditContactPhone] = useState("");
+  // ISO-2 driving the edit modal's flag picker. Pre-filled from the
+  // saved contact's E.164 phone on open (falls back to PK).
+  const [editContactCountryIso, setEditContactCountryIso] = useState<string>("PK");
   const [editContactTags, setEditContactTags] = useState<string[]>([]);
   const [editTagInput, setEditTagInput] = useState("");
 
@@ -822,7 +826,19 @@ export default function ContactsSection() {
   const handleEditContact = (contact: Contact) => {
     setEditingContact(contact);
     setEditContactName(contact.name);
-    setEditContactPhone(contact.phoneNumber);
+    // Parse the stored E.164 phone (e.g. "+923001234567") so the flag
+    // picker lands on the right country and the input only shows the
+    // national portion — otherwise the user would see the +CC prefix
+    // duplicated once they type.
+    const raw = contact.phoneNumber || "";
+    const parsed = parsePhoneNumberFromString(raw);
+    if (parsed) {
+      setEditContactCountryIso(parsed.country ?? "PK");
+      setEditContactPhone(parsed.nationalNumber);
+    } else {
+      setEditContactCountryIso("PK");
+      setEditContactPhone(raw.replace(/^\+/, ""));
+    }
     setEditContactTags([...contact.tags]);
     setEditTagInput("");
     setShowEditContactModal(true);
@@ -986,24 +1002,46 @@ export default function ContactsSection() {
   };
 
   const handleSaveEditContact = () => {
-    if (!editContactName.trim() || !editContactPhone.trim()) {
+    if (!editContactName.trim()) {
       toast({
         title: "Missing Fields",
-        description: "Please fill in all required fields",
+        description: "Please enter a name",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Same libphonenumber-js gate as Add so an edit can't slip a bad
+    // number in. Uses the ISO from the flag chip so validation matches
+    // what the user visually picked.
+    const iso = (editContactCountryIso || "PK") as any;
+    const phoneResult = validatePhone(editContactPhone, iso);
+    if (!phoneResult.ok) {
+      toast({
+        title: "Invalid Phone",
+        description: phoneResult.message ?? "Please enter a valid phone number.",
         variant: "destructive",
       });
       return;
     }
     if (editingContact) {
       const names = editContactName.split(' ');
+      // Resolve the picked ISO back to the workspace country_id so the
+      // backend's normalizeMobile step picks the right dial code.
+      const dial = STATIC_COUNTRIES.find((c) => c.code === iso)?.dial;
+      const matchedId = dial
+        ? countries.find(
+            (c) => `+${(c.phone_code || "").replace(/^\+/, "")}` === dial,
+          )?.id
+        : undefined;
       updateMutation.mutate({
         id: editingContact.id,
         data: {
           first_name: names[0],
           last_name: names.slice(1).join(' '),
-          title: editContactPhone,
-          tags: editContactTags
-        }
+          phone: editContactPhone.trim(),
+          country_id: matchedId,
+          tags: editContactTags,
+        },
       });
     }
   };
@@ -1943,16 +1981,53 @@ export default function ContactsSection() {
               />
             </div>
 
-            {/* Phone Input */}
-            <div>
-              <label className="text-sm font-medium text-foreground">Phone Number<span className="text-red-500 pl-0.5">*</span></label>
-              <input
-                type="tel"
-                placeholder="Enter phone number"
-                value={editContactPhone}
-                onChange={(e) => setEditContactPhone(e.target.value)}
-                className="w-full mt-1 px-3 py-2 text-sm border border-input rounded-md bg-background focus:outline-none transition-colors"
-              />
+            {/* Phone Input — same PhoneInputWithFlag as the Add modal,
+                pre-filled from the contact's E.164 phone number. */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-foreground">
+                Phone Number<span className="text-red-500 pl-0.5">*</span>
+              </label>
+              {(() => {
+                const iso = (editContactCountryIso || "PK") as any;
+                const expected = expectedNationalLength(iso);
+                const digitCount = (editContactPhone.match(/\d/g) ?? []).length;
+                const tooLong = expected !== undefined && digitCount > expected;
+                const isComplete = expected !== undefined && digitCount === expected;
+                const staticCountry = STATIC_COUNTRIES.find((c) => c.code === iso);
+                const hint = expected
+                  ? `${digitCount}/${expected} digits${staticCountry ? ` (${staticCountry.name})` : ""}`
+                  : "Local number";
+                return (
+                  <>
+                    <PhoneInputWithFlag
+                      country={editContactCountryIso || "PK"}
+                      onCountryChange={(newIso) => setEditContactCountryIso(newIso)}
+                      value={editContactPhone}
+                      onChange={(digits) => {
+                        const capped =
+                          expected !== undefined ? digits.slice(0, expected) : digits;
+                        setEditContactPhone(capped);
+                      }}
+                      inputClassName={cn(
+                        "h-10 text-sm",
+                        tooLong ? "border-red-500" : "",
+                      )}
+                    />
+                    <p
+                      className={cn(
+                        "text-[11px]",
+                        tooLong
+                          ? "text-red-600"
+                          : isComplete
+                            ? "text-emerald-600"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {hint}
+                    </p>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Tags Section */}

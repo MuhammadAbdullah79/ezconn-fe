@@ -330,7 +330,7 @@ export const TriggerNode = memo(({ id, data }: NodeProps<any>) => {
 
   return (
     <div
-      className="relative rounded-xl bg-white shadow-md border border-slate-200 overflow-hidden"
+      className="relative rounded-xl bg-white shadow-md border border-slate-200"
       style={{ width: 220 }}
     >
       {/* Header — filled colour circle + title case label + close chip */}
@@ -376,7 +376,7 @@ function makeChannelNode(channel: string) {
     const iconBg = filledIconBgForChannel(channel);
     return (
       <div
-        className="group relative rounded-xl bg-white shadow-md border border-slate-200 overflow-hidden"
+        className="group relative rounded-xl bg-white shadow-md border border-slate-200"
         style={{ width: NODE_WIDTH }}
       >
         <NodeHoverActions nodeId={id} />
@@ -689,7 +689,7 @@ export const DelayNode = memo(({ id, data }: NodeProps<any>) => {
       : `${v.amount ?? "?"} ${v.unit ?? "minutes"}`;
   return (
     <div
-      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -732,7 +732,7 @@ export const RandomizerNode = memo(({ id, data }: NodeProps<any>) => {
   const weights: number[] = data?.value?.weights ?? [50, 50];
   return (
     <div
-      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -792,7 +792,7 @@ export const SplitterNode = memo(({ id, data }: NodeProps<any>) => {
   ];
   return (
     <div
-      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -847,7 +847,7 @@ export const ConditionNode = memo(({ id, data }: NodeProps<any>) => {
   const mode = data?.value?.match_mode ?? "all";
   return (
     <div
-      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -890,7 +890,7 @@ export const ActionNode = memo(({ id, data }: NodeProps<any>) => {
   const schema = ACTION_SCHEMAS[slug];
   return (
     <div
-      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />

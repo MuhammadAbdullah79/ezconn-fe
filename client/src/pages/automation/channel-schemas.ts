@@ -31,6 +31,10 @@ export interface MessageFieldSchema {
   // For `type: 'channel-account'` fields — which channel's connected accounts
   // to offer in the picker (e.g. 'twilio', 'whatsapp').
   channel?: string;
+  // For `type: 'gallery-pick'` fields — filter the media gallery so a
+  // video activity only surfaces videos, a document activity only shows
+  // documents, etc. Defaults to `image` in the picker when omitted.
+  mediaType?: 'image' | 'audio' | 'video' | 'document';
 }
 
 export interface MessageTypeSchema {
@@ -186,7 +190,7 @@ const IMAGE_URL_FIELDS: MessageFieldSchema[] = [
     ],
     defaultValue: 'gallery',
   },
-  { key: 'gallery_media_id', label: 'Pick image', type: 'gallery-pick', dependsOn: { field: 'image_source', equals: 'gallery' } },
+  { key: 'gallery_media_id', label: 'Pick image', type: 'gallery-pick', mediaType: 'image', dependsOn: { field: 'image_source', equals: 'gallery' } },
   { key: 'custom_field_id', label: 'Custom field', type: 'custom-field', dependsOn: { field: 'image_source', equals: 'custom_field' } },
 ];
 
@@ -201,7 +205,7 @@ const AUDIO_FIELDS: MessageFieldSchema[] = [
     ],
     defaultValue: 'gallery',
   },
-  { key: 'gallery_media_id', label: 'Pick audio', type: 'gallery-pick', dependsOn: { field: 'audio_source', equals: 'gallery' } },
+  { key: 'gallery_media_id', label: 'Pick audio', type: 'gallery-pick', mediaType: 'audio', dependsOn: { field: 'audio_source', equals: 'gallery' } },
   { key: 'custom_field_id', label: 'Custom field', type: 'custom-field', dependsOn: { field: 'audio_source', equals: 'custom_field' } },
 ];
 
@@ -240,7 +244,7 @@ const WHATSAPP_TYPES: MessageTypeSchema[] = [
         ],
         defaultValue: 'gallery',
       },
-      { key: 'gallery_media_id', label: 'Pick video', type: 'gallery-pick', dependsOn: { field: 'video_source', equals: 'gallery' } },
+      { key: 'gallery_media_id', label: 'Pick video', type: 'gallery-pick', mediaType: 'video', dependsOn: { field: 'video_source', equals: 'gallery' } },
       { key: 'custom_field_id', label: 'Custom field', type: 'custom-field', dependsOn: { field: 'video_source', equals: 'custom_field' } },
       { key: 'caption', label: 'Caption (optional)', type: 'textarea', textActions: ['emoji', 'keys', 'counter'], maxLength: 1024 },
     ],
@@ -260,7 +264,7 @@ const WHATSAPP_TYPES: MessageTypeSchema[] = [
         ],
         defaultValue: 'gallery',
       },
-      { key: 'gallery_media_id', label: 'Pick document', type: 'gallery-pick', dependsOn: { field: 'doc_source', equals: 'gallery' } },
+      { key: 'gallery_media_id', label: 'Pick document', type: 'gallery-pick', mediaType: 'document', dependsOn: { field: 'doc_source', equals: 'gallery' } },
       { key: 'custom_field_id', label: 'Custom field', type: 'custom-field', dependsOn: { field: 'doc_source', equals: 'custom_field' } },
       { key: 'filename', label: 'File name (shown to recipient)', type: 'text', maxLength: 240 },
     ],

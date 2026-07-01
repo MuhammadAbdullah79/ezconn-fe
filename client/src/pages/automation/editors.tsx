@@ -303,6 +303,8 @@ export function PrimitiveField({ field, value, onChange, contextual }: Primitive
         <GalleryPickButton
           value={value ?? null}
           onChange={(m) => onChange(m)}
+          mediaType={(field as any).mediaType ?? "image"}
+          label={(field as any).label ?? "Pick from gallery"}
         />
       );
     case "wa-template-pick":

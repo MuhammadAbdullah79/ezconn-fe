@@ -495,6 +495,15 @@ function BuilderInner() {
               }}
               onPaneContextMenu={onPaneContextMenu}
               nodeTypes={AUTOMATION_NODE_TYPES}
+              // Replyagent-parity edge look — a soft slate stroke that's a
+              // bit thicker than React Flow's default so the curves read
+              // clearly against the white canvas without dominating the
+              // node cards.
+              defaultEdgeOptions={{
+                type: "smoothstep",
+                style: { stroke: "#94a3b8", strokeWidth: 1.75 },
+                animated: false,
+              }}
               fitView
               proOptions={{ hideAttribution: true }}
             >

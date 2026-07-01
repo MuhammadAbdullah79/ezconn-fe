@@ -330,26 +330,30 @@ export const TriggerNode = memo(({ id, data }: NodeProps<any>) => {
 
   return (
     <div
-      className="relative rounded bg-white shadow-sm border-2 border-emerald-300"
-      style={{ width: 200 }}
+      className="relative rounded-xl bg-white shadow-md border border-slate-200 overflow-hidden"
+      style={{ width: 220 }}
     >
-      <div className="px-3 py-2 flex items-center gap-2 border-b border-emerald-200">
-        <span className="h-4 w-4 rounded-full border-2 border-emerald-500 flex items-center justify-center">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      {/* Header — filled colour circle + title case label + close chip */}
+      <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+        <span className="h-7 w-7 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm shrink-0">
+          <span className="h-2.5 w-2.5 rounded-full bg-white" />
         </span>
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-800">
-          Start
-        </span>
+        <span className="text-[13px] font-semibold text-slate-800">Start</span>
       </div>
-      <div className="bg-white">
+      {/* Activity rows with muted bg — matches replyagent's card row look */}
+      <div className="bg-slate-50/50">
         {items.map((it, idx) => (
           <div
             key={idx}
-            className="px-3 py-1.5 text-[11px] border-b border-emerald-50 last:border-b-0 truncate"
+            className="px-3 py-2 text-[11px] text-slate-700 border-t border-slate-100 first:border-t-0 truncate"
           >
             {renderActivitySummary(it)}
           </div>
         ))}
+      </div>
+      {/* Bottom hint text with the dropdown dot */}
+      <div className="px-3 py-1.5 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 bg-white">
+        <span>Start</span>
       </div>
       <AddStepDropdown nodeId={id} />
     </div>
@@ -369,10 +373,11 @@ function makeChannelNode(channel: string) {
     const activities: any[] = data?.activities ?? [];
     const legacyValue = data?.value ?? {};
     const legacySummary = channelSummary(channel, legacyValue);
+    const iconBg = filledIconBgForChannel(channel);
     return (
       <div
-        className="group relative rounded-md border-2 bg-white shadow-sm"
-        style={{ width: NODE_WIDTH, borderColor: borderForChannel(channel) }}
+        className="group relative rounded-xl bg-white shadow-md border border-slate-200 overflow-hidden"
+        style={{ width: NODE_WIDTH }}
       >
         <NodeHoverActions nodeId={id} />
         <Handle
@@ -382,49 +387,74 @@ function makeChannelNode(channel: string) {
             width: 10,
             height: 10,
             background: "white",
-            border: "2px solid #94a3b8",
+            border: "2px solid #cbd5e1",
           }}
         />
-        <div
-          className={`border-b px-3 py-2 flex items-center gap-2 rounded-t-md ${bgForChannel(channel)}`}
-        >
-          <ChannelIcon channel={channel} />
-          <span className={`text-xs font-semibold uppercase tracking-wider ${meta.color}`}>
-            {meta.label}
+        {/* Header with filled colour circle + title-case label */}
+        <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+          <span className={`h-7 w-7 rounded-full ${iconBg} flex items-center justify-center shadow-sm shrink-0 text-white`}>
+            <ChannelIcon channel={channel} />
+          </span>
+          <span className="text-[13px] font-semibold text-slate-800">
+            {meta.label.charAt(0).toUpperCase() + meta.label.slice(1).toLowerCase()}
           </span>
         </div>
         {activities.length > 0 ? (
-          <div className="bg-white">
+          <div className="bg-slate-50/50">
             {activities.map((act, idx) => (
               <div
                 key={idx}
-                className="border-b last:border-b-0"
-                style={{ borderColor: borderForChannel(channel) }}
+                className="border-t border-slate-100 first:border-t-0"
               >
                 {renderActivityRow(act)}
               </div>
             ))}
           </div>
         ) : (
-          <div className="px-3 py-2 text-sm">
-            <p className="font-medium truncate">
-              {data?.label ?? "Configure message"}
-            </p>
-            <p
-              className="text-[10px] text-muted-foreground truncate"
-              title={legacySummary}
-            >
-              {legacySummary || "—"}
-            </p>
+          <div className="px-3 py-3 bg-slate-50/50">
+            <div className="border border-dashed border-slate-300 rounded-md px-3 py-2 text-center">
+              <p className="text-[11px] font-medium text-slate-400 truncate" title={legacySummary}>
+                {legacySummary || data?.label || "Click to configure"}
+              </p>
+            </div>
           </div>
         )}
         <StatsOverlay data={data} />
+        {/* Bottom "Continue" hint next to the dropdown dot */}
+        <div className="px-3 py-1.5 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 bg-white">
+          <span>Continue</span>
+        </div>
         <AddStepDropdown nodeId={id} />
       </div>
     );
   });
   Component.displayName = `${meta.label}Node`;
   return Component;
+}
+
+// Solid brand backdrop for the header icon circle — matches the channel's
+// primary product colour (WhatsApp green, Telegram sky, etc.) so the card
+// reads at a glance from across the canvas.
+function filledIconBgForChannel(channel: string): string {
+  switch (channel) {
+    case "whatsapp":
+    case "evolution":
+    case "zapi":
+      return "bg-emerald-500";
+    case "telegram":
+      return "bg-sky-500";
+    case "messenger":
+      return "bg-blue-500";
+    case "instagram":
+      return "bg-gradient-to-tr from-fuchsia-500 to-orange-400";
+    case "webchat":
+      return "bg-orange-500";
+    case "twilio_sms":
+    case "twilio_call":
+      return "bg-rose-500";
+    default:
+      return "bg-slate-400";
+  }
 }
 
 // Render a single activity row in the channel node card. Mirrors
@@ -568,25 +598,27 @@ function channelSummary(channel: string, value: any): string {
 }
 
 function ChannelIcon({ channel }: { channel: string }) {
+  // Icons render on top of a filled colour circle (see filledIconBgForChannel),
+  // so glyphs are white for contrast.
   switch (channel) {
     case "whatsapp":
     case "zapi":
     case "evolution":
-      return <FaWhatsapp className="h-4 w-4 text-emerald-600" />;
+      return <FaWhatsapp className="h-4 w-4 text-white" />;
     case "telegram":
-      return <FaTelegramPlane className="h-4 w-4 text-sky-600" />;
+      return <FaTelegramPlane className="h-4 w-4 text-white" />;
     case "messenger":
-      return <FaFacebookMessenger className="h-4 w-4 text-blue-600" />;
+      return <FaFacebookMessenger className="h-4 w-4 text-white" />;
     case "instagram":
-      return <FaInstagram className="h-4 w-4 text-fuchsia-600" />;
+      return <FaInstagram className="h-4 w-4 text-white" />;
     case "webchat":
-      return <BsChatDotsFill className="h-4 w-4 text-orange-500" />;
+      return <BsChatDotsFill className="h-4 w-4 text-white" />;
     case "twilio_sms":
-      return <SiTwilio className="h-4 w-4 text-rose-600" />;
+      return <SiTwilio className="h-4 w-4 text-white" />;
     case "twilio_call":
-      return <Phone className="h-4 w-4 text-rose-600" />;
+      return <Phone className="h-4 w-4 text-white" />;
     default:
-      return <MessageSquare className="h-4 w-4 text-muted-foreground" />;
+      return <MessageSquare className="h-4 w-4 text-white" />;
   }
 }
 
@@ -657,7 +689,7 @@ export const DelayNode = memo(({ id, data }: NodeProps<any>) => {
       : `${v.amount ?? "?"} ${v.unit ?? "minutes"}`;
   return (
     <div
-      className="group relative rounded-md border-2 border-amber-200 bg-white shadow-sm"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -668,22 +700,25 @@ export const DelayNode = memo(({ id, data }: NodeProps<any>) => {
           width: 10,
           height: 10,
           background: "white",
-          border: "2px solid #94a3b8",
+          border: "2px solid #cbd5e1",
         }}
       />
-      <div className="bg-amber-50 border-b border-amber-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
-        <Clock className="h-3.5 w-3.5 text-amber-600" />
-        <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">
-          Delay
+      <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+        <span className="h-7 w-7 rounded-full bg-amber-500 flex items-center justify-center shadow-sm shrink-0">
+          <Clock className="h-3.5 w-3.5 text-white" />
         </span>
+        <span className="text-[13px] font-semibold text-slate-800">Delay</span>
       </div>
-      <div className="px-3 py-2 text-sm">
+      <div className="px-3 py-2 text-[12px] text-slate-700 bg-slate-50/50">
         <p className="font-medium truncate">{summary}</p>
         {v.time_window_enabled && (
-          <p className="text-[10px] text-muted-foreground truncate">
+          <p className="text-[10px] text-slate-400 truncate mt-0.5">
             {v.window_from ?? "?"} – {v.window_to ?? "?"} on {(v.days ?? []).join(", ") || "any day"}
           </p>
         )}
+      </div>
+      <div className="px-3 py-1.5 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 bg-white">
+        <span>Continue</span>
       </div>
       <AddStepDropdown nodeId={id} dotColor="border-amber-500" />
     </div>
@@ -697,7 +732,7 @@ export const RandomizerNode = memo(({ id, data }: NodeProps<any>) => {
   const weights: number[] = data?.value?.weights ?? [50, 50];
   return (
     <div
-      className="group relative rounded-md border-2 border-indigo-200 bg-white shadow-sm"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -708,37 +743,38 @@ export const RandomizerNode = memo(({ id, data }: NodeProps<any>) => {
           width: 10,
           height: 10,
           background: "white",
-          border: "2px solid #94a3b8",
+          border: "2px solid #cbd5e1",
         }}
       />
-      <div className="bg-indigo-50 border-b border-indigo-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
-        <Shuffle className="h-3.5 w-3.5 text-indigo-600" />
-        <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">
-          Randomizer
+      <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+        <span className="h-7 w-7 rounded-full bg-indigo-500 flex items-center justify-center shadow-sm shrink-0">
+          <Shuffle className="h-3.5 w-3.5 text-white" />
         </span>
+        <span className="text-[13px] font-semibold text-slate-800">Randomizer</span>
       </div>
       {/* One row per branch — each row carries its own clickable dot on the
           right edge, so the edge originates from that exact branch. */}
-      {weights.map((w, i) => {
-        const ROW_HEIGHT = 28;
-        return (
-          <div
-            key={i}
-            className="relative px-3 py-1.5 text-xs border-t border-indigo-100 first:border-t-0"
-            style={{ minHeight: ROW_HEIGHT }}
-          >
-            <Badge variant="outline" className="text-[10px]">
-              {String.fromCharCode(65 + i)} {w}%
-            </Badge>
-            <AddStepDropdown
-              nodeId={id}
-              handleId={`branch-${i}`}
-              dotColor="border-indigo-500"
-              style={{ right: -5, top: "50%", transform: "translateY(-50%)" }}
-            />
-          </div>
-        );
-      })}
+      <div className="bg-slate-50/50">
+        {weights.map((w, i) => {
+          return (
+            <div
+              key={i}
+              className="relative px-3 py-2 text-[12px] font-medium text-slate-700 border-t border-slate-100 first:border-t-0"
+              style={{ minHeight: 34 }}
+            >
+              <span>
+                {String.fromCharCode(65 + i)} {w}%
+              </span>
+              <AddStepDropdown
+                nodeId={id}
+                handleId={`branch-${i}`}
+                dotColor="border-indigo-500"
+                style={{ right: -5, top: "50%", transform: "translateY(-50%)" }}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });
@@ -756,7 +792,7 @@ export const SplitterNode = memo(({ id, data }: NodeProps<any>) => {
   ];
   return (
     <div
-      className="group relative rounded-md border-2 border-rose-200 bg-white shadow-sm"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -767,36 +803,38 @@ export const SplitterNode = memo(({ id, data }: NodeProps<any>) => {
           width: 10,
           height: 10,
           background: "white",
-          border: "2px solid #94a3b8",
+          border: "2px solid #cbd5e1",
         }}
       />
-      <div className="bg-rose-50 border-b border-rose-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
-        <Shuffle className="h-3.5 w-3.5 text-rose-600" />
-        <span className="text-xs font-semibold text-rose-700 uppercase tracking-wider">
-          Splitter
+      <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+        <span className="h-7 w-7 rounded-full bg-rose-500 flex items-center justify-center shadow-sm shrink-0">
+          <Shuffle className="h-3.5 w-3.5 text-white" />
         </span>
+        <span className="text-[13px] font-semibold text-slate-800">Splitter</span>
       </div>
-      {paths.map((p, i) => {
-        const label =
-          typeof p === "number"
-            ? `Path ${String.fromCharCode(65 + i)}`
-            : p?.label ?? `Path ${String.fromCharCode(65 + i)}`;
-        return (
-          <div
-            key={i}
-            className="relative px-3 py-1.5 text-xs border-t border-rose-100 first:border-t-0"
-            style={{ minHeight: 28 }}
-          >
-            <span>{label}</span>
-            <AddStepDropdown
-              nodeId={id}
-              handleId={`branch-${i}`}
-              dotColor="border-rose-500"
-              style={{ right: -5, top: "50%", transform: "translateY(-50%)" }}
-            />
-          </div>
-        );
-      })}
+      <div className="bg-slate-50/50">
+        {paths.map((p, i) => {
+          const label =
+            typeof p === "number"
+              ? `Path ${String.fromCharCode(65 + i)}`
+              : p?.label ?? `Path ${String.fromCharCode(65 + i)}`;
+          return (
+            <div
+              key={i}
+              className="relative px-3 py-2 text-[12px] font-medium text-slate-700 border-t border-slate-100 first:border-t-0"
+              style={{ minHeight: 34 }}
+            >
+              <span>{label}</span>
+              <AddStepDropdown
+                nodeId={id}
+                handleId={`branch-${i}`}
+                dotColor="border-rose-500"
+                style={{ right: -5, top: "50%", transform: "translateY(-50%)" }}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });
@@ -809,7 +847,7 @@ export const ConditionNode = memo(({ id, data }: NodeProps<any>) => {
   const mode = data?.value?.match_mode ?? "all";
   return (
     <div
-      className="group relative rounded-md border-2 border-teal-200 bg-white shadow-sm"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -820,21 +858,24 @@ export const ConditionNode = memo(({ id, data }: NodeProps<any>) => {
           width: 10,
           height: 10,
           background: "white",
-          border: "2px solid #94a3b8",
+          border: "2px solid #cbd5e1",
         }}
       />
-      <div className="bg-teal-50 border-b border-teal-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
-        <GitBranch className="h-3.5 w-3.5 text-teal-600" />
-        <span className="text-xs font-semibold text-teal-700 uppercase tracking-wider">
-          Condition
+      <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+        <span className="h-7 w-7 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shrink-0">
+          <GitBranch className="h-3.5 w-3.5 text-white" />
         </span>
+        <span className="text-[13px] font-semibold text-slate-800">Condition</span>
       </div>
-      <div className="px-3 py-2 text-sm">
+      <div className="px-3 py-2 text-[12px] text-slate-700 bg-slate-50/50">
         <p className="font-medium truncate">
           {conditions.length === 0
             ? "Add a condition"
             : `${conditions.length} condition${conditions.length === 1 ? "" : "s"} (${mode})`}
         </p>
+      </div>
+      <div className="px-3 py-1.5 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 bg-white">
+        <span>Continue</span>
       </div>
       <AddStepDropdown nodeId={id} dotColor="border-teal-500" />
     </div>
@@ -849,7 +890,7 @@ export const ActionNode = memo(({ id, data }: NodeProps<any>) => {
   const schema = ACTION_SCHEMAS[slug];
   return (
     <div
-      className="group relative rounded-md border-2 border-slate-300 bg-white shadow-sm"
+      className="group relative rounded-xl border border-slate-200 bg-white shadow-md overflow-hidden"
       style={{ width: NODE_WIDTH }}
     >
       <NodeHoverActions nodeId={id} />
@@ -860,20 +901,23 @@ export const ActionNode = memo(({ id, data }: NodeProps<any>) => {
           width: 10,
           height: 10,
           background: "white",
-          border: "2px solid #94a3b8",
+          border: "2px solid #cbd5e1",
         }}
       />
-      <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center gap-2 rounded-t-md">
-        <Cog className="h-3.5 w-3.5 text-slate-600" />
-        <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-          Action
+      <div className="px-3 py-2.5 flex items-center gap-2.5 bg-white border-b border-slate-100">
+        <span className="h-7 w-7 rounded-full bg-slate-600 flex items-center justify-center shadow-sm shrink-0">
+          <Cog className="h-3.5 w-3.5 text-white" />
         </span>
+        <span className="text-[13px] font-semibold text-slate-800">Action</span>
       </div>
-      <div className="px-3 py-2 text-sm">
+      <div className="px-3 py-2 text-[12px] text-slate-700 bg-slate-50/50">
         <p className="font-medium truncate">{schema?.label ?? "Pick an action"}</p>
-        <p className="text-[10px] text-muted-foreground truncate">
+        <p className="text-[10px] text-slate-400 truncate mt-0.5">
           {schema?.group ?? slug}
         </p>
+      </div>
+      <div className="px-3 py-1.5 flex items-center justify-end gap-1.5 text-[10px] text-slate-400 bg-white">
+        <span>Continue</span>
       </div>
       <AddStepDropdown nodeId={id} dotColor="border-slate-500" />
     </div>

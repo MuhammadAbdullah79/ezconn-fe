@@ -23,6 +23,7 @@ import SmartFlowsPage from "@/pages/SmartFlowsPage";
 import SmartFlowBuilderPage from "@/pages/SmartFlowBuilderPage";
 import WhatsAppOnboardPage from "@/pages/WhatsAppOnboardPage";
 import WhatsAppConnectPage from "@/pages/WhatsAppConnectPage";
+import WhatsAppSignupLauncherPage from "@/pages/WhatsAppSignupLauncherPage";
 import InstagramCallbackPage from "@/pages/InstagramCallbackPage";
 import InstagramPagesCallbackPage from "@/pages/InstagramPagesCallbackPage";
 import NotFound from "@/pages/not-found";
@@ -117,6 +118,15 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
       </Route>
       <Route path="/settings/whatsapp-connect">
         <ProtectedRoute><WhatsAppConnectPage /></ProtectedRoute>
+      </Route>
+      {/* Self-hosted Embedded Signup launcher (replyagent "metaconnect" parity):
+          Coex → /coexistence, Business API → /whatsapp. Runs the Meta dialog
+          then redirects to /settings/whatsapp-onboard with the result hash. */}
+      <Route path="/coexistence">
+        <ProtectedRoute><WhatsAppSignupLauncherPage /></ProtectedRoute>
+      </Route>
+      <Route path="/whatsapp">
+        <ProtectedRoute><WhatsAppSignupLauncherPage /></ProtectedRoute>
       </Route>
       <Route path="/instagram-callback">
         <ProtectedRoute><InstagramCallbackPage /></ProtectedRoute>

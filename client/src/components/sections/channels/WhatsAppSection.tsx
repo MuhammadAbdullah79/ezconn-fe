@@ -61,128 +61,9 @@ import QrCodeManageView from "./whatsapp/QrCodeManageView";
 
 type ViewMode = "list" | "coex_manage" | "api_manage" | "qr_manage";
 
-// ─── Meta FB JS SDK loader ──────────────────────────────────────────
-//
-// Meta's WhatsApp Embedded Signup is exposed as an `FB.login(...)` call
-// configured with the app's Embedded Signup `config_id`. Loading the
-// SDK is a one-shot side effect, so the loader memoises the in-flight
-// promise on `window` and returns it on subsequent calls.
-
-let _fbSdkPromise: Promise<void> | null = null;
-
-function loadFacebookSdk(appId: string, version: string): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if ((window as any).FB) return Promise.resolve();
-  if (_fbSdkPromise) return _fbSdkPromise;
-
-  _fbSdkPromise = new Promise<void>((resolve, reject) => {
-    (window as any).fbAsyncInit = () => {
-      try {
-        (window as any).FB.init({
-          appId,
-          cookie: true,
-          xfbml: false,
-          version,
-        });
-        resolve();
-      } catch (e) {
-        reject(e);
-      }
-    };
-    const id = "facebook-jssdk";
-    if (document.getElementById(id)) return; // script already injected
-    const s = document.createElement("script");
-    s.id = id;
-    s.async = true;
-    s.defer = true;
-    s.crossOrigin = "anonymous";
-    s.src = "https://connect.facebook.net/en_US/sdk.js";
-    s.onerror = () => reject(new Error("Failed to load Facebook SDK."));
-    document.body.appendChild(s);
-  });
-  return _fbSdkPromise;
-}
-
-interface EmbeddedSignupResult {
-  code: string;
-  waba_id?: string;
-  phone_number_id?: string;
-  business_id?: string;
-  user_id?: string;
-}
-
-/**
- * Calls `FB.login` with WhatsApp Embedded Signup options and resolves with
- * the combined OAuth code + WABA metadata once Meta posts the
- * `WA_EMBEDDED_SIGNUP` FINISH event. Rejects with `code: 'USER_CANCELLED'`
- * if the user closes the popup.
- */
-function launchEmbeddedSignup(configId: string): Promise<EmbeddedSignupResult> {
-  return new Promise((resolve, reject) => {
-    const FB = (window as any).FB;
-    if (!FB) {
-      reject(new Error("Facebook SDK is not initialised."));
-      return;
-    }
-
-    let signupData: Partial<EmbeddedSignupResult> = {};
-    let cancelled = false;
-
-    const onMessage = (event: MessageEvent) => {
-      // Meta posts from `https://www.facebook.com` (or regional variants).
-      if (typeof event.origin !== "string" || !/^https:\/\/([a-z-]+\.)?facebook\.com$/.test(event.origin)) {
-        return;
-      }
-      try {
-        const parsed = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (parsed?.type !== "WA_EMBEDDED_SIGNUP") return;
-        if (parsed.event === "FINISH") {
-          signupData = {
-            ...signupData,
-            waba_id: parsed.data?.waba_id,
-            phone_number_id: parsed.data?.phone_number_id,
-            business_id: parsed.data?.business_id,
-            user_id: parsed.data?.user_id,
-          };
-        } else if (parsed.event === "CANCEL") {
-          cancelled = true;
-        }
-      } catch {
-        // Non-JSON or unrelated message — ignore.
-      }
-    };
-    window.addEventListener("message", onMessage);
-
-    FB.login(
-      (response: any) => {
-        window.removeEventListener("message", onMessage);
-        if (cancelled) {
-          const err: any = new Error("User cancelled the sign-up.");
-          err.code = "USER_CANCELLED";
-          reject(err);
-          return;
-        }
-        const code = response?.authResponse?.code;
-        if (!code) {
-          const err: any = new Error("Meta did not return an authorisation code.");
-          err.code = "NO_CODE";
-          reject(err);
-          return;
-        }
-        resolve({ code, ...signupData });
-      },
-      {
-        config_id: configId,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: {
-          feature: "whatsapp_embedded_signup",
-          sessionInfoVersion: 3,
-        },
-      },
-    );
-  });
-}
+// Meta Embedded Signup FB.login helpers live in `@/lib/metaEmbeddedSignup` and
+// run inside the self-hosted launcher page (`WhatsAppSignupLauncherPage`).
+// This section only *redirects* to that launcher (replyagent metaconnect flow).
 
 /**
  * WhatsApp channel management — replyagent parity rewrite.
@@ -373,7 +254,21 @@ export default function WhatsAppSection() {
    * `source = 'aka'` → backend sets `onboard_platform=whatsapp_business_app`
    * (Coexistence). `'api'` → standard Cloud API onboarding.
    */
-  const openEmbeddedSignup = async (source?: "aka" | "api") => {
+  /**
+   * Launch WhatsApp Embedded Signup — replyagent redirect-flow parity.
+   *
+   * replyagent redirects the browser to an external "metaconnect" service
+   * (`VITE_FB_DOMAIN`) at `/coexistence?r=…` (Coex) or `/whatsapp?r=…`
+   * (Business API); that service runs the Meta dialog and redirects back to
+   * `/settings/whatsapp-onboard#c=…&w=…&p=…&s=…`. EZCONN self-hosts that
+   * launcher on its own origin (`WhatsAppSignupLauncherPage`, routes
+   * `/coexistence` + `/whatsapp`) so no external service is required — set
+   * `VITE_FB_DOMAIN` to a real metaconnect domain to match replyagent exactly.
+   *
+   * `source = 'aka'` → `/coexistence` (WhatsApp Business App / Coexistence);
+   * `'api'` → `/whatsapp` (standard Cloud API).
+   */
+  const openEmbeddedSignup = (source?: "aka" | "api") => {
     if (hasReachedLimit) {
       setShowLimitDialog(true);
       return;
@@ -383,10 +278,7 @@ export default function WhatsAppSection() {
     // kicks in at build time (a dynamic `(import.meta as any).env` lookup is
     // skipped by the transformer and yields undefined at runtime).
     const appId: string | undefined = import.meta.env.VITE_META_APP_ID as string | undefined;
-    // Single Embedded Signup config shared by both onboarding flows (Coex 'aka'
-    // + Business API 'api') — only the `_s` source below differs per flow.
     const configId: string | undefined = import.meta.env.VITE_META_ES_CONFIG_ID as string | undefined;
-    const graphVersion: string = (import.meta.env.VITE_META_GRAPH_VERSION as string | undefined) ?? "v22.0";
 
     if (!appId || !configId) {
       toast({
@@ -398,48 +290,14 @@ export default function WhatsAppSection() {
       return;
     }
 
-    try {
-      setIsConnecting(true);
-      await loadFacebookSdk(appId, graphVersion);
-
-      const signupData = await launchEmbeddedSignup(configId);
-
-      // `signupData.code` comes from the OAuth response, the rest from the
-      // WA_EMBEDDED_SIGNUP message event.
-      const res = await apiRequest("POST", "/api/whatsapp/onboard", {
-        _c: signupData.code,
-        _w: signupData.waba_id ?? null,
-        _p: signupData.phone_number_id ?? null,
-        _u: signupData.user_id ?? null,
-        _b: signupData.business_id ?? null,
-        _s: source === "aka" ? "aka" : "api",
-      });
-      const data = await res.json();
-
-      if (data?.success === false) {
-        throw new Error(data?.message ?? "Onboarding failed.");
-      }
-
-      toast({
-        title: "WhatsApp connected",
-        description: data?.message ?? "Your WhatsApp account is being configured.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/accounts", "phoneNumbers,capi"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/limits"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/integrations/channels"] });
-    } catch (err: any) {
-      if (err?.code === "USER_CANCELLED") {
-        // Silent — user closed the popup deliberately.
-        return;
-      }
-      toast({
-        title: "Sign-up failed",
-        description: err?.message ?? "Something went wrong while connecting WhatsApp.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
+    // Metaconnect launcher domain — defaults to EZCONN's own origin (self-hosted
+    // launcher). The onboard return page reads the result hash and POSTs to the
+    // backend (`WhatsAppOnboardPage`).
+    const fbDomain = (import.meta.env.VITE_FB_DOMAIN as string | undefined) || window.location.origin;
+    const returnUrl = `${window.location.origin}/settings/whatsapp-onboard`;
+    const path = source === "aka" ? "coexistence" : "whatsapp";
+    setIsConnecting(true);
+    window.location.href = `${fbDomain}/${path}?r=${returnUrl}`;
   };
 
   // ─── Manual onboard ──────────────────────────────────────────────

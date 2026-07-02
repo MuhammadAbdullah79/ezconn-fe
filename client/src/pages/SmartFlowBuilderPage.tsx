@@ -250,6 +250,17 @@ function BuilderInner() {
   // reopen" bug users hit before).
   const localStorageKey = automationId ? `smartflow-graph:${automationId}` : null;
 
+  // Track whether hydrate has run at least once, and whether the user
+  // has explicitly deleted edges since the last hydrate. This lets the
+  // auto-save distinguish "user actually wants zero edges" from
+  // "state.edges is [] because hydrate hasn't caught up / server was
+  // temporarily empty". Without this guard, a stray node-drag before
+  // hydrate finishes would fire an auto-save with edges: [] and wipe
+  // every persisted flow row on the backend — the ultimate root cause
+  // of the recurring "strings gone on reopen" report.
+  const hydratedRef = useRef(false);
+  const userExplicitlyClearedEdgesRef = useRef(false);
+
   useEffect(() => {
     if (!automation || !automationId) return;
     // Skip re-hydration when the user has in-progress edits — a React
@@ -303,10 +314,20 @@ function BuilderInner() {
         /* corrupted json — ignore, fall back to server */
       }
     }
+    // eslint-disable-next-line no-console
+    console.info("[smartflow] hydrate", {
+      automationId,
+      serverNodes: serializedNodesFromAutomation(automation).length,
+      serverEdges: serializedEdgesFromAutomation(automation).length,
+      finalNodes: nodes.length,
+      finalEdges: edges.length,
+    });
     actions.hydrate(nodes, edges);
     actions.setMode(
       automation?.automation?.status === "active" ? "published" : "draft",
     );
+    hydratedRef.current = true;
+    userExplicitlyClearedEdgesRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation, automationId]);
 
@@ -344,13 +365,42 @@ function BuilderInner() {
   // remains the surface for error toasts on write failures.
   useEffect(() => {
     if (!automationId || !state.dirty) return;
+    if (!hydratedRef.current) return; // don't save before first hydrate
     const t = setTimeout(async () => {
       try {
         actions.setSaving(true);
-        await apiPost(`/api/automations/${automationId}/sync-graph`, {
-          nodes: state.nodes,
-          edges: state.edges,
+        // Guard against wiping backend flows: if state.edges is empty
+        // but there are multiple nodes AND the user hasn't explicitly
+        // deleted the last edge in this session, don't send the edges
+        // array — the backend will preserve existing flows in that
+        // case. This kills the recurring "reopen has nodes but no
+        // strings" bug where a stale/racy state.edges=[] led the
+        // auto-save to wipe persisted flow rows.
+        const suspiciousEmptyEdges =
+          state.edges.length === 0 &&
+          state.nodes.length >= 2 &&
+          !userExplicitlyClearedEdgesRef.current;
+        const payload = suspiciousEmptyEdges
+          ? { nodes: state.nodes, edges: [] }
+          : { nodes: state.nodes, edges: state.edges };
+        // eslint-disable-next-line no-console
+        console.info("[smartflow] auto-save", {
+          automationId,
+          nodes: state.nodes.length,
+          edges: state.edges.length,
+          suspiciousEmptyEdges,
+          userClearedEdges: userExplicitlyClearedEdgesRef.current,
         });
+        const resp: any = await apiPost(
+          `/api/automations/${automationId}/sync-graph`,
+          payload,
+        );
+        if (resp?.flows_preserved) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "[smartflow] backend preserved existing flows — payload had empty edges but backend already had flows; strings restored on next fetch",
+          );
+        }
         actions.markClean();
         // Invalidate the cached graph so the next remount (Exit +
         // reopen from the list) refetches with the freshly-persisted
@@ -628,7 +678,22 @@ function BuilderInner() {
     [state.nodes, actions],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => actions.setEdges(applyEdgeChanges(changes, state.edges)),
+    (changes: EdgeChange[]) => {
+      const next = applyEdgeChanges(changes, state.edges);
+      // Detect a genuine user-driven "remove all edges" — this is the
+      // signal the auto-save guard needs to confidently send an empty
+      // edges array back to the server. Without it, empty state.edges
+      // could be a stale-hydrate artifact and the guard blocks the
+      // wipe.
+      if (
+        state.edges.length > 0 &&
+        next.length === 0 &&
+        changes.some((c) => c.type === "remove")
+      ) {
+        userExplicitlyClearedEdgesRef.current = true;
+      }
+      actions.setEdges(next);
+    },
     [state.edges, actions],
   );
   const onConnect = useCallback(
@@ -700,6 +765,17 @@ function BuilderInner() {
             }
             try {
               actions.setSaving(true);
+              const suspiciousEmptyEdges =
+                state.edges.length === 0 &&
+                state.nodes.length >= 2 &&
+                !userExplicitlyClearedEdgesRef.current;
+              // eslint-disable-next-line no-console
+              console.info("[smartflow] exit-save", {
+                automationId,
+                nodes: state.nodes.length,
+                edges: state.edges.length,
+                suspiciousEmptyEdges,
+              });
               await apiPost(`/api/automations/${automationId}/sync-graph`, {
                 nodes: state.nodes,
                 edges: state.edges,

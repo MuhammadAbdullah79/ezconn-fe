@@ -258,10 +258,16 @@ function BuilderInner() {
           const snap = JSON.parse(raw);
           const snapNodes = Array.isArray(snap?.nodes) ? snap.nodes : [];
           const snapEdges = Array.isArray(snap?.edges) ? snap.edges : [];
-          const serverIsSeedOnly =
-            nodes.length <= 1 && edges.length === 0 &&
-            (snapNodes.length > 1 || snapEdges.length > 0);
-          if (serverIsSeedOnly) {
+          // Overlay whenever the snapshot has strictly more content
+          // than what the server returned. This catches both the
+          // seed-only case (backend save silently failed on a fresh
+          // flow) and the partial-write case (backend persisted some
+          // steps but not all). Server data still wins when it's the
+          // richer of the two, so a fresh device fetching an updated
+          // flow doesn't get shadowed by a stale local snapshot.
+          const snapWeight = snapNodes.length + snapEdges.length;
+          const serverWeight = nodes.length + edges.length;
+          if (snapWeight > serverWeight) {
             nodes = snapNodes;
             edges = snapEdges;
           }
@@ -314,14 +320,14 @@ function BuilderInner() {
           edges: state.edges,
         });
         actions.markClean();
-        // Backend acknowledged — drop the local snapshot so a stale
-        // copy doesn't shadow future clean reloads.
-        if (localStorageKey) {
-          try { localStorage.removeItem(localStorageKey); } catch { /* noop */ }
-        }
+        // NOTE: intentionally NOT clearing localStorage here. If the
+        // backend returns 200 but silently drops the write (the bug
+        // that surfaced this whole chain of fixes), clearing would
+        // lose the user's work. Instead we keep the local mirror and
+        // let the overlay logic decide on next open — if the server
+        // actually persisted, the overlay condition (server is seed-
+        // only) won't match and we'll use server data as normal.
       } catch (err) {
-        // Log but don't toast — the localStorage mirror above already
-        // has the user's work, so on next open we'll restore from it.
         // eslint-disable-next-line no-console
         console.error("[smartflow] auto-save failed:", err);
       } finally {
@@ -661,14 +667,11 @@ function BuilderInner() {
                 edges: state.edges,
               });
               actions.markClean();
-              // Server accepted — drop the local mirror so a stale
-              // snapshot doesn't shadow future reloads.
-              if (localStorageKey) {
-                try { localStorage.removeItem(localStorageKey); } catch { /* noop */ }
-              }
+              // See auto-save comment — deliberately not clearing
+              // localStorage on save success. The overlay logic
+              // handles both branches (server did persist / didn't)
+              // correctly.
             } catch (err) {
-              // Backend save failed — the localStorage entry we wrote
-              // above will be picked up on next open.
               // eslint-disable-next-line no-console
               console.error("[smartflow] exit-save failed, local snapshot preserved:", err);
             } finally {

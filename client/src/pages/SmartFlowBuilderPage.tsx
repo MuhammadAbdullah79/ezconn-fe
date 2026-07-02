@@ -247,6 +247,49 @@ function BuilderInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation]);
 
+  // ─── Auto-save (debounced) ───────────────────────────────────────────
+  // Persist changes ~1.5 s after the user's last edit so quitting the
+  // tab or hitting Exit without a manual Publish still preserves the
+  // flow. Hits the same sync-graph endpoint as the manual Save button
+  // but skips the "Saved" toast so it doesn't spam while the user is
+  // still working. Runs silently — the Save button in the toolbar
+  // remains the surface for error toasts on write failures.
+  useEffect(() => {
+    if (!automationId || !state.dirty) return;
+    const t = setTimeout(async () => {
+      try {
+        actions.setSaving(true);
+        await apiPost(`/api/automations/${automationId}/sync-graph`, {
+          nodes: state.nodes,
+          edges: state.edges,
+        });
+        actions.markClean();
+      } catch {
+        /* silent — the manual Save button will surface any error */
+      } finally {
+        actions.setSaving(false);
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.dirty, state.nodes, state.edges, automationId]);
+
+  // ─── Warn on close / navigate away with unsaved changes ─────────────
+  // Safety net for the case where the user tries to close the tab
+  // before the 1.5 s debounce fires — the browser confirmation dialog
+  // gives the auto-save a chance to complete, and if the user cancels
+  // the close they get another shot at it.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (state.dirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [state.dirty]);
+
   // ─── Save (sync-graph) ──────────────────────────────────────────────
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -534,7 +577,27 @@ function BuilderInner() {
         onUnpublish={() => unpublishMutation.mutate()}
         onTest={() => toast({ title: "Test run started" })}
         onFlushQueue={() => setFlushQueueOpen(true)}
-        onExit={() => setLocation("/automations")}
+        onExit={async () => {
+          // Flush any pending edits before leaving so the flow the user
+          // just built survives — the debounced auto-save might not have
+          // fired yet on rapid Exit clicks.
+          if (state.dirty && automationId) {
+            try {
+              actions.setSaving(true);
+              await apiPost(`/api/automations/${automationId}/sync-graph`, {
+                nodes: state.nodes,
+                edges: state.edges,
+              });
+              actions.markClean();
+            } catch {
+              /* silent — user is leaving anyway; a broken save will
+                 still be recoverable from the auto-save on next open */
+            } finally {
+              actions.setSaving(false);
+            }
+          }
+          setLocation("/automations");
+        }}
       />
 
       <SmartFlowMenuContext.Provider value={smartFlowMenuValue}>

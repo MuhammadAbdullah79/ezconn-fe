@@ -756,15 +756,28 @@ function BuilderInner() {
       // (nodeId + optional handle) already has an outgoing edge. Keeps
       // manual drag-to-connect in sync with the dot-dropdown guard.
       if (!conn.source) return;
+      // Normalise the incoming Connection's sourceHandle before it
+      // touches state — treat the literal strings "undefined"/"null"
+      // as absent, same as the backend/read side. Older React Flow
+      // versions coerced Handle id={undefined} to the string
+      // "undefined" and the resulting edge would fail to render on
+      // reopen.
+      const normSource =
+        !conn.sourceHandle ||
+        conn.sourceHandle === "undefined" ||
+        conn.sourceHandle === "null"
+          ? null
+          : conn.sourceHandle;
+      const normConn: Connection = { ...conn, sourceHandle: normSource };
       const already = state.edges.some(
         (e) =>
           e.source === conn.source &&
-          (conn.sourceHandle
-            ? (e.sourceHandle ?? undefined) === conn.sourceHandle
+          (normSource
+            ? (e.sourceHandle ?? undefined) === normSource
             : !e.sourceHandle),
       );
       if (already) return;
-      actions.setEdges(addEdge(conn, state.edges));
+      actions.setEdges(addEdge(normConn, state.edges));
     },
     [state.edges, actions],
   );
@@ -1939,8 +1952,18 @@ function serializedEdgesFromAutomation(automation: any): Edge[] {
     // it, React Flow drops multi-output edges on reopen with
     // "Couldn't create edge for source handle id: undefined".
     const rawHandle = f.source_handle ?? f.sourceHandle;
-    const sourceHandle =
+    const sourceHandleRaw =
       rawHandle == null || rawHandle === "" ? undefined : String(rawHandle);
+    // Same defensive filter as the backend: previous versions of the
+    // FE occasionally sent the literal string "undefined" as
+    // sourceHandle (React Flow's Handle id coercion). If any of those
+    // slipped into the DB before the write-side guard, drop them on
+    // read so the edge falls back to the default handle instead of
+    // referencing a non-existent one.
+    const sourceHandle =
+      sourceHandleRaw === "undefined" || sourceHandleRaw === "null"
+        ? undefined
+        : sourceHandleRaw;
     return {
       id: String(f.id ?? `e${i}`),
       source: String(f.source_node_id ?? f.connector_node_id ?? f.connector_id ?? ""),

@@ -161,9 +161,11 @@ function AddStepDropdown({
   const { connectedChannelTypes, addStepBelow, hasOutgoingEdge } = useSmartFlowMenu();
 
   // "One child per output" rule — once this (node, handle) already has an
-  // outgoing edge, hide the dot entirely. To add a different next step the
-  // user first deletes the existing child. Matches replyagent behaviour.
-  if (hasOutgoingEdge(nodeId, handleId)) return null;
+  // outgoing edge, hide the click-to-add dot. The React Flow <Handle>
+  // itself MUST stay mounted though, otherwise the persisted edge that
+  // references this handle can't be rendered on reopen ("Couldn't create
+  // edge for source handle id: branch-0"). Matches replyagent behaviour.
+  const hasChild = hasOutgoingEdge(nodeId, handleId);
 
   // Channel must be onboard (connected account exists) before it can be
   // added to a flow — WhatsApp included. Prevents scaffolding a broken
@@ -193,11 +195,19 @@ function AddStepDropdown({
   return (
     <div className="absolute z-10" style={wrapperStyle}>
       {/* Invisible React Flow source handle sits exactly where the dot is —
-          edges originate from the dot's centre, matching replyagent. */}
+          edges originate from the dot's centre, matching replyagent. This
+          handle stays mounted whether or not a child edge exists, so that
+          persisted edges referencing `handleId` can always be re-rendered
+          on reopen. */}
       <Handle
         type="source"
         position={Position.Right}
-        id={handleId}
+        // Only pass `id` when we actually have a handle id — passing
+        // `id={undefined}` gets coerced to the string "undefined" in
+        // React Flow's internal handle map, and later saves round-trip
+        // that literal string back through the backend as a bogus
+        // sourceHandle, breaking edge rendering on reopen.
+        {...(handleId ? { id: handleId } : {})}
         style={{
           position: "absolute",
           left: 5,
@@ -210,6 +220,7 @@ function AddStepDropdown({
           border: "none",
         }}
       />
+      {hasChild ? null : (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -267,6 +278,7 @@ function AddStepDropdown({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      )}
     </div>
   );
 }

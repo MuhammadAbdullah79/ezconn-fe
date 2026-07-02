@@ -263,16 +263,19 @@ function BuilderInner() {
 
   useEffect(() => {
     if (!automation || !automationId) return;
-    // Hydrate ONCE per (mount × automationId). Any post-save refetch
-    // (auto-save invalidation → refetch → hydrate) would race the
-    // user's live edits and overwrite them with a briefly-stale
-    // server response — trigger config gone, edges gone, etc. The
-    // combination of `staleTime: 0` + `refetchOnMount: 'always'` on
-    // the useQuery already guarantees that every real remount
-    // (Exit + Reopen from the list) pulls a fresh snapshot; we do
-    // not need — and must not allow — mid-session refetches to
-    // re-hydrate on top of live state.
-    if (hydratedRef.current) return;
+    // Skip re-hydration only when the user is in the middle of live
+    // edits — a mid-session refetch (only happens on real remounts
+    // now that invalidations were removed) with dirty=false is
+    // exactly when we DO want fresh server data to land. The
+    // hydratedRef strategy was too aggressive: React Query serves
+    // stale cached data on remount and only later updates with the
+    // fresh refetch, so a "hydrate once per mount" ref pinned the
+    // canvas on the stale snapshot and never applied the fresh one.
+    // The queryClient.removeQueries cleanup below invalidates the
+    // cache on unmount so remounts start from an empty slate — and
+    // this dirty-guard keeps auto-save writes from being reversed
+    // by any surprise refetch that lands after a markClean().
+    if (state.dirty) return;
     let nodes = serializedNodesFromAutomation(automation);
     let edges = serializedEdgesFromAutomation(automation);
     // Two-level overlay for the localStorage safety net:
@@ -358,6 +361,26 @@ function BuilderInner() {
       /* quota exceeded or storage disabled — best-effort */
     }
   }, [state.nodes, state.edges, localStorageKey]);
+
+  // Evict the cached automation on unmount (Exit + navigate away).
+  // React Query keeps query data in memory across mounts so the same
+  // query key returns cached data instantly on the next mount and
+  // then does the background refetch. That "stale first, fresh later"
+  // pattern meant the canvas showed a pre-edit snapshot on reopen
+  // (nodes without their newly-persisted flows) and the hydrate
+  // effect either pinned it there (with the hydratedRef strategy)
+  // or briefly overwrote fresh data with cache (with the plain
+  // dirty guard). Removing the query on unmount forces the next
+  // mount to start with `automation: undefined` and only hydrate
+  // once the fresh refetch resolves — the reopen behaviour the
+  // user actually expects.
+  useEffect(() => {
+    return () => {
+      if (automationId) {
+        queryClient.removeQueries({ queryKey: ["/api/automations", automationId, "graph"] });
+      }
+    };
+  }, [automationId, queryClient]);
 
   // ─── Auto-save (debounced) ───────────────────────────────────────────
   // Persist changes ~1.5 s after the user's last edit so quitting the

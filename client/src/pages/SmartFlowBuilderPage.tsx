@@ -242,19 +242,15 @@ function BuilderInner() {
   // reopen" bug users hit before).
   const localStorageKey = automationId ? `smartflow-graph:${automationId}` : null;
 
-  // Hydration guard — React Query returns a fresh object reference on
-  // every refetch (window focus, reconnect, invalidateQueries), and if
-  // we let the hydrate effect run again the user's in-progress edits
-  // get overwritten by whatever the server currently has. Guarding with
-  // a ref keyed to the automation id means we hydrate exactly once per
-  // mount / per automation and then trust our local state as the source
-  // of truth. Explicit navigate-away-and-back unmounts the component,
-  // resets the ref, and we hydrate cleanly next time.
-  const hydratedForId = useRef<string | null>(null);
-
   useEffect(() => {
     if (!automation || !automationId) return;
-    if (hydratedForId.current === automationId) return;
+    // Skip re-hydration when the user has in-progress edits — a React
+    // Query refetch (focus / reconnect / invalidate) returns a fresh
+    // object reference and would otherwise wipe those edits. When state
+    // is clean (dirty=false), re-hydration is safe and lets us pick up
+    // the freshest server data (e.g. the flows field the backend now
+    // returns after the getAutomation fix).
+    if (state.dirty) return;
     let nodes = serializedNodesFromAutomation(automation);
     let edges = serializedEdgesFromAutomation(automation);
     // Overlay any local snapshot we have for this automation whenever
@@ -284,7 +280,6 @@ function BuilderInner() {
     actions.setMode(
       automation?.automation?.status === "active" ? "published" : "draft",
     );
-    hydratedForId.current = automationId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation, automationId]);
 

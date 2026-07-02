@@ -2133,17 +2133,15 @@ export default function CampaignManager() {
   }
 
   return (
-    <div className="px-6 py-6 animate-in fade-in duration-700" data-testid="campaign-manager">
-        {/* Unified Main Card */}
-        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-300 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden flex flex-col">
-            
-            {/* 1. Branded Header Section — replyagent's Broadcasts page uses a
-                subtle emerald wash across the header band with a filled
-                megaphone tile, aligning it visually with the sidebar's
-                Broadcasts entry. A "Refresh" outline button sits next to the
-                primary "New Broadcast" action for quickly re-fetching the
-                list without a full reload. */}
-            <div className="py-3 px-5 border-b border-primary/15 dark:border-primary/25 flex items-center justify-between bg-gradient-to-r from-primary/[0.06] via-white to-white dark:from-primary/10 dark:via-transparent dark:to-transparent">
+    <div className="px-6 py-6 space-y-3 animate-in fade-in duration-700" data-testid="campaign-manager">
+        {/* 1. Branded Header Card — replyagent splits the Broadcasts header
+            into its own rounded floating card with visible shadow, then
+            leaves a small gap before the content card below. The two-
+            layer drop shadow (soft ambient + close contact) matches the
+            floating-header treatment used elsewhere in the app so the
+            "card lifted off the page" cue is consistent. */}
+        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden">
+            <div className="py-3 px-5 flex items-center justify-between bg-gradient-to-r from-primary/[0.06] via-white to-white dark:from-primary/10 dark:via-transparent dark:to-transparent">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-primary text-primary-foreground shadow-sm">
                         <Megaphone size={20} strokeWidth={2.5} />
@@ -2179,8 +2177,16 @@ export default function CampaignManager() {
                     )}
                 </div>
             </div>
+        </div>
 
-            {/* 2. Filter Row — replyagent moved filters ABOVE the stat cards
+        {/* 2. Content Card — filters + stats + sub-header + table +
+            pagination now live in their own rounded card, visibly
+            separated from the header above by the space-y-3 gap on the
+            parent. Same two-layer shadow so both cards read as
+            coordinated floating panels. */}
+        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col">
+
+            {/* Filter Row — replyagent moved filters ABOVE the stat cards
                 so the user chooses the slice first, then sees stats reflect
                 that slice. Four labeled dropdowns: Date Range, Status,
                 Channel, Agent — each with a small icon inside the label. */}

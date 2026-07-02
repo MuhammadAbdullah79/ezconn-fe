@@ -1708,8 +1708,15 @@ function defaultLabelForType(type: string): string {
 function serializedNodesFromAutomation(automation: any): Node[] {
   // The backend sync-graph response shape mirrors the input shape — we
   // reconstruct from `steps` + their `activities` + node-id stamps stashed
-  // in `step.comment`.
-  const steps: any[] = automation?.steps ?? automation?.automation?.steps ?? [];
+  // in `step.comment`. Steps live at a few different paths depending on
+  // whether the caller went through getAutomation (nested under
+  // `automation.version.automation_steps`) or an older shape.
+  const steps: any[] =
+    automation?.steps
+    ?? automation?.automation?.steps
+    ?? automation?.automation?.version?.automation_steps
+    ?? automation?.version?.automation_steps
+    ?? [];
   if (!Array.isArray(steps) || steps.length === 0) {
     // Fresh automation — seed with a trigger node.
     return [
@@ -1728,7 +1735,10 @@ function serializedNodesFromAutomation(automation: any): Node[] {
   }
   return steps.map((s) => {
     const props = typeof s.properties === "string" ? safeJson(s.properties) : s.properties ?? {};
-    const firstActivity = s.activities?.[0];
+    // Activities live under `activities` for the sync-graph response and
+    // under `automation_step_activities` for the getAutomation response.
+    const acts: any[] = s.activities ?? s.automation_step_activities ?? [];
+    const firstActivity = acts[0];
     const activityProps =
       typeof firstActivity?.properties === "string"
         ? safeJson(firstActivity.properties)

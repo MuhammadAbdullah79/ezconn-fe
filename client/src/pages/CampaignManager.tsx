@@ -3658,11 +3658,18 @@ function BroadcastStatsRow({ campaigns }: { campaigns: Campaign[] }) {
       : 0;
   const openRate = 0; // No read receipts wired yet.
 
-  // Synthetic 8-bucket series for the mini bar charts — until real per-week
-  // delivery / open metrics are exposed from the backend we render a flat
-  // shape scaled off the aggregate rate so the card still looks alive.
-  const deliverySeries = Array.from({ length: 8 }, () => Math.max(4, deliveryRate));
-  const openSeries = Array.from({ length: 8 }, () => Math.max(4, openRate));
+  // Synthetic 8-bucket series for the mini bar charts. A hand-picked
+  // sample shape (not random — random re-generates on every render and
+  // makes the tiles flicker) gives the tiles the organic up-and-down
+  // pattern replyagent shows, instead of the previous flat straight
+  // line we got from a constant value. Scaled off the aggregate rate so
+  // the bars still trend up when the rate does; a min floor keeps every
+  // bar visible when the placeholder rate is 0.
+  const deliveryShape = [55, 45, 42, 65, 50, 48, 55, 75];
+  const openShape    = [40, 50, 65, 45, 55, 42, 68, 50];
+  const scaleFor = (rate: number) => Math.max(0.5, Math.min(1, rate / 100 + 0.6));
+  const deliverySeries = deliveryShape.map((v) => Math.round(v * scaleFor(deliveryRate)));
+  const openSeries     = openShape.map((v) => Math.round(v * scaleFor(openRate)));
 
   interface Card {
     label: string;
@@ -3725,7 +3732,7 @@ function BroadcastStatsRow({ campaigns }: { campaigns: Campaign[] }) {
         {cards.map((c) => (
           <div
             key={c.label}
-            className="relative bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 pt-1 pb-3 px-4 flex flex-col justify-between overflow-hidden shadow-sm min-h-[104px]"
+            className="relative bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 pt-1 pb-4 px-4 flex flex-col justify-between overflow-hidden shadow-sm min-h-[140px]"
           >
             {/* Coloured top strip */}
             <div className={cn("absolute top-0 left-0 right-0 h-1.5 rounded-t-xl", c.topBorder)} />
@@ -3749,12 +3756,16 @@ function BroadcastStatsRow({ campaigns }: { campaigns: Campaign[] }) {
                 </p>
               )}
               {c.chartData && (
-                <div className="flex items-end gap-1 mt-2 h-6">
+                // Taller (h-10 = 40px) mini bar chart with rounded-md
+                // corners so each bar reads as a chunky pill rather than
+                // a hairline. Bars span 20-100% of the 40px track so the
+                // shortest one is still clearly visible.
+                <div className="flex items-end gap-1 mt-3 h-10">
                   {c.chartData.map((v, i) => (
                     <div
                       key={i}
-                      className={cn("flex-1 rounded-sm", c.chartColor)}
-                      style={{ height: `${Math.max(20, Math.min(100, v + 20))}%` }}
+                      className={cn("flex-1 rounded-md", c.chartColor)}
+                      style={{ height: `${Math.max(25, Math.min(100, v))}%` }}
                     />
                   ))}
                 </div>

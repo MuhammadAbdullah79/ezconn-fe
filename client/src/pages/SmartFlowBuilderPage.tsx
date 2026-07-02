@@ -228,6 +228,11 @@ function BuilderInner() {
     queryFn: () => apiGet(`/api/automations/${automationId}`),
     enabled: !!automationId,
     staleTime: 0,
+    // gcTime: 0 drops the cached response the moment the component
+    // unmounts. Combined with refetchOnMount: "always" this
+    // guarantees a fresh fetch on every reopen — no "stale cached
+    // data races the background refetch" hydrate race, ever.
+    gcTime: 0,
     refetchOnMount: "always",
   });
 
@@ -278,16 +283,22 @@ function BuilderInner() {
     if (state.dirty) return;
     let nodes = serializedNodesFromAutomation(automation);
     let edges = serializedEdgesFromAutomation(automation);
-    // Two-level overlay for the localStorage safety net:
+    // Three-level overlay for the localStorage safety net. Each rung
+    // is more aggressive than the last, and we hit them in order —
+    // whichever level applies first wins.
     //   1. Whole-graph overlay — if the local snapshot is strictly
     //      richer than the server response (e.g. backend silently
     //      dropped a full sync-graph write), take the local view.
-    //   2. Edge-only salvage — if the server returned nodes but zero
-    //      edges (either older backend not returning flows[], or a
-    //      partial save), keep the server nodes but restore any local
-    //      edges whose endpoints exist in the server's node set. This
-    //      is the case that was leaving the canvas as a row of
-    //      disconnected nodes on reopen.
+    //   2. Edge salvage on empty server flows — server returned
+    //      nodes but zero edges; layer local edges whose endpoints
+    //      still exist in the server's node set on top of server
+    //      nodes. This is the case that was leaving the canvas as a
+    //      row of disconnected nodes on reopen.
+    //   3. Edge top-up when local strictly beats server — local
+    //      snapshot has more edges than the server AND every local
+    //      edge references a valid server node. Use the local edge
+    //      list. Handles the "server saved 1 flow, local has 3"
+    //      case (partial backend writes / race with wipe-guard).
     if (localStorageKey) {
       try {
         const raw = localStorage.getItem(localStorageKey);
@@ -297,23 +308,37 @@ function BuilderInner() {
           const snapEdges = Array.isArray(snap?.edges) ? snap.edges : [];
           const snapWeight = snapNodes.length + snapEdges.length;
           const serverWeight = nodes.length + edges.length;
+          const serverNodeIds = new Set(nodes.map((n: any) => String(n.id)));
+          const localEdgesForServerNodes = snapEdges.filter(
+            (e: any) =>
+              serverNodeIds.has(String(e.source)) &&
+              serverNodeIds.has(String(e.target)),
+          );
           if (snapWeight > serverWeight) {
+            // eslint-disable-next-line no-console
+            console.info(
+              `[smartflow] localStorage overlay — snap richer than server (${snapWeight} vs ${serverWeight})`,
+            );
             nodes = snapNodes;
             edges = snapEdges;
-          } else if (edges.length === 0 && snapEdges.length > 0 && nodes.length > 0) {
-            const serverNodeIds = new Set(nodes.map((n: any) => String(n.id)));
-            const salvaged = snapEdges.filter(
-              (e: any) =>
-                serverNodeIds.has(String(e.source)) &&
-                serverNodeIds.has(String(e.target)),
+          } else if (
+            edges.length === 0 &&
+            localEdgesForServerNodes.length > 0
+          ) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[smartflow] restored ${localEdgesForServerNodes.length} edge(s) from localStorage — server flows[] was empty`,
             );
-            if (salvaged.length > 0) {
-              // eslint-disable-next-line no-console
-              console.info(
-                `[smartflow] restored ${salvaged.length} edge(s) from localStorage — server flows[] was empty`,
-              );
-              edges = salvaged;
-            }
+            edges = localEdgesForServerNodes;
+          } else if (
+            localEdgesForServerNodes.length > edges.length &&
+            snapNodes.length >= nodes.length
+          ) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              `[smartflow] topped up edges from localStorage (${edges.length} -> ${localEdgesForServerNodes.length}) — server had a partial flows[]`,
+            );
+            edges = localEdgesForServerNodes;
           }
         }
       } catch {

@@ -1933,20 +1933,30 @@ function serializedNodesFromAutomation(automation: any): Node[] {
 function serializedEdgesFromAutomation(automation: any): Edge[] {
   const flows: any[] = automation?.flows ?? automation?.connections ?? [];
   if (!Array.isArray(flows)) return [];
-  return flows.map((f, i) => ({
-    id: String(f.id ?? `e${i}`),
-    source: String(f.source_node_id ?? f.connector_node_id ?? f.connector_id ?? ""),
-    target: String(f.target_node_id ?? f.next_node_id ?? f.next_step_id ?? ""),
-    // Arrow head on every hydrated edge so previously-saved flows also
-    // show flow direction after the reload — defaultEdgeOptions only
-    // covers new edges, not ones we push in via the edges prop.
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      color: "#94a3b8",
-      width: 18,
-      height: 18,
-    },
-  }));
+  return flows.map((f, i) => {
+    // Backend encodes React Flow's sourceHandle (Randomizer A/B, etc.)
+    // in the slug field and returns it under `source_handle`. Without
+    // it, React Flow drops multi-output edges on reopen with
+    // "Couldn't create edge for source handle id: undefined".
+    const rawHandle = f.source_handle ?? f.sourceHandle;
+    const sourceHandle =
+      rawHandle == null || rawHandle === "" ? undefined : String(rawHandle);
+    return {
+      id: String(f.id ?? `e${i}`),
+      source: String(f.source_node_id ?? f.connector_node_id ?? f.connector_id ?? ""),
+      target: String(f.target_node_id ?? f.next_node_id ?? f.next_step_id ?? ""),
+      ...(sourceHandle ? { sourceHandle } : {}),
+      // Arrow head on every hydrated edge so previously-saved flows also
+      // show flow direction after the reload — defaultEdgeOptions only
+      // covers new edges, not ones we push in via the edges prop.
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "#94a3b8",
+        width: 18,
+        height: 18,
+      },
+    } as Edge;
+  });
 }
 
 function safeJson(s: string): any {

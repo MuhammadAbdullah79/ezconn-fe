@@ -217,10 +217,18 @@ function BuilderInner() {
   >(null);
 
   // ─── Fetch the automation + hydrate the graph ───────────────────────
+  // staleTime: 0 + refetchOnMount override the global queryClient
+  // defaults (staleTime: Infinity) so every navigation back into the
+  // builder pulls a fresh snapshot from the server. Without this the
+  // cached response from the first open (before the user built the
+  // flow) kept overwriting live edges on remount — nodes came back but
+  // strings did not, because the cached body had `flows: []`.
   const { data: automation, isLoading } = useQuery({
     queryKey: ["/api/automations", automationId, "graph"],
     queryFn: () => apiGet(`/api/automations/${automationId}`),
     enabled: !!automationId,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   // Realtime refresh of integrations (channels / AI agents / custom fields
@@ -253,11 +261,16 @@ function BuilderInner() {
     if (state.dirty) return;
     let nodes = serializedNodesFromAutomation(automation);
     let edges = serializedEdgesFromAutomation(automation);
-    // Overlay any local snapshot we have for this automation whenever
-    // it's richer than the server response (e.g. backend silently
-    // dropped a sync-graph write). Server wins when it holds the
-    // richer graph, so a fresh device fetching an updated flow isn't
-    // shadowed by a stale local snapshot.
+    // Two-level overlay for the localStorage safety net:
+    //   1. Whole-graph overlay — if the local snapshot is strictly
+    //      richer than the server response (e.g. backend silently
+    //      dropped a full sync-graph write), take the local view.
+    //   2. Edge-only salvage — if the server returned nodes but zero
+    //      edges (either older backend not returning flows[], or a
+    //      partial save), keep the server nodes but restore any local
+    //      edges whose endpoints exist in the server's node set. This
+    //      is the case that was leaving the canvas as a row of
+    //      disconnected nodes on reopen.
     if (localStorageKey) {
       try {
         const raw = localStorage.getItem(localStorageKey);
@@ -270,6 +283,20 @@ function BuilderInner() {
           if (snapWeight > serverWeight) {
             nodes = snapNodes;
             edges = snapEdges;
+          } else if (edges.length === 0 && snapEdges.length > 0 && nodes.length > 0) {
+            const serverNodeIds = new Set(nodes.map((n: any) => String(n.id)));
+            const salvaged = snapEdges.filter(
+              (e: any) =>
+                serverNodeIds.has(String(e.source)) &&
+                serverNodeIds.has(String(e.target)),
+            );
+            if (salvaged.length > 0) {
+              // eslint-disable-next-line no-console
+              console.info(
+                `[smartflow] restored ${salvaged.length} edge(s) from localStorage — server flows[] was empty`,
+              );
+              edges = salvaged;
+            }
           }
         }
       } catch {
@@ -283,12 +310,17 @@ function BuilderInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation, automationId]);
 
-  // Mirror every dirty change into localStorage so the flow survives an
-  // unexpected close, backend outage, or auth-expired session. This
-  // runs synchronously — no debounce — because localStorage writes are
-  // near-free and the extra safety is worth it.
+  // Mirror every graph change into localStorage so the flow survives an
+  // unexpected close, backend outage, or auth-expired session. Also
+  // mirrors after a successful save (clean state) so the local snap
+  // stays the last-known-good reference — the previous guard on
+  // `state.dirty` meant the localStorage effect stopped writing right
+  // after a save, so the snapshot could go stale after an in-place
+  // edit + save cycle. Only skip when nothing has been hydrated yet
+  // (empty state, first render before the useEffect above runs).
   useEffect(() => {
-    if (!localStorageKey || !state.dirty) return;
+    if (!localStorageKey) return;
+    if (state.nodes.length === 0 && state.edges.length === 0) return;
     try {
       localStorage.setItem(
         localStorageKey,
@@ -301,7 +333,7 @@ function BuilderInner() {
     } catch {
       /* quota exceeded or storage disabled — best-effort */
     }
-  }, [state.dirty, state.nodes, state.edges, localStorageKey]);
+  }, [state.nodes, state.edges, localStorageKey]);
 
   // ─── Auto-save (debounced) ───────────────────────────────────────────
   // Persist changes ~1.5 s after the user's last edit so quitting the
@@ -320,6 +352,12 @@ function BuilderInner() {
           edges: state.edges,
         });
         actions.markClean();
+        // Invalidate the cached graph so the next remount (Exit +
+        // reopen from the list) refetches with the freshly-persisted
+        // flows[]. Without this the global `staleTime: Infinity`
+        // default keeps the pre-save cache in memory and hydrate
+        // wipes live edges back to nothing on remount.
+        queryClient.invalidateQueries({ queryKey: ["/api/automations", automationId, "graph"] });
         // NOTE: intentionally NOT clearing localStorage here. If the
         // backend returns 200 but silently drops the write (the bug
         // that surfaced this whole chain of fixes), clearing would
@@ -667,6 +705,10 @@ function BuilderInner() {
                 edges: state.edges,
               });
               actions.markClean();
+              // Invalidate cache so the automations-list -> builder
+              // navigation on reopen refetches fresh flows[] instead
+              // of returning the stale pre-save snapshot.
+              queryClient.invalidateQueries({ queryKey: ["/api/automations", automationId, "graph"] });
               // See auto-save comment — deliberately not clearing
               // localStorage on save success. The overlay logic
               // handles both branches (server did persist / didn't)

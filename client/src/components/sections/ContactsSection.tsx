@@ -1201,12 +1201,12 @@ export default function ContactsSection() {
 
   return (
     <>
-      <div className="animate-in fade-in duration-700">
-        {/* Unified Main Card */}
-        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-300 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden flex flex-col">
-
-          {/* 1. Branded Header Section */}
-          <div className="py-1.5 px-5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-transparent">
+      <div className="space-y-3 animate-in fade-in duration-700">
+        {/* 1. Branded Header Card — standalone floating card matching the
+            broadcasts / smart-flows treatment: two-layer drop shadow,
+            soft border, gap below via parent's space-y-3. */}
+        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden">
+          <div className="py-1.5 px-5 flex items-center justify-between bg-transparent">
             <div className="flex items-center gap-6">
               <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/10 shadow-inner">
                 <Users size={20} strokeWidth={2.5} />
@@ -1243,8 +1243,13 @@ export default function ContactsSection() {
               )}
             </div>
           </div>
+        </div>
 
-          {/* 2. Unified Filter Row Section */}
+        {/* 2. Content Card — filters + table + pagination in their own
+            rounded floating card. */}
+        <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col">
+
+          {/* Unified Filter Row Section */}
           {/* 2. Unified Filter Row Section */}
           <div className="px-5 py-2.5 bg-slate-50/50 dark:bg-transparent border-b border-slate-200 dark:border-slate-800/80 flex items-center gap-3 flex-wrap">
             {/* Search Bar - Modernized */}

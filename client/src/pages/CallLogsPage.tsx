@@ -584,12 +584,11 @@ export default function CallLogsPage() {
     return (
         <>
             <audio ref={audioRef} className="hidden" />
-        <div className="animate-in fade-in duration-700 p-6">
-            {/* Unified Master Card */}
-            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-300 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex flex-col">
-                
-                {/* 1. Branded Header Section */}
-                <div className="py-1.5 px-5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-transparent rounded-t-[20px]">
+        <div className="animate-in fade-in duration-700 p-6 space-y-3">
+            {/* 1. Branded Header Card — standalone floating card with the
+                shared two-layer drop shadow. */}
+            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden">
+                <div className="py-1.5 px-5 flex items-center justify-between bg-transparent">
                     <div className="flex items-center gap-6">
                         <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/10 shadow-inner">
                             <Mic size={20} strokeWidth={2.5} />
@@ -620,6 +619,11 @@ export default function CallLogsPage() {
                         </Tooltip>
                     </div>
                 </div>
+            </div>
+
+            {/* 2. Content Card — stats + filters + table + pagination in
+                their own floating card. */}
+            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] flex flex-col overflow-hidden">
 
                 <div className="grid grid-cols-2 md:grid-cols-5 border-b border-slate-200 dark:border-slate-800/80 divide-x divide-slate-100 dark:divide-slate-800/50">
                     <div className="p-3 bg-slate-50/30 dark:bg-transparent">

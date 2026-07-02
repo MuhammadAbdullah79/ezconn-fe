@@ -381,12 +381,15 @@ export default function SmartFlowsPage() {
     const paginatedFlows = filteredFlows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
     return (
-        <div className="px-4 pt-8 pb-4 animate-in fade-in duration-700">
-            {/* Unified Main Card */}
-            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-300 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden">
-                
-                {/* 1. Header Section */}
-                <div className="py-4 px-5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between bg-transparent">
+        <div className="px-4 pt-8 pb-4 space-y-3 animate-in fade-in duration-700">
+            {/* 1. Branded Header Card — standalone floating card with the
+                two-layer drop shadow used across the app (broadcasts /
+                settings / insights). The old single-card layout squashed
+                the header + filters + table together with only a
+                border-b divider; splitting them out gives replyagent's
+                clear "header floats above the content" cue. */}
+            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden">
+                <div className="py-4 px-5 flex items-center justify-between bg-transparent">
                     <div className="flex items-center gap-4">
                         <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/10 shadow-inner">
                             <GitMerge size={20} strokeWidth={2.5} />
@@ -409,8 +412,13 @@ export default function SmartFlowsPage() {
                         <span>Create Flow</span>
                     </Button>
                 </div>
+            </div>
 
-                {/* 2. Filters Section */}
+            {/* 2. Content Card — filters + table + pagination in their
+                own rounded floating card with matching shadow. */}
+            <div className="bg-white dark:bg-slate-900/50 rounded-[20px] border border-slate-200/70 dark:border-slate-800 shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18),0_4px_10px_-2px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.55),0_4px_10px_-2px_rgba(0,0,0,0.35)] overflow-hidden">
+
+                {/* Filters Section */}
                 <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-4 bg-white dark:bg-transparent">
                     <div className="flex items-center gap-3 flex-1">
                         {/* Search */}

@@ -242,15 +242,26 @@ function BuilderInner() {
   // reopen" bug users hit before).
   const localStorageKey = automationId ? `smartflow-graph:${automationId}` : null;
 
+  // Hydration guard — React Query returns a fresh object reference on
+  // every refetch (window focus, reconnect, invalidateQueries), and if
+  // we let the hydrate effect run again the user's in-progress edits
+  // get overwritten by whatever the server currently has. Guarding with
+  // a ref keyed to the automation id means we hydrate exactly once per
+  // mount / per automation and then trust our local state as the source
+  // of truth. Explicit navigate-away-and-back unmounts the component,
+  // resets the ref, and we hydrate cleanly next time.
+  const hydratedForId = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!automation) return;
+    if (!automation || !automationId) return;
+    if (hydratedForId.current === automationId) return;
     let nodes = serializedNodesFromAutomation(automation);
     let edges = serializedEdgesFromAutomation(automation);
-    // Overlay any local snapshot we have for this automation. We only
-    // apply the snapshot if it's richer than the server response — i.e.
-    // the user built more locally than the backend persisted — so a
-    // clean server load doesn't get shadowed by a stale localStorage
-    // entry for the same automation id.
+    // Overlay any local snapshot we have for this automation whenever
+    // it's richer than the server response (e.g. backend silently
+    // dropped a sync-graph write). Server wins when it holds the
+    // richer graph, so a fresh device fetching an updated flow isn't
+    // shadowed by a stale local snapshot.
     if (localStorageKey) {
       try {
         const raw = localStorage.getItem(localStorageKey);
@@ -258,13 +269,6 @@ function BuilderInner() {
           const snap = JSON.parse(raw);
           const snapNodes = Array.isArray(snap?.nodes) ? snap.nodes : [];
           const snapEdges = Array.isArray(snap?.edges) ? snap.edges : [];
-          // Overlay whenever the snapshot has strictly more content
-          // than what the server returned. This catches both the
-          // seed-only case (backend save silently failed on a fresh
-          // flow) and the partial-write case (backend persisted some
-          // steps but not all). Server data still wins when it's the
-          // richer of the two, so a fresh device fetching an updated
-          // flow doesn't get shadowed by a stale local snapshot.
           const snapWeight = snapNodes.length + snapEdges.length;
           const serverWeight = nodes.length + edges.length;
           if (snapWeight > serverWeight) {
@@ -280,8 +284,9 @@ function BuilderInner() {
     actions.setMode(
       automation?.automation?.status === "active" ? "published" : "draft",
     );
+    hydratedForId.current = automationId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [automation]);
+  }, [automation, automationId]);
 
   // Mirror every dirty change into localStorage so the flow survives an
   // unexpected close, backend outage, or auth-expired session. This

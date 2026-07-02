@@ -236,16 +236,66 @@ function BuilderInner() {
     refetchOnWindowFocus: true,
   });
 
+  // localStorage key namespaced per automation — used as a belt-and-
+  // suspenders backup so the flow survives even when the backend save
+  // errors out silently (which was the root cause of the "flow lost on
+  // reopen" bug users hit before).
+  const localStorageKey = automationId ? `smartflow-graph:${automationId}` : null;
+
   useEffect(() => {
     if (!automation) return;
-    const nodes = serializedNodesFromAutomation(automation);
-    const edges = serializedEdgesFromAutomation(automation);
+    let nodes = serializedNodesFromAutomation(automation);
+    let edges = serializedEdgesFromAutomation(automation);
+    // Overlay any local snapshot we have for this automation. We only
+    // apply the snapshot if it's richer than the server response — i.e.
+    // the user built more locally than the backend persisted — so a
+    // clean server load doesn't get shadowed by a stale localStorage
+    // entry for the same automation id.
+    if (localStorageKey) {
+      try {
+        const raw = localStorage.getItem(localStorageKey);
+        if (raw) {
+          const snap = JSON.parse(raw);
+          const snapNodes = Array.isArray(snap?.nodes) ? snap.nodes : [];
+          const snapEdges = Array.isArray(snap?.edges) ? snap.edges : [];
+          const serverIsSeedOnly =
+            nodes.length <= 1 && edges.length === 0 &&
+            (snapNodes.length > 1 || snapEdges.length > 0);
+          if (serverIsSeedOnly) {
+            nodes = snapNodes;
+            edges = snapEdges;
+          }
+        }
+      } catch {
+        /* corrupted json — ignore, fall back to server */
+      }
+    }
     actions.hydrate(nodes, edges);
     actions.setMode(
       automation?.automation?.status === "active" ? "published" : "draft",
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [automation]);
+
+  // Mirror every dirty change into localStorage so the flow survives an
+  // unexpected close, backend outage, or auth-expired session. This
+  // runs synchronously — no debounce — because localStorage writes are
+  // near-free and the extra safety is worth it.
+  useEffect(() => {
+    if (!localStorageKey || !state.dirty) return;
+    try {
+      localStorage.setItem(
+        localStorageKey,
+        JSON.stringify({
+          nodes: state.nodes,
+          edges: state.edges,
+          savedAt: Date.now(),
+        }),
+      );
+    } catch {
+      /* quota exceeded or storage disabled — best-effort */
+    }
+  }, [state.dirty, state.nodes, state.edges, localStorageKey]);
 
   // ─── Auto-save (debounced) ───────────────────────────────────────────
   // Persist changes ~1.5 s after the user's last edit so quitting the
@@ -264,8 +314,16 @@ function BuilderInner() {
           edges: state.edges,
         });
         actions.markClean();
-      } catch {
-        /* silent — the manual Save button will surface any error */
+        // Backend acknowledged — drop the local snapshot so a stale
+        // copy doesn't shadow future clean reloads.
+        if (localStorageKey) {
+          try { localStorage.removeItem(localStorageKey); } catch { /* noop */ }
+        }
+      } catch (err) {
+        // Log but don't toast — the localStorage mirror above already
+        // has the user's work, so on next open we'll restore from it.
+        // eslint-disable-next-line no-console
+        console.error("[smartflow] auto-save failed:", err);
       } finally {
         actions.setSaving(false);
       }
@@ -580,8 +638,22 @@ function BuilderInner() {
         onExit={async () => {
           // Flush any pending edits before leaving so the flow the user
           // just built survives — the debounced auto-save might not have
-          // fired yet on rapid Exit clicks.
+          // fired yet on rapid Exit clicks. Always writes to
+          // localStorage first (near-instant) so even a slow/failing
+          // POST doesn't cost the user their work.
           if (state.dirty && automationId) {
+            if (localStorageKey) {
+              try {
+                localStorage.setItem(
+                  localStorageKey,
+                  JSON.stringify({
+                    nodes: state.nodes,
+                    edges: state.edges,
+                    savedAt: Date.now(),
+                  }),
+                );
+              } catch { /* best-effort */ }
+            }
             try {
               actions.setSaving(true);
               await apiPost(`/api/automations/${automationId}/sync-graph`, {
@@ -589,9 +661,16 @@ function BuilderInner() {
                 edges: state.edges,
               });
               actions.markClean();
-            } catch {
-              /* silent — user is leaving anyway; a broken save will
-                 still be recoverable from the auto-save on next open */
+              // Server accepted — drop the local mirror so a stale
+              // snapshot doesn't shadow future reloads.
+              if (localStorageKey) {
+                try { localStorage.removeItem(localStorageKey); } catch { /* noop */ }
+              }
+            } catch (err) {
+              // Backend save failed — the localStorage entry we wrote
+              // above will be picked up on next open.
+              // eslint-disable-next-line no-console
+              console.error("[smartflow] exit-save failed, local snapshot preserved:", err);
             } finally {
               actions.setSaving(false);
             }

@@ -263,13 +263,16 @@ function BuilderInner() {
 
   useEffect(() => {
     if (!automation || !automationId) return;
-    // Skip re-hydration when the user has in-progress edits — a React
-    // Query refetch (focus / reconnect / invalidate) returns a fresh
-    // object reference and would otherwise wipe those edits. When state
-    // is clean (dirty=false), re-hydration is safe and lets us pick up
-    // the freshest server data (e.g. the flows field the backend now
-    // returns after the getAutomation fix).
-    if (state.dirty) return;
+    // Hydrate ONCE per (mount × automationId). Any post-save refetch
+    // (auto-save invalidation → refetch → hydrate) would race the
+    // user's live edits and overwrite them with a briefly-stale
+    // server response — trigger config gone, edges gone, etc. The
+    // combination of `staleTime: 0` + `refetchOnMount: 'always'` on
+    // the useQuery already guarantees that every real remount
+    // (Exit + Reopen from the list) pulls a fresh snapshot; we do
+    // not need — and must not allow — mid-session refetches to
+    // re-hydrate on top of live state.
+    if (hydratedRef.current) return;
     let nodes = serializedNodesFromAutomation(automation);
     let edges = serializedEdgesFromAutomation(automation);
     // Two-level overlay for the localStorage safety net:
@@ -402,19 +405,19 @@ function BuilderInner() {
           );
         }
         actions.markClean();
-        // Invalidate the cached graph so the next remount (Exit +
-        // reopen from the list) refetches with the freshly-persisted
-        // flows[]. Without this the global `staleTime: Infinity`
-        // default keeps the pre-save cache in memory and hydrate
-        // wipes live edges back to nothing on remount.
-        queryClient.invalidateQueries({ queryKey: ["/api/automations", automationId, "graph"] });
-        // NOTE: intentionally NOT clearing localStorage here. If the
-        // backend returns 200 but silently drops the write (the bug
-        // that surfaced this whole chain of fixes), clearing would
-        // lose the user's work. Instead we keep the local mirror and
-        // let the overlay logic decide on next open — if the server
-        // actually persisted, the overlay condition (server is seed-
-        // only) won't match and we'll use server data as normal.
+        // DELIBERATELY not invalidating the query cache here.
+        // Invalidate → refetch → hydrate would race the user's live
+        // edits and briefly overwrite in-progress trigger config /
+        // node data / edges with the just-saved-then-refetched
+        // server view — the exact bug reported as "trigger apply
+        // ke baad kuch seconds mein sab disappear ho jata hai".
+        // refetchOnMount: 'always' on the useQuery already forces
+        // a fresh fetch on the next real remount (Exit + Reopen),
+        // which is when we actually need current server state.
+        //
+        // Also not clearing localStorage here. If the backend
+        // returns 200 but silently drops a write, the local mirror
+        // + overlay-on-hydrate is our recovery path.
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("[smartflow] auto-save failed:", err);
@@ -454,7 +457,10 @@ function BuilderInner() {
       actions.setSaving(false);
       actions.markClean();
       toast({ title: "Saved" });
-      queryClient.invalidateQueries({ queryKey: ["/api/automations", automationId, "graph"] });
+      // Do NOT invalidate — a mid-session refetch would trigger
+      // hydrate (guarded to run once) OR briefly race the user's
+      // continuing edits. refetchOnMount: 'always' handles the
+      // Exit + Reopen freshness case.
     },
     onError: (err: any) => {
       actions.setSaving(false);
@@ -781,10 +787,10 @@ function BuilderInner() {
                 edges: state.edges,
               });
               actions.markClean();
-              // Invalidate cache so the automations-list -> builder
-              // navigation on reopen refetches fresh flows[] instead
-              // of returning the stale pre-save snapshot.
-              queryClient.invalidateQueries({ queryKey: ["/api/automations", automationId, "graph"] });
+              // No invalidate needed — setLocation("/automations")
+              // below unmounts this component, and `refetchOnMount:
+              // "always"` on the graph query fires a fresh fetch on
+              // the next mount.
               // See auto-save comment — deliberately not clearing
               // localStorage on save success. The overlay logic
               // handles both branches (server did persist / didn't)

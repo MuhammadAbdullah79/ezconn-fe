@@ -12,7 +12,14 @@ export default defineConfig(async ({ mode }) => {
   // loadEnv reads from import.meta.dirname (= d:\Ezconn\frontend\) regardless of
   // the `root` option so frontend\.env is always found.
   const env = loadEnv(mode, import.meta.dirname, "");
-  const apiBaseUrl = env.VITE_API_BASE_URL || "";
+  // Trim: .env values on Windows can carry a trailing \r (CRLF),
+  // and copy-paste sometimes leaves whitespace on the value. If that
+  // gets injected into the inline <script>window.__API_BASE_URL__="…"</script>
+  // tag, an unescaped newline inside the string literal throws a
+  // JavaScript SyntaxError at page load — the app never boots, so any
+  // downstream flow (e.g. the WhatsApp onboard return page) silently
+  // never runs its POST to the backend. Trimming here is the root fix.
+  const apiBaseUrl = (env.VITE_API_BASE_URL || "").trim();
 
   return {
     plugins: [

@@ -298,54 +298,21 @@ export default function TemplateManager() {
   const handleCreateTemplate = () => {
     if (!isTemplateFormValid()) return;
 
-    // Extract variables from header and body
-    const allText = headerText + " " + bodyText;
-    const variableMatches = allText.match(/\{\{[^}]+\}\}/g) || [];
-    const uniqueVariables = Array.from(new Set(variableMatches)).map(v =>
-      v.match(/\{\{([^}]+)\}\}/)?.[1] || ""
-    );
-
-    const now = new Date();
-
-    // Create new template object
-    const newTemplate: any = {
-      id: Date.now(),
+    // Submit to the backend, which creates the template on Meta (enters
+    // PENDING review) and persists it locally so it appears in the list.
+    const waAccountId = new URLSearchParams(window.location.search).get("wa_account_id");
+    createTemplateMutation.mutate({
+      wa_account_id: waAccountId || undefined,
       name: templateName,
       category: selectedCategory,
-      type: templateType,
       language: selectedLanguage,
       header: headerText || undefined,
       body: bodyText,
       footer: footerText || undefined,
-      variables: uniqueVariables,
       buttons: templateButtons,
-      status: "Pending",
-      statusTypeColor: "warning" as const,
-      topBlockReason: "",
-      lastEdited: new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10),
-    };
-
-    // Add media if selected
-    if (mediaSample !== "none" && selectedMediaFile) {
-      newTemplate.mediaSample = mediaSample;
-      newTemplate.mediaFile = selectedMediaFile;
-    }
-
-    // Add variable samples if any
-    if (Object.keys(variableSamples).length > 0) {
-      newTemplate.variableSamples = variableSamples;
-    }
-
-    // Add to templates list
-    // setWhatappTemplates([...whatsappTemplates, newTemplate]);
-
-    toast({
-      title: "Template Created",
-      description: `The template "${newTemplate.name}" has been created successfully.`,
+      examples: variableSamples,
+      mediaSample,
     });
-
-    // Reset form
-    handleCancelCreateTemplate();
   };
 
   // Open edit template handler
@@ -613,6 +580,29 @@ export default function TemplateManager() {
       const res = await apiRequest("GET", "/api/waba/templates");
       return res.json();
     }
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await apiRequest("POST", "/api/waba/templates", payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Template Created",
+        description: "Your template has been submitted to WhatsApp for review.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/waba/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waba/templates/stats"] });
+      handleCancelCreateTemplate();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Failed to create template",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteMutation = useMutation({

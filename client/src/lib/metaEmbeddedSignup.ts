@@ -82,16 +82,24 @@ export function launchEmbeddedSignup(configId: string, coex = false): Promise<Em
       }
       try {
         const parsed = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (parsed?.type !== "WA_EMBEDDED_SIGNUP") return;
-        if (parsed.event === "FINISH") {
+        // Meta posts two shapes depending on the flow:
+        //   Cloud/Business API : { type, event, data: { waba_id, phone_number_id, ... } }
+        //   Coexistence app    : { data: { type, event, waba_id, phone_number_id, ... } }
+        // …and the finish event is "FINISH" for the API flow but
+        // "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" for the Coexistence flow.
+        const type = parsed?.type ?? parsed?.data?.type;
+        const evt = parsed?.event ?? parsed?.data?.event;
+        const data = parsed?.data ?? {};
+        if (type !== "WA_EMBEDDED_SIGNUP") return;
+        if (evt === "FINISH" || evt === "FINISH_ONLY_WABA" || evt === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
           signupData = {
             ...signupData,
-            waba_id: parsed.data?.waba_id,
-            phone_number_id: parsed.data?.phone_number_id,
-            business_id: parsed.data?.business_id,
-            user_id: parsed.data?.user_id,
+            waba_id: data.waba_id,
+            phone_number_id: data.phone_number_id,
+            business_id: data.business_id,
+            user_id: data.user_id,
           };
-        } else if (parsed.event === "CANCEL") {
+        } else if (evt === "CANCEL") {
           cancelled = true;
         }
       } catch {

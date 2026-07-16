@@ -197,6 +197,10 @@ export default function CampaignManager() {
   const [campaignEndDate, setCampaignEndDate] = useState<Date | undefined>(undefined);
   const [selectedWhatsAppTemplate, setSelectedWhatsAppTemplate] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  // Static values for the selected template's body placeholders ({{1}}, {{2}}…),
+  // keyed by placeholder number ("1", "2") to match PreviewV2's lookup. The same
+  // value is sent to every recipient (no per-contact personalisation yet).
+  const [composerVariables, setComposerVariables] = useState<Record<string, string>>({});
   const [startDatePickerOpen, setStartDatePickerOpen] = useState(false);
   const [endDatePickerOpen, setEndDatePickerOpen] = useState(false);
   const [neverEnds, setNeverEnds] = useState(false);
@@ -1038,6 +1042,7 @@ export default function CampaignManager() {
     setCampaignEndDate(undefined);
     setSelectedWhatsAppTemplate(null);
     setSelectedTemplate(null);
+    setComposerVariables({});
     setNeverEnds(false);
     setSchedules([{ id: Date.now(), date: undefined, hour: "", minute: "", period: "" }]);
     setBroadcastCampaignType("");
@@ -1131,6 +1136,10 @@ export default function CampaignManager() {
   const buildComposerPayload = (uiStatus: "draft" | "scheduled") => {
     const templateRow = whatsappTemplates.find((t: any) => t.name === selectedWhatsAppTemplate);
     const wa_template_id = templateRow?.backend_id ?? templateRow?.id ?? null;
+    // Ordered values for the template's body placeholders — index 0 → {{1}}.
+    const templateParams = (templateRow?.variables ?? []).map(
+      (_: any, i: number) => composerVariables[String(i + 1)] ?? "",
+    );
     const active = channels.find(
       (c: any) => `${c.channel_type}:${c.channelable_id}` === newBroadcastChannelKey,
     ) ?? defaultChannel;
@@ -1154,6 +1163,7 @@ export default function CampaignManager() {
         type: "Broadcast",
         messageType: composerScheduleMode === "now" ? "Immediate" : "Scheduled",
         whatsAppTemplateName: selectedWhatsAppTemplate,
+        templateParams,
         audienceMatch: composerAudienceMatch,
         pauseIfMarketing: composerPauseIfMarketing,
         tagFailed: composerTagFailed || null,
@@ -1199,9 +1209,18 @@ export default function CampaignManager() {
     setNewBroadcastChannelKey(channelKey);
     // Template
     setSelectedWhatsAppTemplate(campaign.whatsAppTemplateName || null);
-    setSelectedTemplate(
-      whatsappTemplates.find((t: any) => t.name === campaign.whatsAppTemplateName) || null,
-    );
+    const editTpl =
+      whatsappTemplates.find((t: any) => t.name === campaign.whatsAppTemplateName) || null;
+    setSelectedTemplate(editTpl);
+    // Restore saved placeholder values (ordered array in metadata.templateParams).
+    const savedParams: any[] = Array.isArray(campaign.metadata?.templateParams)
+      ? campaign.metadata.templateParams
+      : [];
+    const initVars: Record<string, string> = {};
+    (editTpl?.variables ?? []).forEach((_: any, i: number) => {
+      initVars[String(i + 1)] = savedParams[i] != null ? String(savedParams[i]) : "";
+    });
+    setComposerVariables(initVars);
     // Schedule
     if (campaign.scheduledAt) {
       setComposerScheduleMode("later");
@@ -1254,10 +1273,17 @@ export default function CampaignManager() {
     // this early-return just stops the network call. Once the user
     // fills the missing pieces the errors clear automatically since
     // they read the current values live.
+    const templateVarsMissing =
+      !!selectedTemplate &&
+      (selectedTemplate.variables?.length ?? 0) > 0 &&
+      selectedTemplate.variables.some(
+        (_: any, i: number) => !(composerVariables[String(i + 1)] ?? "").trim(),
+      );
     const anyMissing =
       !campaignName.trim() ||
       !newBroadcastChannelKey ||
       !selectedWhatsAppTemplate ||
+      templateVarsMissing ||
       composerConditions.length === 0 ||
       (composerScheduleMode === "later" && !composerScheduleDate);
     if (anyMissing) {
@@ -1721,7 +1747,13 @@ export default function CampaignManager() {
                   value={selectedWhatsAppTemplate || ""}
                   onValueChange={(value) => {
                     setSelectedWhatsAppTemplate(value);
-                    setSelectedTemplate(whatsappTemplates.find(t => t.name === value) || null);
+                    const tpl = whatsappTemplates.find(t => t.name === value) || null;
+                    setSelectedTemplate(tpl);
+                    // Reset placeholder values for the newly picked template.
+                    const count = tpl?.variables?.length ?? 0;
+                    const next: Record<string, string> = {};
+                    for (let i = 1; i <= count; i++) next[String(i)] = "";
+                    setComposerVariables(next);
                   }}
                 >
                   <SelectTrigger className={cn(
@@ -1745,6 +1777,47 @@ export default function CampaignManager() {
                   <p className="text-[11px] text-rose-500 italic">Please select a template</p>
                 )}
               </div>
+
+              {/* Template variables ({{1}}, {{2}}…) — static values, same for every recipient */}
+              {selectedTemplate && (selectedTemplate.variables?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
+                    Template variables
+                  </label>
+                  <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Fill each placeholder — the same value is sent to every recipient.
+                  </p>
+                  {selectedTemplate.variables.map((_: any, i: number) => {
+                    const key = String(i + 1);
+                    const missing = composerSendAttempted && !(composerVariables[key] ?? "").trim();
+                    return (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="h-9 min-w-[3rem] px-2 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-500 shrink-0">
+                          {`{{${key}}}`}
+                        </span>
+                        <Input
+                          value={composerVariables[key] ?? ""}
+                          onChange={(e) =>
+                            setComposerVariables((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          placeholder={`Value for {{${key}}}`}
+                          className={cn(
+                            "h-9 rounded-lg text-[12px]",
+                            missing
+                              ? "border-rose-300 dark:border-rose-800 focus-visible:ring-rose-300"
+                              : "border-slate-200 dark:border-slate-800",
+                          )}
+                        />
+                      </div>
+                    );
+                  })}
+                  {composerSendAttempted &&
+                    selectedTemplate.variables.some(
+                      (_: any, i: number) => !(composerVariables[String(i + 1)] ?? "").trim(),
+                    ) && <p className="text-[11px] text-rose-500 italic">Fill every template variable</p>}
+                </div>
+              )}
+
               {/* Pause if Marketing */}
               <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-start gap-3">
                 <span className="h-7 w-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 shrink-0">
@@ -1915,7 +1988,7 @@ export default function CampaignManager() {
                     footerText={selectedTemplate.footer || ""}
                     selectedMediaFile={null}
                     templateButtons={selectedTemplate.buttons || []}
-                    variableSamples={selectedTemplate.variableSamples || {}}
+                    variableSamples={composerVariables}
                   />
                 ) : (
                   <p className="text-[12px] text-slate-400">No template selected</p>

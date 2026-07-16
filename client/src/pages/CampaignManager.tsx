@@ -317,7 +317,26 @@ export default function CampaignManager() {
       return res.json();
     },
   });
-  const channels: any[] = channelsResponse?.channels ?? [];
+
+  // Only *onboarded* channels belong in the picker. A wa_account starts life as
+  // PENDING and only flips to status 'ACTIVE' once the WhatsApp microservice
+  // confirms registration, so we hide any account that isn't ACTIVE (e.g.
+  // half-created accounts that were never fully onboarded).
+  const { data: waAccountsResponse } = useQuery<any>({
+    queryKey: ["/api/whatsapp/accounts"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/whatsapp/accounts");
+      return res.json();
+    },
+  });
+  const onboardedAccountIds = new Set<string>(
+    (waAccountsResponse?.wa ?? [])
+      .filter((a: any) => String(a.status).toUpperCase() === "ACTIVE")
+      .map((a: any) => String(a.id)),
+  );
+  const channels: any[] = (channelsResponse?.channels ?? []).filter(
+    (c: any) => c.channel_type !== "whatsapp" || onboardedAccountIds.has(String(c.channelable_id)),
+  );
   const defaultChannel = channels[0] ?? null;
 
   // Workspace tags — drives the composer's "Tag failed contacts" dropdown.

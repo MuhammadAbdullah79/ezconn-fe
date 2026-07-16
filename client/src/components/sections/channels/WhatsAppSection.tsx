@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronLeft,
+  ChevronRight,
   MoreVertical,
   Trash2,
   Plus,
@@ -20,7 +21,6 @@ import {
   EyeOff,
   Copy as CopyIcon,
   BadgeCheck,
-  Info,
   KeyRound,
   ShieldAlert,
   ShieldCheck,
@@ -160,6 +160,27 @@ export default function WhatsAppSection() {
   });
   const channelsLimit: number = limitsData?.limit ?? 4;
   const hasReachedLimit: boolean = limitsData ? !limitsData.can_add : false;
+
+  // Approved-template count per WhatsApp account — powers the "N approved"
+  // line on each phone-number card. Templates come back as a flat list (each
+  // item carries wa_account_id + status); we group + count APPROVED client-side.
+  const { data: templatesData } = useQuery({
+    queryKey: ["/api/waba/templates"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/waba/templates");
+      return res.json();
+    },
+  });
+  const approvedTemplatesByAccount: Record<string, number> = useMemo(() => {
+    const list: any[] = Array.isArray(templatesData) ? templatesData : [];
+    const counts: Record<string, number> = {};
+    for (const t of list) {
+      if (String(t.status).toUpperCase() !== "APPROVED") continue;
+      const key = String(t.wa_account_id);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [templatesData]);
 
   // ─── Dialog state ────────────────────────────────────────────────
 
@@ -447,20 +468,6 @@ export default function WhatsAppSection() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {(view === "api_manage" || view === "coex_manage") && (
-                <button
-                  onClick={() => openEmbeddedSignup(view === "coex_manage" ? "aka" : "api")}
-                  disabled={isConnecting}
-                  className="h-10 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2 border-primary text-primary hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isConnecting ? (
-                    <span className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full" />
-                  ) : (
-                    <Plus size={12} />
-                  )}
-                  {isConnecting ? "Connecting…" : "Add new"}
-                </button>
-              )}
               {view === "api_manage" && (
                 <button
                   onClick={() => setShowManualConnectDialog(true)}
@@ -714,10 +721,9 @@ export default function WhatsAppSection() {
                       onResubscribe={() => resubscribeMutation.mutate(account.id)}
                       onRegisterNumber={(n: any) => setNumberToRegister(n)}
                       onOpenTemplates={() => setLocation(`/templates?wa_account_id=${account.id}`)}
-                      onAddNumber={() => {
-                        setSelectedAccount(account);
-                        setShowAddNumberDialog(true);
-                      }}
+                      coex={view === "coex_manage"}
+                      approvedTemplateCount={approvedTemplatesByAccount[String(account.id)] ?? 0}
+                      onAddNumber={() => openEmbeddedSignup(view === "coex_manage" ? "aka" : "api")}
                     />
                   ))}
                 </div>
@@ -1052,6 +1058,8 @@ function AccountCard(props: {
   onRegisterNumber: (n: any) => void;
   onOpenTemplates: () => void;
   onAddNumber: () => void;
+  coex: boolean;
+  approvedTemplateCount: number;
 }) {
   const { account, dark, text, sub, card, border, softBg, softBorder, outlineBtn } = props;
 
@@ -1097,6 +1105,11 @@ function AccountCard(props: {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className={cn("text-[13px] font-black truncate", text)}>{account.name}</p>
+              {props.coex && (
+                <Badge variant="outline" className="h-5 px-2 rounded-md border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
+                  Coex
+                </Badge>
+              )}
               <Badge variant="outline" className={cn("h-5 px-2 rounded-md text-[10px] font-semibold", accountBadgeTone)}>
                 {account.status}
               </Badge>
@@ -1132,8 +1145,14 @@ function AccountCard(props: {
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold opacity-60 flex-wrap">
-              <span className={sub}>WABA: {account.waba_id}</span>
+            <div className="flex items-center gap-2 mt-1 text-[10px] font-bold opacity-70 flex-wrap">
+              <span className={sub}>Business Manager</span>
+              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md border", dark ? "border-slate-700 text-slate-300" : "border-slate-200 text-slate-600")}>
+                BM · {account.waba_id}
+              </span>
+              <span className={sub}>
+                {numbers.length} number{numbers.length === 1 ? "" : "s"}
+              </span>
               {account.currency && <span className={sub}>• {account.currency}</span>}
               {/* Gap 9 — on-behalf-of business (partner-managed accounts) */}
               {onBehalfOf && (
@@ -1145,77 +1164,49 @@ function AccountCard(props: {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <button onClick={props.onOpenTemplates} className={outlineBtn}>
-            Templates
-          </button>
-
-          {account.capi ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={props.onSetupCapi}
-                    className="h-11 px-5 rounded-xl bg-primary/10 text-primary border border-primary/20 text-[11px] font-semibold flex items-center gap-2"
-                  >
-                    <Sparkles size={12} /> CAPI ✓
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Dataset: {account.capi.dataset_id}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <button onClick={props.onSetupCapi} className={outlineBtn}>
-              <Sparkles size={12} /> Setup CAPI
-            </button>
-          )}
-
-          <a
-            href="https://business.facebook.com/settings/whatsapp-business-accounts/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={outlineBtn}
-          >
-            Access BM <ExternalLink size={12} />
-          </a>
           <a
             href="https://developers.facebook.com/docs/whatsapp/pricing/"
             target="_blank"
             rel="noopener noreferrer"
-            className={cn("text-[11px] font-bold underline-offset-2 hover:underline", dark ? "text-slate-400 hover:text-white" : "text-slate-600 hover:text-slate-900")}
+            className={outlineBtn}
           >
-            Pricing
+            <Gauge size={12} /> Pricing <ExternalLink size={12} />
+          </a>
+          <a
+            href="https://business.facebook.com/settings/whatsapp-business-accounts/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-11 px-5 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 hover:bg-primary/90 transition-all"
+          >
+            <ExternalLink size={12} /> Access BM
           </a>
 
-          {/* Gap 7 — re-check Meta review/verification state */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={props.onVerifyAccount} disabled={props.isVerifying} className={cn(outlineBtn, "disabled:opacity-50 disabled:cursor-not-allowed")}>
-                  <RefreshCcw size={12} className={props.isVerifying ? "animate-spin" : ""} /> Verify
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Re-check account status from Meta</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          {/* Gap 6 — manual webhook re-subscribe (cron also runs every 6h) */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={props.onResubscribe} className={outlineBtn}>
-                  <Repeat size={12} /> Re-subscribe
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Re-establish the WhatsApp webhook subscription</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <button
-            onClick={props.onDeleteAccount}
-            className={cn("h-11 px-5 rounded-xl border text-[11px] font-semibold transition-all flex items-center gap-2", "border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500")}
-          >
-            <Trash2 size={12} /> Delete
-          </button>
+          {/* Secondary actions collapsed into a ⋮ menu (mirrors replyagent header) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div role="button" tabIndex={0} className={cn("w-11 h-11 rounded-xl border flex items-center justify-center transition-colors cursor-pointer", dark ? "border-slate-800 hover:bg-slate-800 text-slate-400" : "border-slate-200 hover:bg-slate-100 text-slate-500")}>
+                <MoreVertical size={16} />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[210px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
+              <DropdownMenuItem onClick={props.onOpenTemplates} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
+                <CopyIcon size={12} /> Templates
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={props.onSetupCapi} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
+                <Sparkles size={12} /> {account.capi ? "Conversions API ✓" : "Setup Conversions API"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={props.onVerifyAccount} disabled={props.isVerifying} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
+                <RefreshCcw size={12} className={props.isVerifying ? "animate-spin" : ""} /> Verify
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={props.onResubscribe} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
+                <Repeat size={12} /> Re-subscribe
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={props.onDeleteAccount} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500">
+                <Trash2 size={12} /> Delete account
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -1245,13 +1236,11 @@ function AccountCard(props: {
       )}
 
       {/* Phone Numbers */}
-      <div className="p-5 space-y-3">
-        <h4 className={cn("text-[11px] font-semibold ml-1", sub)}>Phone numbers</h4>
-        {(account.phone_numbers ?? []).length === 0 ? (
-          <p className={cn("text-[12px] py-4 text-center", sub)}>No phone numbers attached to this account yet.</p>
-        ) : (
-          (account.phone_numbers ?? []).map((number: any) => (
-            <PhoneNumberRow
+      <div className="p-5">
+        <h4 className={cn("text-[11px] font-semibold ml-1 mb-3", sub)}>Phone numbers</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {(account.phone_numbers ?? []).map((number: any) => (
+            <PhoneNumberCard
               key={number.id}
               number={number}
               dark={dark}
@@ -1259,238 +1248,178 @@ function AccountCard(props: {
               sub={sub}
               card={card}
               border={border}
+              approvedTemplateCount={props.approvedTemplateCount}
               onDelete={() => props.onDeleteNumber(number)}
               onReconnect={() => props.onReconnect(number)}
               onDefaultReply={() => props.onDefaultReply(number)}
               onToggleFeeder={() => props.onToggleFeeder(number)}
               onRegister={() => props.onRegisterNumber(number)}
               onTemplates={props.onOpenTemplates}
+              onSetupCapi={props.onSetupCapi}
             />
-          ))
-        )}
+          ))}
+
+          {/* Dashed "add" card — launches the same onboarding flow as "Add new".
+              Rendered as a div (not <button>) so the global `.settings-pane
+              button:hover` primary-fill rule can't turn it blue on hover. */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={props.onAddNumber}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                props.onAddNumber();
+              }
+            }}
+            className={cn(
+              "h-full min-h-[180px] rounded-[1rem] border-2 border-dashed flex flex-col items-center justify-center gap-2 text-center cursor-pointer transition-colors",
+              dark ? "border-slate-800 bg-slate-900/20 hover:bg-slate-900/40" : "border-slate-200 bg-slate-50 hover:bg-slate-100",
+            )}
+          >
+            <div className={cn("w-10 h-10 rounded-full flex items-center justify-center", dark ? "bg-slate-800 text-slate-400" : "bg-slate-100 text-slate-500")}>
+              <Plus size={18} />
+            </div>
+            <span className={cn("text-[12px] font-bold", text)}>Add phone number</span>
+            <span className={cn("text-[10px] font-medium opacity-60 max-w-[200px]", sub)}>
+              Verify another number in this Business Manager.
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function PhoneNumberRow(props: {
+/**
+ * Neutral clickable rendered as a <div> (not <button>) so it opts out of the
+ * global `.settings-pane button:hover { background: primary !important }` rule
+ * — that rule is !important + high-specificity and can't be beaten by a class,
+ * so any real <button> in the settings pane turns blue on hover.
+ */
+function NeutralButton({
+  onClick,
+  className,
+  children,
+}: {
+  onClick: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={className}
+    >
+      {children}
+    </div>
+  );
+}
+
+function PhoneNumberCard(props: {
   number: any;
   dark: boolean;
   text: string;
   sub: string;
   card: string;
   border: string;
+  approvedTemplateCount: number;
   onDelete: () => void;
   onReconnect: () => void;
   onDefaultReply: () => void;
   onToggleFeeder: () => void;
   onRegister: () => void;
   onTemplates: () => void;
+  onSetupCapi: () => void;
 }) {
-  const { number, dark, text, sub, card, border } = props;
+  const { number, dark, text, sub, card, border, approvedTemplateCount } = props;
+  const { toast } = useToast();
 
   const isActive = number.status === "ACTIVE";
-  const isBlocked = ["LOCKED", "FAILED"].includes(number.status);
-  const isDisconnected = number.status === "DISCONNECTED";
   const isPending = number.status === "PENDING";
+  const isDisconnected = number.status === "DISCONNECTED";
 
-  // ── Gap 5: messaging-limit tier + throughput level (from Meta) ──
-  const limitTier: string | null = number.current_limit
-    ? String(number.current_limit).replace(/^TIER_/, "").replace(/_/g, " ")
-    : null;
-  const throughputLevel: string | null = (() => {
-    if (!number.throughput) return null;
-    try {
-      const t = typeof number.throughput === "string" ? JSON.parse(number.throughput) : number.throughput;
-      return t?.level ?? null;
-    } catch {
-      return null;
-    }
-  })();
+  // Connection state (left dot) — mirrors replyagent's "• Connected" label.
+  const connectedTone = isActive ? "bg-emerald-500" : isPending ? "bg-amber-500" : "bg-rose-500";
+  const connectedLabel = isActive ? "Connected" : isPending ? "Pending" : isDisconnected ? "Disconnected" : "Blocked";
 
-  let statusBadge = (
-    <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-      Active
-    </span>
+  // Meta quality_rating: GREEN = high, YELLOW = medium, RED = low.
+  const quality = String(number.quality_rating ?? "").toUpperCase();
+  const qualityLabel = quality === "GREEN" ? "High quality" : quality === "YELLOW" ? "Medium quality" : quality === "RED" ? "Low quality" : null;
+  const qualityTone = quality === "GREEN" ? "bg-emerald-500" : quality === "YELLOW" ? "bg-amber-500" : quality === "RED" ? "bg-rose-500" : "bg-slate-400";
+
+  const hasAutoReply = !!number.auto_reply_automation_id;
+  const rowBorder = dark ? "border-slate-800" : "border-slate-100";
+  const shadedRow = dark ? "bg-slate-900/40 border-slate-800" : "bg-slate-50 border-slate-100";
+  const manageBtn = cn(
+    "h-8 px-3 rounded-lg border text-[11px] font-semibold flex items-center gap-1 shrink-0 transition-all",
+    dark ? "border-slate-800 hover:bg-slate-800 text-slate-300" : "border-slate-200 hover:bg-slate-100 text-slate-600",
   );
-  if (isPending) {
-    statusBadge = (
-      <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-        Pending
-      </span>
-    );
-  } else if (isBlocked) {
-    const blockedLabel = number.error_code === "PAYMENT_FAILED" ? "Payment failed" : "Blocked";
-    statusBadge = (
-      <a
-        href="https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="px-2 py-1 rounded-md text-[11px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
-      >
-        {blockedLabel}
-        {number.error_code ? ` (${number.error_code})` : ""}
-      </a>
-    );
-  } else if (isDisconnected) {
-    statusBadge = (
-      <span className="px-2 py-1 rounded-md text-[11px] font-semibold bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
-        Disconnected
-      </span>
-    );
-  }
+
+  const copyNumber = () => {
+    try {
+      navigator.clipboard?.writeText(number.display_phone_number ?? "");
+      toast({ title: "Copied", description: number.display_phone_number });
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  };
 
   return (
-    <div className={cn("p-4 rounded-[1rem] border flex items-center justify-between gap-4 flex-wrap", card, border)}>
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="relative shrink-0">
-          <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-            <Phone size={16} />
+    <div className={cn("rounded-[1rem] border overflow-hidden", card, border, isActive ? "ring-1 ring-emerald-500/30" : "")}>
+      {/* Header — icon, name, status dots, ⋮ menu */}
+      <div className="p-3 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+            <img src="/images/automations/whatsapp.svg" alt="WA" className="w-4 h-4" />
           </div>
-          <div
-            className={cn("absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2", isActive ? "bg-emerald-500" : isPending ? "bg-amber-500" : "bg-rose-500")}
-            style={{ borderColor: dark ? "#0f1829" : "white" }}
-          />
-        </div>
-        <div className="min-w-0">
-          <p className={cn("text-[13px] font-black", text)}>{number.display_phone_number}</p>
-          <div className="flex items-center gap-1 mt-0.5">
-            {["AVAILABLE_WITHOUT_REVIEW", "APPROVED"].includes(number.name_status) ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-emerald-500">
-                      <BadgeCheck size={11} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>Display name approved by Meta</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className={cn("opacity-50", sub)}>
-                      <Info size={11} />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>Display name pending Meta approval</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            <p className={cn("text-[10px] font-medium opacity-60 truncate", sub)}>{number.verified_name}</p>
-          </div>
-          {/* Gap 5 — messaging limit tier + throughput level */}
-          {(limitTier || throughputLevel) && (
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              {limitTier && (
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <p className={cn("text-[13px] font-black truncate", text)}>{number.verified_name || number.display_phone_number}</p>
+              {["AVAILABLE_WITHOUT_REVIEW", "APPROVED"].includes(number.name_status) && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border", dark ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500")}>
-                        <Gauge size={9} /> {limitTier}/24h
-                      </span>
+                      <span className="text-emerald-500 shrink-0"><BadgeCheck size={11} /></span>
                     </TooltipTrigger>
-                    <TooltipContent>Messaging limit tier — unique customers you can message per 24h</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {throughputLevel && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border", dark ? "border-slate-700 text-slate-400" : "border-slate-200 text-slate-500")}>
-                        <Activity size={9} /> {throughputLevel}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>Throughput level — sending rate this number supports</TooltipContent>
+                    <TooltipContent>Display name approved by Meta</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               )}
             </div>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 shrink-0">
-        {statusBadge}
-
-        {!isActive && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={props.onReconnect} className={cn("w-9 h-9 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-slate-800 text-slate-400 hover:text-primary" : "hover:bg-slate-100 text-slate-500 hover:text-primary")}>
-                  <RotateCw size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh status</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        {!isActive && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button onClick={props.onRegister} className={cn("w-9 h-9 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-slate-800 text-slate-400 hover:text-emerald-500" : "hover:bg-slate-100 text-slate-500 hover:text-emerald-500")}>
-                  <KeyRound size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>Register on Cloud API with a 2-step PIN</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        {isActive && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={props.onDefaultReply}
-                  className={cn(
-                    "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
-                    number.auto_reply_automation_id
-                      ? "bg-emerald-500/10 text-emerald-500"
-                      : dark
-                        ? "hover:bg-slate-800 text-slate-400"
-                        : "hover:bg-slate-100 text-slate-500",
-                  )}
-                >
-                  <ReplyAll size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>{number.auto_reply_automation_id ? "Auto-reply configured" : "Set auto-reply"}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        <div className="flex items-center gap-2">
-          <span className={cn("text-[10px] font-semibold hidden sm:inline", sub)}>AI Feeder</span>
-          <Switch
-            checked={!!number.allow_in_feeder}
-            onCheckedChange={() => props.onToggleFeeder()}
-            className="data-[state=checked]:bg-emerald-500"
-          />
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold", sub)}>
+                <span className={cn("w-1.5 h-1.5 rounded-full", connectedTone)} /> {connectedLabel}
+              </span>
+              {qualityLabel && (
+                <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold", sub)}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full", qualityTone)} /> {qualityLabel}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-all", dark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500")}>
+            <div role="button" tabIndex={0} className={cn("w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 cursor-pointer", dark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500")}>
               <MoreVertical size={14} />
-            </button>
+            </div>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[180px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
-            <DropdownMenuItem
-              onClick={props.onDefaultReply}
-              className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
-            >
+          <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[190px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
+            <DropdownMenuItem onClick={props.onDefaultReply} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
               <ReplyAll size={12} /> Default reply
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={props.onTemplates}
-              className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
-            >
-              <CopyIcon size={12} /> Manage Templates
+            <DropdownMenuItem onClick={props.onTemplates} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
+              <CopyIcon size={12} /> Manage templates
             </DropdownMenuItem>
             <DropdownMenuItem onClick={props.onReconnect} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
               <RotateCw size={12} /> Refresh status
@@ -1499,14 +1428,73 @@ function PhoneNumberRow(props: {
               <KeyRound size={12} /> Register / 2-step PIN
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={props.onDelete}
-              className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500"
-            >
-              <Trash2 size={12} /> Delete number
+            <DropdownMenuItem onClick={props.onDelete} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500">
+              <Trash2 size={12} /> Delete phone number
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+
+      {/* Phone number + copy */}
+      <div className="px-3 pb-2 -mt-1">
+        <p className={cn("text-[9px] font-bold uppercase tracking-wide opacity-50", sub)}>Phone number</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className={cn("text-[13px] font-black", text)}>{number.display_phone_number}</p>
+          <NeutralButton onClick={copyNumber} className={cn("w-6 h-6 rounded-md flex items-center justify-center cursor-pointer transition-colors", dark ? "hover:bg-slate-800 text-slate-400" : "hover:bg-slate-100 text-slate-500")}>
+            <CopyIcon size={12} />
+          </NeutralButton>
+        </div>
+      </div>
+
+      {/* Auto Reply */}
+      <div className={cn("px-3 py-2 border-t flex items-center justify-between gap-3", rowBorder)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <ReplyAll size={15} className="text-emerald-500 shrink-0" />
+          <div className="min-w-0">
+            <p className={cn("text-[12px] font-bold", text)}>Auto Reply</p>
+            <p className={cn("text-[10px] font-medium opacity-60", sub)}>{hasAutoReply ? "Configured" : "Not configured"}</p>
+          </div>
+        </div>
+        <NeutralButton onClick={props.onDefaultReply} className={manageBtn}>
+          Set up <ChevronRight size={12} />
+        </NeutralButton>
+      </div>
+
+      {/* AI item (feeder) */}
+      <div className={cn("px-3 py-2 border-t flex items-center justify-between gap-3", rowBorder)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <Bot size={15} className={cn("shrink-0", number.allow_in_feeder ? "text-emerald-500" : "opacity-50")} />
+          <div className="min-w-0">
+            <p className={cn("text-[12px] font-bold", text)}>AI item</p>
+            <p className={cn("text-[10px] font-medium opacity-60", sub)}>{number.allow_in_feeder ? "Enabled" : "Disabled"}</p>
+          </div>
+        </div>
+        <Switch checked={!!number.allow_in_feeder} onCheckedChange={() => props.onToggleFeeder()} className="data-[state=checked]:bg-emerald-500 shrink-0" />
+      </div>
+
+      {/* WhatsApp Templates */}
+      <div className={cn("px-3 py-2 border-t flex items-center justify-between gap-3", shadedRow)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <CopyIcon size={15} className="text-primary shrink-0" />
+          <div className="min-w-0">
+            <p className={cn("text-[11px] font-bold uppercase tracking-wide", text)}>WhatsApp Templates</p>
+            <p className={cn("text-[10px] font-medium opacity-60", sub)}>{approvedTemplateCount} approved</p>
+          </div>
+        </div>
+        <NeutralButton onClick={props.onTemplates} className={manageBtn}>
+          Manage <ChevronRight size={12} />
+        </NeutralButton>
+      </div>
+
+      {/* Conversions API */}
+      <div className={cn("px-3 py-2 border-t flex items-center justify-between gap-3", shadedRow)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <Sparkles size={15} className="text-primary shrink-0" />
+          <p className={cn("text-[11px] font-bold uppercase tracking-wide truncate", text)}>Conversions API</p>
+        </div>
+        <NeutralButton onClick={props.onSetupCapi} className={manageBtn}>
+          Manage <ChevronRight size={12} />
+        </NeutralButton>
       </div>
     </div>
   );

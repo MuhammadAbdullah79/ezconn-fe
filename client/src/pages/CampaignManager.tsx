@@ -1175,11 +1175,29 @@ export default function CampaignManager() {
     value: string;
     valueLabel?: string;
   }): { module: string; key: string; filter: string; value: any } | null => {
-    // The backend spells the "contains" operator as `contain`.
-    const filter = c.operator === "contains" ? "contain" : c.operator;
-    if (c.fieldId === "first_name" || c.fieldId === "last_name" || c.fieldId === "full_name") {
-      if (filter !== "is" && filter !== "contain") return null;
+    const filter = c.operator;
+    // Contact columns — the field id doubles as the column name.
+    if (
+      c.fieldId === "first_name" ||
+      c.fieldId === "last_name" ||
+      c.fieldId === "full_name" ||
+      c.fieldId === "title" ||
+      c.fieldId === "source"
+    ) {
       return { module: "contact", key: c.fieldId, filter, value: c.value };
+    }
+    if (c.fieldId === "contact_id") {
+      return { module: "contact", key: "id", filter, value: c.value };
+    }
+    if (c.fieldId === "created_on") {
+      return { module: "contact", key: "created_at", filter, value: c.value };
+    }
+    // Numbers live on contact_mobiles.
+    if (c.fieldId === "phone" || c.fieldId === "whatsapp_number" || c.fieldId === "phone_country_code") {
+      return { module: "mobile_number", key: c.fieldId, filter, value: c.value };
+    }
+    if (c.fieldId === "email") {
+      return { module: "email", key: "email", filter, value: c.value };
     }
     if (c.fieldId === "tag") {
       return {
@@ -1194,6 +1212,7 @@ export default function CampaignManager() {
       if (!cf?.slug) return null;
       return { module: "custom_field", key: cf.slug, filter, value: c.value };
     }
+    // Opportunity + per-channel attributes have no backend module yet.
     return null;
   };
 

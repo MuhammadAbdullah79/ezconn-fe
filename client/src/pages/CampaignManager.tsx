@@ -63,6 +63,20 @@ interface SortEntry {
   direction: "asc" | "desc";
 }
 
+// Contact-field tokens that can be dropped into a template variable value.
+// The backend swaps them for each recipient's own data at send time, so a
+// value like "Hi [CONTACT_FIRST_NAME]" personalises per contact. Mirrors
+// replyagent's [CONTACT_*] placeholders — keep in sync with the resolver in
+// agentawk-core's broadcast-processor.service.ts.
+const CONTACT_TOKENS: Array<{ token: string; label: string }> = [
+  { token: "[CONTACT_FIRST_NAME]", label: "First name" },
+  { token: "[CONTACT_LAST_NAME]", label: "Last name" },
+  { token: "[CONTACT_FULL_NAME]", label: "Full name" },
+  { token: "[CONTACT_TITLE]", label: "Title" },
+  { token: "[CREATED_AT]", label: "Created on" },
+  { token: "[CURRENT_DATETIME]", label: "Current date & time" },
+];
+
 // True when `date` falls inside the rolling window identified by `token`.
 // Tokens are kept short and human-readable so the dropdown stays compact —
 // matches replyagent's broadcast list page quick filters.
@@ -1785,18 +1799,20 @@ export default function CampaignManager() {
                     Template variables
                   </label>
                   <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-snug">
-                    Fill each placeholder — the same value is sent to every recipient.
+                    Type a fixed value, or insert a contact field to personalise it per recipient.
                   </p>
                   {selectedTemplate.variables.map((_: any, i: number) => {
                     const key = String(i + 1);
-                    const missing = composerSendAttempted && !(composerVariables[key] ?? "").trim();
+                    const value = composerVariables[key] ?? "";
+                    const missing = composerSendAttempted && !value.trim();
+                    const personalised = /\[[A-Z_]+\]/.test(value);
                     return (
                       <div key={key} className="flex items-center gap-2">
                         <span className="h-9 min-w-[3rem] px-2 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-500 shrink-0">
                           {`{{${key}}}`}
                         </span>
                         <Input
-                          value={composerVariables[key] ?? ""}
+                          value={value}
                           onChange={(e) =>
                             setComposerVariables((prev) => ({ ...prev, [key]: e.target.value }))
                           }
@@ -1805,12 +1821,48 @@ export default function CampaignManager() {
                             "h-9 rounded-lg text-[12px]",
                             missing
                               ? "border-rose-300 dark:border-rose-800 focus-visible:ring-rose-300"
-                              : "border-slate-200 dark:border-slate-800",
+                              : personalised
+                                ? "border-emerald-300 dark:border-emerald-800"
+                                : "border-slate-200 dark:border-slate-800",
                           )}
                         />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              title="Insert a contact field"
+                              className="h-9 w-9 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-primary shrink-0"
+                            >
+                              <User className="h-3.5 w-3.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-xl p-1.5 min-w-[190px]">
+                            {CONTACT_TOKENS.map((t) => (
+                              <DropdownMenuItem
+                                key={t.token}
+                                className="rounded-lg py-2 cursor-pointer font-medium text-[11px]"
+                                onClick={() =>
+                                  setComposerVariables((prev) => ({
+                                    ...prev,
+                                    [key]: `${prev[key] ?? ""}${t.token}`,
+                                  }))
+                                }
+                              >
+                                {t.label}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     );
                   })}
+                  {selectedTemplate.variables.some((_: any, i: number) =>
+                    /\[[A-Z_]+\]/.test(composerVariables[String(i + 1)] ?? ""),
+                  ) && (
+                    <p className="text-[10.5px] text-emerald-600 dark:text-emerald-400 leading-snug">
+                      Contact fields are replaced with each recipient's own data when sending.
+                    </p>
+                  )}
                   {composerSendAttempted &&
                     selectedTemplate.variables.some(
                       (_: any, i: number) => !(composerVariables[String(i + 1)] ?? "").trim(),

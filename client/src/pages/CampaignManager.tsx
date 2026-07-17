@@ -384,12 +384,17 @@ export default function CampaignManager() {
       return res.json();
     },
   });
-  const workspaceCustomFields: Array<{ id: string; name: string }> = useMemo(() => {
+  const workspaceCustomFields: Array<{ id: string; name: string; slug: string }> = useMemo(() => {
     const raw = customFieldsResponse?.fields ?? customFieldsResponse?.data ?? customFieldsResponse ?? [];
     if (!Array.isArray(raw)) return [];
     return raw
       .filter((f: any) => f?.id != null)
-      .map((f: any) => ({ id: String(f.id), name: String(f.label ?? f.name ?? `#${f.id}`) }));
+      .map((f: any) => ({
+        id: String(f.id),
+        name: String(f.label ?? f.name ?? `#${f.id}`),
+        // The backend audience filter looks custom fields up by slug.
+        slug: String(f.slug ?? ""),
+      }));
   }, [customFieldsResponse]);
 
   // Workspace agents/users — powers the Agent filter dropdown above the
@@ -1147,6 +1152,44 @@ export default function CampaignManager() {
   // off delivery; "now" transitions the newly-created row into pending
   // via the existing sendBroadcast endpoint so the cron sweep picks it
   // up within the next minute.
+  /**
+   * Translate a composer condition row into the shape the backend audience
+   * filter understands: { module, key, filter, value }. Returns null when the
+   * backend has no module for that field yet — callers must then refuse to
+   * send rather than drop it, because a dropped condition silently WIDENS the
+   * audience (an empty item list means "everyone" server-side).
+   */
+  const toBackendFilter = (c: {
+    fieldId: string;
+    operator: string;
+    value: string;
+    valueLabel?: string;
+  }): { module: string; key: string; filter: string; value: any } | null => {
+    // The backend spells the "contains" operator as `contain`.
+    const filter = c.operator === "contains" ? "contain" : c.operator;
+    if (c.fieldId === "first_name" || c.fieldId === "last_name" || c.fieldId === "full_name") {
+      if (filter !== "is" && filter !== "contain") return null;
+      return { module: "contact", key: c.fieldId, filter, value: c.value };
+    }
+    if (c.fieldId === "tag") {
+      return {
+        module: "tag",
+        key: "tag",
+        filter,
+        value: { id: c.value, name: c.valueLabel ?? c.value },
+      };
+    }
+    if (c.fieldId.startsWith("cf_")) {
+      const cf = workspaceCustomFields.find((f) => `cf_${f.id}` === c.fieldId);
+      if (!cf?.slug) return null;
+      return { module: "custom_field", key: cf.slug, filter, value: c.value };
+    }
+    return null;
+  };
+
+  // Conditions the backend can't translate — send is blocked while any exist.
+  const unsupportedConditions = composerConditions.filter((c) => toBackendFilter(c) === null);
+
   const buildComposerPayload = (uiStatus: "draft" | "scheduled") => {
     const templateRow = whatsappTemplates.find((t: any) => t.name === selectedWhatsAppTemplate);
     const wa_template_id = templateRow?.backend_id ?? templateRow?.id ?? null;
@@ -1173,11 +1216,21 @@ export default function CampaignManager() {
       wa_template_id,
       scheduled_at,
       status: uiStatus,
+      // The audience the user built. Without this the backend sees no filters
+      // and targets EVERY contact in the workspace.
+      filters: {
+        condition: composerAudienceMatch,
+        items: composerConditions
+          .map(toBackendFilter)
+          .filter((f): f is NonNullable<typeof f> => f !== null),
+      },
       metadata: {
         type: "Broadcast",
         messageType: composerScheduleMode === "now" ? "Immediate" : "Scheduled",
         whatsAppTemplateName: selectedWhatsAppTemplate,
         templateParams,
+        // Kept so the composer can rebuild the rows when editing.
+        conditions: composerConditions,
         audienceMatch: composerAudienceMatch,
         pauseIfMarketing: composerPauseIfMarketing,
         tagFailed: composerTagFailed || null,
@@ -1305,11 +1358,30 @@ export default function CampaignManager() {
       toast({ title: "Please complete the highlighted fields", variant: "destructive" });
       return;
     }
+    // Refuse instead of silently dropping: an untranslatable condition would be
+    // stripped from the payload, and a broadcast with no filters goes to every
+    // contact in the workspace.
+    if (unsupportedConditions.length > 0) {
+      setComposerSendAttempted(true);
+      toast({
+        title: "Unsupported audience condition",
+        description: `${unsupportedConditions
+          .map((c) => c.fieldLabel)
+          .join(", ")} can't be used to target an audience yet. Remove it, or filter by First / Last / Full name, Tag, or a custom field.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setComposerSendAttempted(false);
     // Create OR update → then transition to sending if user picked "Send
     // now"; if they scheduled a future date the row stays "pending" and
     // the cron picks it up automatically.
-    const payload = buildComposerPayload("scheduled");
+    //
+    // "Send now" must create a DRAFT: sendBroadcast only accepts draft/failed,
+    // and creating with "scheduled" lands the row on `pending`, which made the
+    // follow-up send call fail with "Only draft or failed broadcasts can be
+    // sent (current: pending)" even though the cron then sent it anyway.
+    const payload = buildComposerPayload(composerScheduleMode === "now" ? "draft" : "scheduled");
     const onSuccess = (data: any) => {
       const id = data?.id ?? data?.broadcast?.id ?? editingCampaignId;
       if (composerScheduleMode === "now" && id) {

@@ -1219,6 +1219,35 @@ export default function CampaignManager() {
   // Conditions the backend can't translate — send is blocked while any exist.
   const unsupportedConditions = composerConditions.filter((c) => toBackendFilter(c) === null);
 
+  // Real audience size, evaluated by the backend with the very same filter
+  // engine the sender uses — so the number shown is the number messaged.
+  // (It used to display `composerConditions.length`, i.e. how many conditions
+  // were picked, which is why the preview never matched what was sent.)
+  const audienceFilterPayload = useMemo(
+    () => ({
+      condition: composerAudienceMatch,
+      items: composerConditions
+        .map(toBackendFilter)
+        .filter((f): f is NonNullable<typeof f> => f !== null),
+    }),
+    [composerConditions, composerAudienceMatch, workspaceCustomFields],
+  );
+  const { data: audiencePreview, isFetching: audienceLoading } = useQuery<{ count: number }>({
+    queryKey: ["/api/broadcasts/audience/preview", JSON.stringify(audienceFilterPayload)],
+    queryFn: async () => {
+      const res = await apiRequest("POST", "/api/broadcasts/audience/preview", {
+        filters: audienceFilterPayload,
+      });
+      return res.json();
+    },
+    // Only meaningful once the composer is open with at least one usable
+    // condition; an empty item list would count the whole workspace.
+    enabled: composerOpen && audienceFilterPayload.items.length > 0,
+    staleTime: 15_000,
+  });
+  const audienceCount =
+    audienceFilterPayload.items.length > 0 ? (audiencePreview?.count ?? 0) : 0;
+
   const buildComposerPayload = (uiStatus: "draft" | "scheduled") => {
     const templateRow = whatsappTemplates.find((t: any) => t.name === selectedWhatsAppTemplate);
     const wa_template_id = templateRow?.backend_id ?? templateRow?.id ?? null;
@@ -1584,7 +1613,6 @@ export default function CampaignManager() {
     // Est. duration = time to deliver AUDIENCE messages given batch size
     // + inter-batch pause + per-message interval (using the midpoint of
     // the random range). Falls back to a dash while audience is 0.
-    const audienceCount = 0; // TODO: wire real audience computation
     const midInterval = (composerIntervalMin + composerIntervalMax) / 2;
     const secondsPerBatch = composerBatchSize * midInterval + composerBatchPause;
     const numBatches = audienceCount > 0 ? Math.ceil(audienceCount / composerBatchSize) : 0;
@@ -1829,10 +1857,16 @@ export default function CampaignManager() {
                   contact-count endpoint is wired in. */}
               <div className="relative rounded-xl border border-rose-200 dark:border-rose-900/40 bg-gradient-to-br from-rose-50/70 via-white to-fuchsia-50/60 dark:from-rose-950/20 dark:via-slate-900/40 dark:to-fuchsia-950/20 p-3 overflow-hidden">
                 <p className="text-[28px] font-bold leading-none tabular-nums bg-gradient-to-br from-rose-600 to-fuchsia-600 bg-clip-text text-transparent">
-                  {composerConditions.length}
+                  {audienceLoading ? "…" : audienceCount.toLocaleString()}
                 </p>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-1.5">Total audience</p>
-                <p className="text-[10.5px] text-slate-400 dark:text-slate-500">Will receive the message</p>
+                <p className="text-[10.5px] text-slate-400 dark:text-slate-500">
+                  {composerConditions.length === 0
+                    ? "Add a condition to target contacts"
+                    : unsupportedConditions.length > 0
+                      ? "This condition can't be used yet"
+                      : "Will receive the message"}
+                </p>
                 {composerSendAttempted && composerConditions.length === 0 && (
                   <p className="text-[10.5px] text-rose-500 italic mt-1.5">
                     There is no audience to send this broadcast to.

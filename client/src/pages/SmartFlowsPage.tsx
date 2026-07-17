@@ -15,7 +15,7 @@ import {
     ArrowDownWideNarrow,
     ArrowUpWideNarrow,
     User,
-    FolderTree,
+    FolderPlus,
     PlusCircle,
     Pencil,
     CircleArrowDown,
@@ -25,7 +25,8 @@ import {
     ChevronLeft,
     ChevronRight,
     ChevronsRight,
-    GitMerge
+    GitMerge,
+    Workflow
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -370,12 +371,40 @@ export default function SmartFlowsPage() {
         ...folders.map((f: any) => ({ id: f.id.toString(), name: f.name }))
     ];
 
-    const statusOptions = [
-        { id: "all", name: "All Statuses" },
-        { id: "active", name: "Published" },
-        { id: "unpublished", name: "Unpublished" },
-        { id: "draft", name: "Draft" }
+    // Status pills (All / Active / Drafts / Unpublished) with live counts.
+    // Counted off the folder+search+user filtered set — but NOT the status
+    // filter itself, so each pill keeps showing how many it would select.
+    const statusCounts = useMemo(() => {
+        let base = flows;
+        if (selectedFolders.length > 0 && !selectedFolders.includes("all")) {
+            base = base.filter((flow: any) => {
+                if (selectedFolders.includes("root") && !flow.folder_id) return true;
+                return selectedFolders.includes(flow.folder_id?.toString());
+            });
+        }
+        if (searchText) {
+            base = base.filter((flow: any) => flow.name.toLowerCase().includes(searchText.toLowerCase()));
+        }
+        if (selectedUsers.length > 0 && !selectedUsers.includes("all")) {
+            base = base.filter((flow: any) => flow.created_by && selectedUsers.includes(flow.created_by.id.toString()));
+        }
+        const by = (s: string) => base.filter((f: any) => f.status === s).length;
+        return { all: base.length, active: by("active"), draft: by("draft"), unpublished: by("unpublished") };
+    }, [flows, selectedFolders, searchText, selectedUsers]);
+
+    const statusPills: Array<{ id: string; label: string; count: number }> = [
+        { id: "all", label: "All", count: statusCounts.all },
+        { id: "active", label: "Active", count: statusCounts.active },
+        { id: "draft", label: "Drafts", count: statusCounts.draft },
+        { id: "unpublished", label: "Unpublished", count: statusCounts.unpublished },
     ];
+
+    // Folder name per flow, for the row badge.
+    const folderNameById = useMemo(() => {
+        const m = new Map<string, string>();
+        folders.forEach((f: any) => m.set(String(f.id), f.name));
+        return m;
+    }, [folders]);
 
     const totalPages = Math.ceil(filteredFlows.length / rowsPerPage);
     const paginatedFlows = filteredFlows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
@@ -420,22 +449,8 @@ export default function SmartFlowsPage() {
 
                 {/* Filters Section */}
                 <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-4 bg-white dark:bg-transparent">
-                    <div className="flex items-center gap-3 flex-1">
-                        {/* Search */}
-                        <div className="relative w-64 group">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors w-3.5 h-3.5" />
-                            <Input
-                                type="text"
-                                value={searchText}
-                                onChange={(e) => setSearchText(e.target.value)}
-                                placeholder="Search flows..."
-                                className="pl-9 h-9 text-[11px] font-medium w-full border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-slate-400 text-slate-800 dark:text-slate-200"
-                            />
-                        </div>
-
-                        <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1" />
-
-                        {/* Folder Dropdown — single-select, trigger shows chosen name */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {/* Folder Dropdown — leads the toolbar (replyagent parity) */}
                         <CustomDropdown
                             options={folderOptions}
                             selected={selectedFolders}
@@ -448,14 +463,58 @@ export default function SmartFlowsPage() {
 
                         {/* Create Folder Button */}
                         <button
-                            className="flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 hover:text-primary transition-all shadow-sm"
+                            className="flex items-center justify-center h-9 w-9 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 hover:text-emerald-600 hover:border-emerald-200 transition-all shadow-sm shrink-0"
                             onClick={() => setShowFolderModal(true)}
                             title="Create New Folder"
                         >
-                            <FolderTree size={16} />
+                            <FolderPlus size={16} />
                         </button>
 
                         <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1" />
+
+                        {/* Status pills with counts — replaces the status dropdown so
+                            the spread of flows is visible at a glance. */}
+                        <div className="flex items-center gap-1 rounded-xl bg-slate-100 dark:bg-slate-900/60 p-1">
+                            {statusPills.map((pill) => {
+                                const activePill = statusFilter.includes(pill.id);
+                                return (
+                                    <button
+                                        key={pill.id}
+                                        onClick={() => { setStatusFilter([pill.id]); setCurrentPage(1); }}
+                                        className={cn(
+                                            "flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold transition-all",
+                                            activePill
+                                                ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
+                                                : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200",
+                                        )}
+                                    >
+                                        {pill.label}
+                                        <span className={cn(
+                                            "px-1.5 py-0.5 rounded-md text-[9px] font-bold tabular-nums",
+                                            activePill
+                                                ? "bg-primary/10 text-primary"
+                                                : "bg-slate-200/70 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
+                                        )}>
+                                            {pill.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                        {/* Search */}
+                        <div className="relative w-56 group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors w-3.5 h-3.5" />
+                            <Input
+                                type="text"
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                placeholder="Search flows..."
+                                className="pl-9 h-9 text-[11px] font-medium w-full border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-slate-400 text-slate-800 dark:text-slate-200"
+                            />
+                        </div>
 
                         {/* Users Dropdown — single-select */}
                         <CustomDropdown
@@ -463,20 +522,9 @@ export default function SmartFlowsPage() {
                             selected={selectedUsers}
                             onChange={setSelectedUsers}
                             placeholder="All Users"
-                            width="160px"
+                            width="170px"
                             showSearch={true}
                             showSelectedOption={true}
-                        />
-
-                        {/* Status Filter — single-select */}
-                        <CustomDropdown
-                            options={statusOptions}
-                            selected={statusFilter}
-                            onChange={setStatusFilter}
-                            placeholder="All Statuses"
-                            width="150px"
-                            showSelectedOption={true}
-                            showSearch={false}
                         />
                     </div>
 
@@ -584,10 +632,13 @@ export default function SmartFlowsPage() {
                                         }}
                                     />
                                 </th>
-                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Name & Status</th>
-                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-center">Runs</th>
-                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-center">Created By</th>
-                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-center">Last Updated</th>
+                                {/* Flow takes every spare pixel so Runs / Created by /
+                                    Updated at collapse to their content and sit over on
+                                    the right, as in the reference. */}
+                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest w-full">Flow</th>
+                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-left whitespace-nowrap">Runs</th>
+                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-left whitespace-nowrap">Created By</th>
+                                <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-left whitespace-nowrap">Updated At</th>
                                 <th className="px-5 py-3 text-[10px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
                         </thead>
@@ -626,39 +677,54 @@ export default function SmartFlowsPage() {
                                             />
                                         </td>
                                         <td className="px-5 py-4">
-                                            <div className="flex flex-col gap-1.5">
-                                                <button
-                                                    onClick={() => handleOpenFlow(flow.id)}
-                                                    className="text-[13px] font-semibold text-slate-900 dark:text-white hover:text-primary transition-colors text-left tracking-tight"
-                                                >
-                                                    {flow.name}
-                                                </button>
-                                                <div className="flex items-center gap-2.5">
-                                                    <Badge className={cn(
-                                                        "px-2 py-0.5 h-4.5 text-[9px] font-semibold uppercase rounded-md shadow-none border-0",
-                                                        flow.status === "active" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400" :
-                                                        flow.status === "draft" ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400" :
-                                                        flow.status === "unpublished" ? "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400" :
-                                                        "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-400"
-                                                    )}>
-                                                        {flow.status}
-                                                    </Badge>
-                                                    <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">ID: {flow.id}</span>
+                                            <div className="flex items-center gap-3">
+                                                {/* Flow glyph — tinted by status, mirrors replyagent */}
+                                                <span className={cn(
+                                                    "h-9 w-9 rounded-xl flex items-center justify-center shrink-0",
+                                                    flow.status === "active" ? "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400" :
+                                                    flow.status === "unpublished" ? "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400" :
+                                                    "bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400/80"
+                                                )}>
+                                                    <Workflow size={16} strokeWidth={2} />
+                                                </span>
+                                                <div className="flex flex-col gap-1.5 min-w-0">
+                                                    <button
+                                                        onClick={() => handleOpenFlow(flow.id)}
+                                                        className="text-[13px] font-semibold text-slate-900 dark:text-white hover:text-primary transition-colors text-left tracking-tight truncate"
+                                                    >
+                                                        {flow.name}
+                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        {/* Status — dot + label, like the reference */}
+                                                        <span className={cn(
+                                                            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold border",
+                                                            flow.status === "active" ? "border-emerald-200 text-emerald-700 dark:border-emerald-500/30 dark:text-emerald-400" :
+                                                            flow.status === "unpublished" ? "border-amber-200 text-amber-700 dark:border-amber-500/30 dark:text-amber-400" :
+                                                            "border-amber-200 text-amber-700 dark:border-amber-500/30 dark:text-amber-400"
+                                                        )}>
+                                                            <span className={cn(
+                                                                "h-1.5 w-1.5 rounded-full",
+                                                                flow.status === "active" ? "bg-emerald-500" : "bg-amber-500"
+                                                            )} />
+                                                            {flow.status === "active" ? "Active" : flow.status === "unpublished" ? "Unpublished" : "Draft"}
+                                                        </span>
+                                                        {/* Folder badge */}
+                                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium border border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                                            <FolderOpen size={10} />
+                                                            {folderNameById.get(String(flow.folder_id)) ?? "No folder"}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4 text-center">
-                                            <span className="text-[12px] font-semibold text-slate-900 dark:text-white bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                                        <td className="px-5 py-4 whitespace-nowrap">
+                                            <span className="text-[12px] font-semibold text-slate-900 dark:text-white tabular-nums">
                                                 {flow.total_runs}
                                             </span>
                                         </td>
-                                        <td className="px-5 py-4 text-center">
-                                            <div className="flex justify-center" title={
-                                                flow.created_by
-                                                    ? `${flow.created_by.first_name || ''} ${flow.created_by.last_name || ''}`.trim() || flow.created_by.email || 'User'
-                                                    : 'Unknown'
-                                            }>
-                                                <div className="w-8 h-8 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center border border-primary/10 dark:border-primary/20 shadow-sm transition-transform group-hover:scale-105 text-[10px] font-bold text-primary uppercase tracking-tight">
+                                        <td className="px-5 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="w-7 h-7 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center border border-primary/10 dark:border-primary/20 shrink-0 text-[9px] font-bold text-primary uppercase">
                                                     {flow.created_by ? (
                                                         (() => {
                                                             const f = (flow.created_by.first_name || '').trim();
@@ -667,15 +733,28 @@ export default function SmartFlowsPage() {
                                                             return (flow.created_by.email || '?').charAt(0).toUpperCase();
                                                         })()
                                                     ) : (
-                                                        <User size={15} className="text-primary" />
+                                                        <User size={13} className="text-primary" />
                                                     )}
                                                 </div>
+                                                <span className="text-[11.5px] font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                    {flow.created_by
+                                                        ? `${flow.created_by.first_name || ''} ${flow.created_by.last_name || ''}`.trim() || flow.created_by.email || 'User'
+                                                        : 'Unknown'}
+                                                </span>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4 text-center">
-                                            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 tracking-tight">
-                                                {formatDateTime(flow.updated_at)}
-                                            </span>
+                                        <td className="px-5 py-4 whitespace-nowrap">
+                                            {/* Date on top, time beneath — reference layout */}
+                                            <div className="flex flex-col leading-tight">
+                                                <span className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
+                                                    {flow.updated_at ? new Date(flow.updated_at).toLocaleDateString("en-GB") : "—"}
+                                                </span>
+                                                <span className="text-[10px] font-medium text-slate-400 tabular-nums">
+                                                    {flow.updated_at
+                                                        ? new Date(flow.updated_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })
+                                                        : ""}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td className="px-5 py-4 text-right">
                                             <DropdownMenu>

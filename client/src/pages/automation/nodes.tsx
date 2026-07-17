@@ -193,7 +193,14 @@ function AddStepDropdown({
   const wrapperStyle: React.CSSProperties = style ?? { right: -5, bottom: -5 };
 
   return (
-    <div className="absolute z-10" style={wrapperStyle}>
+    // The 10×10 size must be pinned here, NOT left to the dot: once this
+    // output has a child the dot isn't rendered, and since the <Handle> is
+    // absolutely positioned the wrapper would collapse to 0×0. The handle
+    // (left:5, top:5) would then sit ~10px outside the card instead of on its
+    // corner, so every connected node's edge started away from it — the
+    // visible gap between a node and its wire. A fixed size also gives the
+    // branch handles' translateY(-50%) a real height to centre against.
+    <div className="absolute z-10 h-2.5 w-2.5" style={wrapperStyle}>
       {/* Invisible React Flow source handle sits exactly where the dot is —
           edges originate from the dot's centre, matching replyagent. This
           handle stays mounted whether or not a child edge exists, so that

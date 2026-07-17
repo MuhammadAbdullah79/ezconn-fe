@@ -558,7 +558,17 @@ export default function CampaignManager() {
 
     return (broadcastsData.broadcasts as any[]).map((b: any) => {
       const rawStatus = String(b.status ?? "draft").toLowerCase();
-      const uiStatus = statusToUi[rawStatus] ?? rawStatus;
+      // `pending` covers two very different things: waiting for a future
+      // send slot ("Scheduled") and handed to the sender right now, which
+      // the cron picks up within a minute ("Queued"). Showing "Scheduled"
+      // for a Send-now broadcast reads like it didn't send.
+      let uiStatus = statusToUi[rawStatus] ?? rawStatus;
+      if (rawStatus === "pending") {
+        const due = b.scheduled_at ?? b.scheduledAt ?? null;
+        const dueDate = due ? new Date(due) : null;
+        const isFuture = !!dueDate && !Number.isNaN(dueDate.getTime()) && dueDate.getTime() > Date.now();
+        uiStatus = isFuture ? "scheduled" : "queued";
+      }
       const metaType = b.metadata?.type ?? (b.channel_type === "whatsapp" ? "Broadcast" : "API Triggered");
       const metaMessageType =
         b.metadata?.messageType ?? b.metadata?.message_type ?? (b.scheduled_at ? "Scheduled" : "Immediate");
@@ -2452,7 +2462,9 @@ export default function CampaignManager() {
                         options={[
                             { id: "", name: "All" },
                             { id: "draft", name: "Draft" },
+                            { id: "queued", name: "Queued" },
                             { id: "scheduled", name: "Scheduled" },
+                            { id: "sending", name: "Sending" },
                             { id: "sent", name: "Sent" },
                             { id: "failed", name: "Failed" },
                             { id: "archived", name: "Archived" },
@@ -2734,6 +2746,7 @@ export default function CampaignManager() {
                                             "px-2 py-0.5 rounded-md text-[10px] font-semibold border shadow-sm capitalize",
                                             campaign.status === "delivered" || campaign.status === "sent" ? "bg-green-50 text-green-700 border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800/50" :
                                             campaign.status === "scheduled" ? "bg-yellow-50 text-yellow-700 border-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800/50" :
+                                            campaign.status === "queued" || campaign.status === "sending" ? "bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50" :
                                             campaign.status === "failed" ? "bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800/50" :
                                             "bg-slate-50 text-slate-600 border-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
                                         )}>

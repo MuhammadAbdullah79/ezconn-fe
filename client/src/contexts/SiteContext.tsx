@@ -17,7 +17,6 @@ interface SiteContextType {
 
 const SiteContext = createContext<SiteContextType | undefined>(undefined);
 
-const LIVE_URL = "https://ezconn-backend-396801134474.us-central1.run.app";
 export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [siteData, setSiteData] = useState<SiteData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +30,9 @@ export const SiteProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Try backend first, fall back to hostname detection
         try {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://ezconn-backend-396801134474.us-central1.run.app/api";
+          // Fallback only fires if VITE_API_BASE_URL is missing at build time.
+          // Points at the live API (Nginx server) — the old GCP Cloud Run URL is retired.
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://api.agentawk.com";
           const response = await fetch(`${API_BASE_URL}/ignite?hostname=${host}`);
           if (response.ok) {
             const data = await response.json();

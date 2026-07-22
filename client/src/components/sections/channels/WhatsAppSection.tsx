@@ -7,7 +7,6 @@ import {
   Plus,
   Phone,
   Bot,
-  Activity,
   AlertCircle,
   Smartphone,
   Zap,
@@ -41,7 +40,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup } from "@/components/ui/radio-group";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
@@ -125,25 +123,37 @@ export default function WhatsAppSection() {
 
   // ─── Account data ────────────────────────────────────────────────
 
-  // Use the new replyagent-compatible endpoint that returns
-  // `{ wa: [{ ...account, phone_numbers, capi }] }`. We filter client-side
-  // by onboard_platform so a single fetch powers both manage tabs.
+  // replyagent-compatible endpoint returning `{ wa: [{ ...account, phone_numbers, capi }] }`.
+  // Platform scoping happens SERVER-side, mirroring replyagent: its Coexistence
+  // page requests `?onboard_platform=whatsapp_business_app` while its Business
+  // API page relies on the endpoint's `whatsapp_business` default. We name the
+  // platform explicitly either way so the request is self-describing, and so a
+  // `qr_code` account can never surface under a Cloud API tab.
+  const platformParam =
+    view === "coex_manage" ? "whatsapp_business_app" : "whatsapp_business";
+
   const { data: accountsData, isLoading } = useQuery({
-    queryKey: ["/api/whatsapp/accounts", "phoneNumbers,capi"],
+    queryKey: ["/api/whatsapp/accounts", "phoneNumbers,capi", platformParam],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/whatsapp/accounts?with=phoneNumbers,capi");
+      const res = await apiRequest(
+        "GET",
+        `/api/whatsapp/accounts?with=phoneNumbers,capi&onboard_platform=${platformParam}`,
+      );
       return res.json();
     },
     refetchInterval: 30_000,
   });
 
   const allAccounts: any[] = useMemo(() => accountsData?.wa ?? [], [accountsData]);
+  // Belt-and-braces: the server already scoped the list, but keep the split
+  // positive (=== whatsapp_business) rather than negated — a negated filter let
+  // `qr_code` rows fall through into the Business API tab.
   const coexAccounts = useMemo(
     () => allAccounts.filter((a) => a.onboard_platform === "whatsapp_business_app"),
     [allAccounts],
   );
   const apiAccounts = useMemo(
-    () => allAccounts.filter((a) => a.onboard_platform !== "whatsapp_business_app"),
+    () => allAccounts.filter((a) => a.onboard_platform === "whatsapp_business"),
     [allAccounts],
   );
 
@@ -184,22 +194,15 @@ export default function WhatsAppSection() {
 
   // ─── Dialog state ────────────────────────────────────────────────
 
-  const [showAddNumberDialog, setShowAddNumberDialog] = useState(false);
   const [showManualConnectDialog, setShowManualConnectDialog] = useState(false);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
 
-  const [selectedAccount, setSelectedAccount] = useState<any>(null);
   const [accountToDelete, setAccountToDelete] = useState<any>(null);
   const [numberToDelete, setNumberToDelete] = useState<any>(null);
   const [numberToReconnect, setNumberToReconnect] = useState<any>(null);
   const [numberForDefaultReply, setNumberForDefaultReply] = useState<any>(null);
   const [accountForCapi, setAccountForCapi] = useState<any>(null);
   const [numberToRegister, setNumberToRegister] = useState<any>(null);
-
-  const [newNumberData, setNewNumberData] = useState({
-    phoneNumber: "",
-    purposeType: "automated" as "automated" | "notification",
-  });
 
   // Manual onboarding form
   const emptyManualForm = {
@@ -236,11 +239,29 @@ export default function WhatsAppSection() {
     // approval changes, AI Feeder toggles from another tab, etc.).
     const refetch = () =>
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/accounts", "phoneNumbers,capi"] });
+    // Generic channel.* broadcast (replyagent ChannelUpdated) — cross-feature
+    // refresh: re-pull the channels list, the integrations list (automation
+    // consumers), and the live total-channels counter.
+    const onChannel = () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/total-channels"] });
+      // A channel add/delete changes the used-slot count; without this the
+      // cached /limits response goes stale the moment the change happens in
+      // ANY tab (not just the one that triggered it via the mutation above).
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/limits"] });
+    };
     socket.on("whatsapp.account_updated", refetch);
     socket.on("whatsapp.number_updated", refetch);
+    socket.on("channel.updated", onChannel);
+    socket.on("channel.created", onChannel);
+    socket.on("channel.deleted", onChannel);
     return () => {
       socket.off("whatsapp.account_updated", refetch);
       socket.off("whatsapp.number_updated", refetch);
+      socket.off("channel.updated", onChannel);
+      socket.off("channel.created", onChannel);
+      socket.off("channel.deleted", onChannel);
     };
   }, [socket, queryClient]);
 
@@ -356,6 +377,9 @@ export default function WhatsAppSection() {
       setManualErrors({});
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/accounts", "phoneNumbers,capi"] });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations/channels"] });
+      // Adding an account consumes a channel slot — refresh so a workspace at
+      // its limit immediately shows "Channel limit reached" without a reload.
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/limits"] });
     },
   });
 
@@ -474,6 +498,20 @@ export default function WhatsAppSection() {
                   className={outlineBtn}
                 >
                   <Plus size={12} /> Connect manually
+                </button>
+              )}
+              {/* "Add new" launches Embedded Signup straight from the header —
+                  replyagent puts it there on the Business API page (and only
+                  there; Coexistence adds numbers from inside an account panel,
+                  which is the dashed add-card further down). openEmbeddedSignup
+                  already short-circuits into the limit-reached prompt when the
+                  workspace is out of channel allowance. */}
+              {view === "api_manage" && (
+                <button
+                  onClick={() => openEmbeddedSignup("api")}
+                  className="h-11 px-5 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 hover:bg-primary/90 transition-all"
+                >
+                  <Plus size={12} /> Add new
                 </button>
               )}
               {view !== "list" && (
@@ -748,95 +786,12 @@ export default function WhatsAppSection() {
         </CardContent>
       </Card>
 
-      {/* ── Add Phone Number dialog (placeholder; existing UI preserved) ── */}
-      <Dialog open={showAddNumberDialog} onOpenChange={setShowAddNumberDialog}>
-        <DialogContent className={cn("rounded-[2rem] border p-0 max-w-lg overflow-hidden", card, border)}>
-          <div className="p-6 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                <Plus size={16} />
-              </div>
-              <div>
-                <h2 className={cn("text-[14px] font-semibold", text)}>Add Phone Number</h2>
-                <p className={cn("text-[11px] font-medium opacity-60 mt-0.5", sub)}>Account: {selectedAccount?.name}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>
-                  Phone Number (International Format)
-                </label>
-                <Input
-                  placeholder="e.g. +1 555 000 0000"
-                  value={newNumberData.phoneNumber}
-                  onChange={(e) => setNewNumberData({ ...newNumberData, phoneNumber: e.target.value })}
-                  className={inputCls}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className={cn("text-[11px] font-semibold pl-1 block", sub)}>Purpose</label>
-                <RadioGroup
-                  value={newNumberData.purposeType}
-                  onValueChange={(v: any) => setNewNumberData({ ...newNumberData, purposeType: v })}
-                  className="grid grid-cols-2 gap-3"
-                >
-                  {(
-                    [
-                      { v: "automated", label: "Automated", desc: "AI & flow processing", icon: <Bot size={16} /> },
-                      { v: "notification", label: "Notification", desc: "System alerts only", icon: <Activity size={16} /> },
-                    ] as const
-                  ).map((opt) => {
-                    const active = newNumberData.purposeType === opt.v;
-                    return (
-                      <button
-                        key={opt.v}
-                        onClick={() => setNewNumberData({ ...newNumberData, purposeType: opt.v })}
-                        className={cn(
-                          "p-4 rounded-[1rem] border text-left transition-all",
-                          active
-                            ? "border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/10"
-                            : cn(softBorder, softBg, "hover:border-emerald-500/30"),
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "w-8 h-8 rounded-lg flex items-center justify-center mb-2 transition-all",
-                            active ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "bg-emerald-500/10 text-emerald-500",
-                          )}
-                        >
-                          {opt.icon}
-                        </div>
-                        <p className={cn("text-[12px] font-black tracking-tight", text)}>{opt.label}</p>
-                        <p className={cn("text-[10px] font-medium opacity-60 mt-0.5", sub)}>{opt.desc}</p>
-                      </button>
-                    );
-                  })}
-                </RadioGroup>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowAddNumberDialog(false)} className={outlineBtn}>
-                Cancel
-              </button>
-              <button
-                onClick={() =>
-                  toast({
-                    title: "Coming soon",
-                    description:
-                      "Add Phone Number via Meta is initiated from Embedded Signup — use the 'Add new' button at the top to launch the Meta flow for this account.",
-                  })
-                }
-                className="h-11 px-7 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-semibold transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2"
-              >
-                <Plus size={12} /> Add Number
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* An "Add Phone Number" dialog used to live here. It was unreachable —
+          nothing ever opened it — and its submit button only raised a "Coming
+          soon" toast pointing at Embedded Signup. Adding a number to an existing
+          WABA genuinely goes through Embedded Signup (replyagent re-launches the
+          same flow and its backend reuses the matching wa_accounts row), which is
+          what the header "Add new" button and the dashed add-card already do. */}
 
       {/* ── Manual Connect Dialog (kept from existing UI) ── */}
       <Dialog
@@ -1164,8 +1119,23 @@ function AccountCard(props: {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* Templates — replyagent gives Business API a dedicated, prominent
+              "Manage Templates" action in the account row, while Coexistence
+              buries it in the kebab. Templates are the only way a Business API
+              number can open a conversation, so the emphasis is deliberate. */}
+          {!props.coex && (
+            <NeutralButton onClick={props.onOpenTemplates} className={outlineBtn}>
+              <CopyIcon size={12} /> Manage Templates
+            </NeutralButton>
+          )}
+          {/* Pricing — the two platforms are billed against different published
+              rate cards, so replyagent points them at different pages. */}
           <a
-            href="https://developers.facebook.com/docs/whatsapp/pricing/"
+            href={
+              props.coex
+                ? "https://developers.facebook.com/docs/whatsapp/pricing/"
+                : `https://business.whatsapp.com/products/platform-pricing?lang=${(navigator.language || "en-US").replace("-", "_")}`
+            }
             target="_blank"
             rel="noopener noreferrer"
             className={outlineBtn}
@@ -1178,7 +1148,7 @@ function AccountCard(props: {
             rel="noopener noreferrer"
             className="h-11 px-5 rounded-xl bg-primary text-white text-[11px] font-semibold flex items-center gap-2 hover:bg-primary/90 transition-all"
           >
-            <ExternalLink size={12} /> Access BM
+            <ExternalLink size={12} /> {props.coex ? "Access BM" : "Manage"}
           </a>
 
           {/* Secondary actions collapsed into a ⋮ menu (mirrors replyagent header) */}
@@ -1243,6 +1213,7 @@ function AccountCard(props: {
             <PhoneNumberCard
               key={number.id}
               number={number}
+              isCoex={account.onboard_platform === "whatsapp_business_app"}
               dark={dark}
               text={text}
               sub={sub}
@@ -1332,6 +1303,7 @@ function PhoneNumberCard(props: {
   card: string;
   border: string;
   approvedTemplateCount: number;
+  isCoex?: boolean;
   onDelete: () => void;
   onReconnect: () => void;
   onDefaultReply: () => void;
@@ -1340,16 +1312,34 @@ function PhoneNumberCard(props: {
   onTemplates: () => void;
   onSetupCapi: () => void;
 }) {
-  const { number, dark, text, sub, card, border, approvedTemplateCount } = props;
+  const { number, dark, text, sub, card, border, approvedTemplateCount, isCoex } = props;
   const { toast } = useToast();
 
   const isActive = number.status === "ACTIVE";
   const isPending = number.status === "PENDING";
   const isDisconnected = number.status === "DISCONNECTED";
+  const isBlocked = number.status === "LOCKED" || number.status === "FAILED";
 
   // Connection state (left dot) — mirrors replyagent's "• Connected" label.
   const connectedTone = isActive ? "bg-emerald-500" : isPending ? "bg-amber-500" : "bg-rose-500";
   const connectedLabel = isActive ? "Connected" : isPending ? "Pending" : isDisconnected ? "Disconnected" : "Blocked";
+
+  // ── Blocked-number detail, mirroring replyagent's status cell ──
+  // A LOCKED/FAILED number is unusable until someone acts, and *what* to do
+  // depends entirely on the Meta error: a billing failure is fixed in Business
+  // Manager, everything else needs the error-code reference. Showing a bare
+  // "Blocked" chip (what we had) tells the user nothing actionable, so surface
+  // the code and link out the same way replyagent does.
+  const errorCode: string | null = number.error_code ? String(number.error_code) : null;
+  const isPaymentFailure = errorCode === "PAYMENT_FAILED";
+  const blockedTooltip = isPaymentFailure
+    ? "Payment failed. Add or update a payment method on the WhatsApp Account in Meta Business Manager."
+    : errorCode
+      ? `Error code: ${errorCode}. Open Meta's error reference to learn more about this error.`
+      : isCoex
+        ? "We couldn't connect the number. Remove it from WhatsApp Manager and from the WhatsApp Business App, then try reconnecting. If the issue continues, contact Support."
+        : "We couldn't connect the number. Remove it from WhatsApp Manager and try reconnecting. If the issue continues, contact Support.";
+  const blockedLabel = isPaymentFailure ? "Blocked" : errorCode ? "Blocked" : "Error";
 
   // Meta quality_rating: GREEN = high, YELLOW = medium, RED = low.
   const quality = String(number.quality_rating ?? "").toUpperCase();
@@ -1396,9 +1386,33 @@ function PhoneNumberCard(props: {
               )}
             </div>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
-              <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold", sub)}>
-                <span className={cn("w-1.5 h-1.5 rounded-full", connectedTone)} /> {connectedLabel}
-              </span>
+              {isBlocked ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {errorCode && !isPaymentFailure ? (
+                        <a
+                          href="https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-500 underline decoration-dotted"
+                        >
+                          <ShieldAlert size={11} /> {blockedLabel}
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-rose-500">
+                          <ShieldAlert size={11} /> {blockedLabel}
+                        </span>
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[260px]">{blockedTooltip}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold", sub)}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full", connectedTone)} /> {connectedLabel}
+                </span>
+              )}
               {qualityLabel && (
                 <span className={cn("inline-flex items-center gap-1 text-[10px] font-semibold", sub)}>
                   <span className={cn("w-1.5 h-1.5 rounded-full", qualityTone)} /> {qualityLabel}
@@ -1424,9 +1438,14 @@ function PhoneNumberCard(props: {
             <DropdownMenuItem onClick={props.onReconnect} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
               <RotateCw size={12} /> Refresh status
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={props.onRegister} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
-              <KeyRound size={12} /> Register / 2-step PIN
-            </DropdownMenuItem>
+            {/* Register / 2-step PIN is Business-API only — replyagent has no
+                register flow on Coexistence numbers (they're already registered
+                via the WhatsApp Business app), so hide it for the Coex variant. */}
+            {!isCoex && (
+              <DropdownMenuItem onClick={props.onRegister} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]">
+                <KeyRound size={12} /> Register / 2-step PIN
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={props.onDelete} className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px] text-rose-500">
               <Trash2 size={12} /> Delete phone number
@@ -1559,6 +1578,27 @@ function CapiSetupDialog({
     },
   });
 
+  // Auto-provision: mint the dataset from Meta server-side (no user input).
+  // Mirrors replyagent's single-click setupCapi(wa) → GET /capi/whatsapp/{id}.
+  const provisionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/whatsapp/capi/${account?.id}/provision`, {});
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        toast({ title: "CAPI configured", description: "Dataset provisioned from Meta." });
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/accounts", "phoneNumbers,capi"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/capi", account?.id] });
+        onClose();
+      } else if (data?.error_code === "capi_exists") {
+        toast({ title: "CAPI already configured", description: "Delete the existing dataset before creating a new one.", variant: "destructive" });
+      } else {
+        toast({ title: "Could not provision CAPI", description: data?.message ?? "", variant: "destructive" });
+      }
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("DELETE", `/api/whatsapp/capi/${account?.id}`);
@@ -1612,6 +1652,19 @@ function CapiSetupDialog({
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Primary path — one click, dataset minted from Meta server-side. */}
+              <button
+                onClick={() => provisionMutation.mutate()}
+                disabled={provisionMutation.isPending}
+                className="w-full h-11 rounded-xl text-[12px] font-semibold transition-all flex items-center justify-center gap-2 bg-primary text-white hover:bg-primary/90 disabled:opacity-50"
+              >
+                <Sparkles size={14} /> {provisionMutation.isPending ? "Provisioning…" : "Auto-provision from Meta"}
+              </button>
+              <div className="flex items-center gap-3">
+                <div className={cn("flex-1 h-px", dark ? "bg-slate-800" : "bg-slate-200")} />
+                <span className={cn("text-[10px] font-semibold uppercase tracking-wider opacity-50", dark ? "text-slate-400" : "text-slate-500")}>or enter manually</span>
+                <div className={cn("flex-1 h-px", dark ? "bg-slate-800" : "bg-slate-200")} />
+              </div>
               <div className="space-y-2">
                 <label className={cn("text-[11px] font-semibold", dark ? "text-slate-400" : "text-slate-600")}>
                   Dataset ID <span className="text-rose-500">*</span>

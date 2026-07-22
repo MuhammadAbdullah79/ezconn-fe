@@ -67,6 +67,9 @@ interface Conversation {
   channel: string;
   isAssigned?: boolean;
   folderId?: string | null;
+  // WhatsApp: which number this chat belongs to (per-row badge) + opt-in state (M19).
+  channelNumber?: { name: string | null; phone_number: string | null } | null;
+  hasOptedIn?: boolean;
 }
 
 // WhatsApp Cloud API file-size limits (bytes)
@@ -119,7 +122,7 @@ interface Message {
   text: string;
   time: string;
   status?: MessageStatus;
-  images?: Array<{ url: string; name: string; size: number }>;
+  images?: Array<{ url: string; name: string; size: number; thumb?: string | null }>;
   attachments?: Array<{ url: string; name: string; size: number }>;
   video?: { url: string; name: string; size: number; thumbnail?: string };
   audio?: { url: string; name: string; size: number };
@@ -136,6 +139,10 @@ interface Message {
   // Tier-3 rich types.
   location?: { latitude?: number; longitude?: number; name?: string; address?: string } | null;
   vcards?: any[] | null;
+  // Persisted reply quote — the message this one is replying to (resolved by the
+  // backend from `reply_to`), so the quote survives reloads. Mirrors replyagent's
+  // WhatsappMessageResource `reply`.
+  reply?: { id: number; from: 'agent' | 'user'; text: string } | null;
 }
 
 interface Agent {
@@ -493,6 +500,50 @@ export default function ConversationsInbox() {
   // initialization" on first render.
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+
+  // WhatsApp numbers for the per-number channel filter (multi-number ISOLATION).
+  // Selecting a specific number scopes the inbox to that number's chats only,
+  // so a workspace with 2+ numbers can view one number in isolation.
+  const { data: waAccountsForFilter } = useQuery<any>({
+    queryKey: ["/api/whatsapp/accounts", "filter-numbers"],
+    queryFn: async () => {
+      // `onboard_platform=all` — the endpoint defaults to Business API only
+      // (replyagent parity). The inbox pools Coexistence and Business API
+      // numbers exactly as replyagent's getChannels() does, so it must opt out
+      // of that default or Coex numbers would vanish from the channel filter.
+      const res = await apiRequest("GET", "/api/whatsapp/accounts?with=phoneNumbers&onboard_platform=all");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const waFilterNumbers = useMemo(() => {
+    const accounts = waAccountsForFilter?.wa ?? waAccountsForFilter?.accounts ?? waAccountsForFilter ?? [];
+    const list: Array<{ id: string; label: string }> = [];
+    if (Array.isArray(accounts)) {
+      for (const acc of accounts) {
+        const numbers = acc?.phone_numbers ?? acc?.phoneNumbers ?? [];
+        for (const n of numbers) {
+          if (n?.id == null) continue;
+          const label = n.verified_name
+            ? `${n.verified_name} (${n.display_phone_number ?? n.phone_number ?? ""})`
+            : (n.display_phone_number ?? n.phone_number ?? `Number ${n.id}`);
+          list.push({ id: String(n.id), label });
+        }
+      }
+    }
+    return list;
+  }, [waAccountsForFilter]);
+
+  // Split the unified channel selection into channel-type ids and WhatsApp
+  // number ids (per-number chips are stored as "wa_num:<id>" in selectedChannels).
+  const channelTypesParam = useMemo(
+    () => selectedChannels.filter((s) => !s.startsWith("wa_num:")),
+    [selectedChannels],
+  );
+  const waNumberIdsParam = useMemo(
+    () => selectedChannels.filter((s) => s.startsWith("wa_num:")).map((s) => s.slice("wa_num:".length)),
+    [selectedChannels],
+  );
   // Header "Agents" dropdown (replyagent UserFilter). Declared here — before the
   // list/count queries that read it — to avoid the same TDZ trap as above.
   const [selectedFilterAgents, setSelectedFilterAgents] = useState<string[]>([]);
@@ -547,7 +598,8 @@ export default function ConversationsInbox() {
     queryFn: async () => {
       const res = await apiRequest("POST", "/api/inbox/count", {
         folder_id: activeFolderId ? activeFolderId : undefined,
-        channel_types: selectedChannels.length ? selectedChannels : undefined,
+        channel_types: channelTypesParam.length ? channelTypesParam : undefined,
+        wa_number_ids: waNumberIdsParam.length ? waNumberIdsParam : undefined,
         users: selectedFilterAgents.length ? selectedFilterAgents : undefined,
       });
       return res.json();
@@ -607,7 +659,8 @@ export default function ConversationsInbox() {
         search: searchQuery.trim().length >= searchMinChars ? searchQuery : "",
         search_type: searchType,
         folder_id: activeFolderId ? activeFolderId : undefined,
-        channel_types: selectedChannels.length ? selectedChannels : undefined,
+        channel_types: channelTypesParam.length ? channelTypesParam : undefined,
+        wa_number_ids: waNumberIdsParam.length ? waNumberIdsParam : undefined,
         users: selectedFilterAgents.length ? selectedFilterAgents : undefined,
         sort: { column: sortBy.column, order: sortBy.order },
         limit: listLimit,
@@ -671,6 +724,9 @@ export default function ConversationsInbox() {
       channel: detectChannel(item.modelable_type),
       isAssigned: !!item.is_assigned,
       folderId: item.folder_id != null ? String(item.folder_id) : null,
+      // WhatsApp per-row badge data (M19) — which number the chat belongs to + opt-in.
+      channelNumber: item.phoneNumber ?? null,
+      hasOptedIn: !!item.has_opted_in,
     };
   });
 
@@ -725,15 +781,30 @@ export default function ConversationsInbox() {
   // dropdown drives `selectedChannels`, which is wired into the list/count API.
   const channelImg = (src: string, alt: string) =>
     React.createElement("img", { src, alt, className: "w-3.5 h-3.5" });
-  const channelOptions = [
-    { id: "whatsapp", name: "WhatsApp", icon: channelImg("/images/automations/whatsapp.svg", "WhatsApp") },
-    { id: "instagram", name: "Instagram", icon: channelImg("/images/automations/instagram.svg", "Instagram") },
-    { id: "messenger", name: "Messenger", icon: channelImg("/images/automations/messenger.svg", "Messenger") },
-    { id: "telegram", name: "Telegram", icon: channelImg("/images/automations/telegram.svg", "Telegram") },
-    { id: "sms", name: "SMS", icon: channelImg("/images/automations/sms.svg", "SMS") },
-    { id: "zapi", name: "Z-API", icon: channelImg("/images/automations/whatsapp.svg", "Z-API") },
-    { id: "webchat", name: "Webchat", icon: React.createElement(Mail, { size: 14 }) },
-  ];
+  const channelOptions = useMemo(() => {
+    const base = [
+      { id: "whatsapp", name: "WhatsApp", icon: channelImg("/images/automations/whatsapp.svg", "WhatsApp") },
+      { id: "instagram", name: "Instagram", icon: channelImg("/images/automations/instagram.svg", "Instagram") },
+      { id: "messenger", name: "Messenger", icon: channelImg("/images/automations/messenger.svg", "Messenger") },
+      { id: "telegram", name: "Telegram", icon: channelImg("/images/automations/telegram.svg", "Telegram") },
+      { id: "sms", name: "SMS", icon: channelImg("/images/automations/sms.svg", "SMS") },
+      { id: "zapi", name: "Z-API", icon: channelImg("/images/automations/whatsapp.svg", "Z-API") },
+      { id: "webchat", name: "Webchat", icon: React.createElement(Mail, { size: 14 }) },
+    ];
+    // Per-number WhatsApp filter chips (multi-number isolation). Only shown when
+    // more than one number exists — with a single number there is nothing to
+    // isolate and the plain "WhatsApp" chip already covers it.
+    if (waFilterNumbers.length > 1) {
+      for (const n of waFilterNumbers) {
+        base.push({
+          id: `wa_num:${n.id}`,
+          name: `WhatsApp · ${n.label}`,
+          icon: channelImg("/images/automations/whatsapp.svg", "WhatsApp number"),
+        });
+      }
+    }
+    return base;
+  }, [waFilterNumbers]);
 
   // Fetch messages for selected conversation
   const { data: messagesResponse, isLoading: isLoadingMessages } = useQuery({
@@ -819,14 +890,17 @@ export default function ConversationsInbox() {
       } as Message;
     }
 
-    // Separate image vs non-image uploads from parsed_files
-    const parsedFiles: Array<{ url: string; name: string; size: number; mime: string }> = raw.parsed_files || [];
+    // Separate image / video / audio / other uploads from parsed_files.
+    // `thumb` (from the media_gallery row) drives image previews + video posters.
+    const parsedFiles: Array<{ url: string; name: string; size: number; mime: string; thumb?: string | null }> = raw.parsed_files || [];
     const imageFiles = parsedFiles.filter((f) => f.mime?.startsWith('image/'));
+    const videoFiles = parsedFiles.filter((f) => f.mime?.startsWith('video/'));
     const audioFiles = parsedFiles.filter((f) =>
       f.mime?.startsWith('audio/') || f.name?.toLowerCase().startsWith('voice-message')
     );
     const otherFiles = parsedFiles.filter((f) =>
       !f.mime?.startsWith('image/') &&
+      !f.mime?.startsWith('video/') &&
       !f.mime?.startsWith('audio/') &&
       !f.name?.toLowerCase().startsWith('voice-message')
     );
@@ -859,7 +933,28 @@ export default function ConversationsInbox() {
       } catch {}
     }
 
-    const hasMediaContent = imageFiles.length > 0 || audioFiles.length > 0 || otherFiles.length > 0;
+    // Persisted reply quote — backend resolves `reply_to` into a compact preview
+    // of the quoted message. Derive a human label the same way the main bubble does.
+    let reply: Message['reply'] = null;
+    if (raw.reply) {
+      const rp = raw.reply;
+      const rpType = (rp.type ?? '').toLowerCase();
+      let rpText = (rp.text ?? '').toString().trim();
+      if (!rpText) {
+        const pf = Array.isArray(rp.parsed_files) ? rp.parsed_files : [];
+        const isImg = pf.some((f: any) => f.mime?.startsWith('image/')) || rpType === 'image';
+        const isAud = pf.some((f: any) => f.mime?.startsWith('audio/') || f.name?.toLowerCase().startsWith('voice-message')) || rpType === 'audio' || rpType === 'voice';
+        rpText = isAud ? '🎤 Voice message'
+          : isImg ? '🖼 Image'
+          : rpType === 'video' ? '🎥 Video'
+          : rpType === 'document' ? '📄 Document'
+          : rpType === 'sticker' ? '🌟 Sticker'
+          : '(media)';
+      }
+      reply = { id: Number(rp.id), from: rp.direction === 'OUTGOING' ? 'agent' : 'user', text: rpText };
+    }
+
+    const hasMediaContent = imageFiles.length > 0 || videoFiles.length > 0 || audioFiles.length > 0 || otherFiles.length > 0;
     const displayText = rawText ? rawText : (!hasMediaContent ? (
       msgType === 'audio' || msgType === 'voice' ? '🎤 Voice message' :
       msgType === 'image' ? '🖼 Image' :
@@ -877,6 +972,7 @@ export default function ConversationsInbox() {
       time: m.created_at || new Date().toISOString(),
       status: normalizeStatus(m.status),
       images: imageFiles.length > 0 ? imageFiles : undefined,
+      video: videoFiles.length > 0 ? { url: videoFiles[0].url, name: videoFiles[0].name, size: videoFiles[0].size, thumbnail: videoFiles[0].thumb ?? undefined } : undefined,
       attachments: otherFiles.length > 0 ? otherFiles : undefined,
       audio: audioFiles.length > 0 ? { url: audioFiles[0].url, name: audioFiles[0].name, size: audioFiles[0].size } : undefined,
       reactions: Array.isArray(raw.reactions) ? raw.reactions : [],
@@ -886,6 +982,7 @@ export default function ConversationsInbox() {
       template: raw.template ?? null,
       location: location && (location.latitude || location.longitude) ? location : null,
       vcards: vcards && vcards.length ? vcards : null,
+      reply,
     };
   });
 
@@ -923,6 +1020,13 @@ export default function ConversationsInbox() {
   const [galleryDialogOpen, setGalleryDialogOpen] = useState(false);
   const [automationDialogOpen, setAutomationDialogOpen] = useState(false);
   const [stickerDialogOpen, setStickerDialogOpen] = useState(false);
+  // Location composer (replyagent type:'location' send).
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+  const [locLat, setLocLat] = useState("");
+  const [locLng, setLocLng] = useState("");
+  const [locName, setLocName] = useState("");
+  const [locAddress, setLocAddress] = useState("");
+  const [locGeoLoading, setLocGeoLoading] = useState(false);
 
   // AI transform popover state. Selects translate/correct/expand/shorten.
   const [aiTransformOpen, setAiTransformOpen] = useState(false);
@@ -1132,6 +1236,49 @@ export default function ConversationsInbox() {
     }
   };
 
+  // Fill the location form from the browser's geolocation (best-effort).
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocation not supported by this browser", variant: "destructive" });
+      return;
+    }
+    setLocGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocLat(String(pos.coords.latitude));
+        setLocLng(String(pos.coords.longitude));
+        setLocGeoLoading(false);
+      },
+      (err) => {
+        setLocGeoLoading(false);
+        toast({ title: "Couldn't get location", description: err.message, variant: "destructive" });
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  // Send a WhatsApp location message (replyagent type:'location').
+  const sendLocation = () => {
+    const latitude = parseFloat(locLat);
+    const longitude = parseFloat(locLng);
+    if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+      toast({ title: "Enter a valid latitude and longitude", variant: "destructive" });
+      return;
+    }
+    sendMessageMutation.mutate({
+      text: "",
+      type: "location",
+      location: {
+        latitude,
+        longitude,
+        name: locName.trim() || undefined,
+        address: locAddress.trim() || undefined,
+      },
+    } as any);
+    setLocationDialogOpen(false);
+    setLocLat(""); setLocLng(""); setLocName(""); setLocAddress("");
+  };
+
   // Attach a gallery file into the composer (fetch its signed URL → File).
   const attachGalleryFile = async (f: any) => {
     if (!f?.file_url) return;
@@ -1338,7 +1485,7 @@ export default function ConversationsInbox() {
   }, [inboxResponse, isLoadingInbox, selectedConversation]);
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (input: string | { text: string; compose_mode?: string; reply_to_message_id?: number | null; files?: File[]; audio?: Blob | null; mentions?: string[]; is_sticker?: boolean }) => {
+    mutationFn: async (input: string | { text: string; compose_mode?: string; reply_to_message_id?: number | null; files?: File[]; audio?: Blob | null; mentions?: string[]; is_sticker?: boolean; type?: string; location?: any; gif?: any }) => {
       const hasFiles = typeof input !== "string" && ((input.files && input.files.length > 0) || input.audio);
 
       if (hasFiles && typeof input !== "string") {
@@ -1372,6 +1519,10 @@ export default function ConversationsInbox() {
               compose_mode: input.compose_mode ?? "reply",
               reply_to_message_id: input.reply_to_message_id ?? null,
               mentions: input.mentions && input.mentions.length ? input.mentions : undefined,
+              // Location / GIF sends (replyagent type:'location' / type:'gif').
+              ...(input.type ? { type: input.type } : {}),
+              ...(input.location ? { location: JSON.stringify(input.location) } : {}),
+              ...(input.gif ? { gif: JSON.stringify(input.gif) } : {}),
             };
       const res = await apiRequest("POST", `/api/inbox/send-message/${selectedConversation}`, payload);
       return res.json();
@@ -3120,6 +3271,15 @@ export default function ConversationsInbox() {
                             <span className="text-xs text-muted-foreground flex-shrink-0">{formatConversationTime(conv.time)}</span>
                           </div>
                           <p className="text-sm truncate mb-1 font-normal text-muted-foreground" style={{ maxWidth: `${sidebarWidth - 96}px` }}>{conv.lastMessage}</p>
+                          {/* Per-row WhatsApp number badge (M19) — only when the
+                              workspace has more than one number, so the agent can
+                              tell which number a chat arrived on. */}
+                          {conv.channelNumber?.phone_number && waFilterNumbers.length > 1 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 mb-1 max-w-full truncate">
+                              <img src="/images/automations/whatsapp.svg" alt="WA" className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{conv.channelNumber.name || conv.channelNumber.phone_number}</span>
+                            </span>
+                          )}
                           {/* Footer row (replyagent): assignee on the left
                               ("Waiting for assistance" when unassigned) + a
                               New/Transferred badge on the right. */}
@@ -3516,6 +3676,25 @@ export default function ConversationsInbox() {
                           )}
 
                           <div id={`message-${msg.id}`} className={`relative max-w-[70%] rounded-lg p-3 ${msg.from === "user" ? "bg-blue-100 dark:bg-blue-900/30 dark:text-blue-100" : "bg-gray-200 text-gray-900 dark:bg-slate-700 dark:text-slate-100"}`} data-testid={`message-${msg.id}`}>
+                            {/* Quoted reply — the message this one is replying to.
+                                Click scrolls to the original bubble. */}
+                            {msg.reply && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  document.getElementById(`message-${msg.reply!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                }}
+                                className="mb-2 w-full text-left rounded-md border-l-4 border-emerald-500 bg-black/5 dark:bg-white/10 px-2 py-1"
+                                data-testid={`reply-quote-${msg.id}`}
+                              >
+                                <span className="block text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {msg.reply.from === "agent" ? "You" : "Customer"}
+                                </span>
+                                <span className="block text-[11px] text-muted-foreground truncate">{msg.reply.text}</span>
+                              </button>
+                            )}
+
                             {/* WhatsApp template preview card */}
                             {msg.template && <TemplateMessageCard template={msg.template} />}
 
@@ -3566,11 +3745,12 @@ export default function ConversationsInbox() {
                             {/* Images */}
                             {msg.images && msg.images.length > 0 && (
                               <div className="mt-2 space-y-2">
-                                {msg.images.map((image: { url: string; name: string; size: number }, idx: number) => (
+                                {msg.images.map((image: { url: string; name: string; size: number; thumb?: string | null }, idx: number) => (
                                   <div key={idx} className="space-y-1">
                                     <img
-                                      src={image.url}
+                                      src={image.thumb || image.url}
                                       alt={image.name}
+                                      loading="lazy"
                                       className="max-w-full h-auto rounded max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
                                       onClick={() => setPreviewImage(image.url)}
                                     />
@@ -4051,6 +4231,11 @@ export default function ConversationsInbox() {
                         {selectedConvObj?.channel === "whatsapp" && (
                           <DropdownMenuItem onClick={() => setStickerDialogOpen(true)}>
                             <Smile size={14} className="mr-2" /> Sticker
+                          </DropdownMenuItem>
+                        )}
+                        {selectedConvObj?.channel === "whatsapp" && (
+                          <DropdownMenuItem onClick={() => setLocationDialogOpen(true)}>
+                            <MapPin size={14} className="mr-2" /> Location
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={() => setAutomationDialogOpen(true)}>
@@ -4961,6 +5146,44 @@ export default function ConversationsInbox() {
                 ))}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Composer "+" → Location share (replyagent type:'location' send). */}
+      <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share a location</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button variant="outline" size="sm" onClick={useCurrentLocation} disabled={locGeoLoading} className="w-full">
+              <MapPin size={14} className="mr-2" /> {locGeoLoading ? "Getting location…" : "Use my current location"}
+            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-muted-foreground">Latitude *</label>
+                <Input value={locLat} onChange={(e) => setLocLat(e.target.value)} placeholder="e.g. 24.8607" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-muted-foreground">Longitude *</label>
+                <Input value={locLng} onChange={(e) => setLocLng(e.target.value)} placeholder="e.g. 67.0011" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground">Name</label>
+              <Input value={locName} onChange={(e) => setLocName(e.target.value)} placeholder="Place name (optional)" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-muted-foreground">Address</label>
+              <Input value={locAddress} onChange={(e) => setLocAddress(e.target.value)} placeholder="Street address (optional)" />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" size="sm" onClick={() => setLocationDialogOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={sendLocation} disabled={sendMessageMutation.isPending || !locLat.trim() || !locLng.trim()}>
+                <MapPin size={14} className="mr-2" /> Send location
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -135,7 +135,9 @@ export function useConnectedAccounts(enabled: boolean): ChannelAccount[] {
   // a Pusher channel set up on EZCONN, we poll every 30 s while the modal
   // is open so a newly-connected channel appears within half a minute.
   const refetchInterval = enabled ? 30_000 : false;
-  const wa = useQuery({ queryKey: ["/api/whatsapp/accounts"], queryFn: () => fetcher("/api/whatsapp/accounts", ["wa", "accounts"]), enabled, retry: false, refetchInterval });
+  // `onboard_platform=all` — /whatsapp/accounts defaults to Business API only
+  // (replyagent parity); automations fire on Coexistence numbers too.
+  const wa = useQuery({ queryKey: ["/api/whatsapp/accounts"], queryFn: () => fetcher("/api/whatsapp/accounts?onboard_platform=all", ["wa", "accounts"]), enabled, retry: false, refetchInterval });
   const tg = useQuery({ queryKey: ["/api/telegram/bots"], queryFn: () => fetcher("/api/telegram/bots", ["bots"]), enabled, retry: false, refetchInterval });
   const fb = useQuery({ queryKey: ["/api/messenger/pages"], queryFn: () => fetcher("/api/messenger/pages", ["pages"]), enabled, retry: false, refetchInterval });
   const ig = useQuery({ queryKey: ["/api/instagram/pages"], queryFn: () => fetcher("/api/instagram/pages", ["pages"]), enabled, retry: false, refetchInterval });

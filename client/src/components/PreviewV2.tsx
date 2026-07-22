@@ -23,6 +23,18 @@ interface PreviewV2Props {
   templateButtons?: Array<any>;
   variableSamples?: Record<string, string>;
 
+  // Carousel template preview — mirrors replyagent's TemplatePreview.vue
+  // Branch B: the bubble body renders as the normal message, then the ACTIVE
+  // card only renders below it with chevron navigation between cards.
+  carouselCards?: Array<{
+    mediaFormat?: string;
+    media?: { file_url?: string } | null;
+    body?: string;
+    buttons?: Array<any>;
+  }>;
+  activeCardIndex?: number;
+  onCardChange?: (index: number) => void;
+
   // Optional Command related
   commands?: { commandText: string; commandDescription: string; }[];
 
@@ -56,6 +68,9 @@ const PreviewV2: React.FC<PreviewV2Props> = ({
   icebreakers = [],
   commands = [],
   variableSamples = {},
+  carouselCards = [],
+  activeCardIndex = 0,
+  onCardChange,
   showPlaceholderMessageInTemplate = true,
   showMobile = true,
   profileName = "Your Business Name",
@@ -410,6 +425,72 @@ const PreviewV2: React.FC<PreviewV2Props> = ({
                     )}
                   </div>
                 </div>
+
+                {carouselCards.length > 0 && (() => {
+                  const clampedIndex = Math.min(Math.max(activeCardIndex, 0), carouselCards.length - 1);
+                  const card = carouselCards[clampedIndex];
+                  const cardMediaUrl = card?.media?.file_url ?? "";
+                  return (
+                    <div className="relative flex justify-start flex-shrink-0 mt-[8px]">
+                      <div className="z-10 bg-white rounded-[16px] overflow-hidden max-w-[260px] shadow-sm">
+                        {cardMediaUrl && (
+                          <div className="bg-black/5">
+                            {card?.mediaFormat === "VIDEO" ? (
+                              <video src={cardMediaUrl} className="w-full h-[140px] object-cover" controls />
+                            ) : (
+                              <img src={cardMediaUrl} alt="Card" className="w-full h-[140px] object-cover" />
+                            )}
+                          </div>
+                        )}
+                        <div className="px-[12px] py-[8px]">
+                          <p className="text-[16px] text-[#111B21] leading-relaxed whitespace-pre-wrap break-words">
+                            {card?.body || ""}
+                          </p>
+                        </div>
+                        {(card?.buttons ?? []).length > 0 && (
+                          <div className="space-y-0">
+                            {(card?.buttons ?? []).map((button: any, i: number) => (
+                              <div key={i}>
+                                <div className="w-full" style={{ borderTopWidth: "2px", borderTopColor: "#e7e7e7ff" }} />
+                                <div className="px-[12px] py-[8px] text-center">
+                                  <p className="text-[15px] text-[#0064FF] font-normal break-words">
+                                    {getButtonDisplayText(button)}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Chevrons — jump between cards, mirroring replyagent's
+                          TemplatePreview.vue carousel navigation. */}
+                      {carouselCards.length > 1 && onCardChange && (
+                        <>
+                          {clampedIndex > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => onCardChange(clampedIndex - 1)}
+                              className="absolute -left-[10px] top-1/2 -translate-y-1/2 w-[22px] h-[22px] rounded-full bg-white shadow flex items-center justify-center text-[#111B21] text-[13px]"
+                            >
+                              ‹
+                            </button>
+                          )}
+                          {clampedIndex < carouselCards.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => onCardChange(clampedIndex + 1)}
+                              className="absolute -right-[10px] top-1/2 -translate-y-1/2 w-[22px] h-[22px] rounded-full bg-white shadow flex items-center justify-center text-[#111B21] text-[13px]"
+                            >
+                              ›
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div ref={messagesEndRef} />
               </>
             )}

@@ -537,7 +537,12 @@ function ChannelAccountSelector({
   channel?: string;
 }) {
   const urlByChannel: Record<string, { url: string; listKey: string }> = {
-    whatsapp: { url: "/api/whatsapp/accounts", listKey: "accounts" },
+    // listKey is `wa`, not `accounts` — /whatsapp/accounts answers with
+    // `{ wa: [...] }` (replyagent's response shape). With `accounts` the coercion
+    // below fell through to `[]`, so this selector was always empty.
+    // `onboard_platform=all` — the endpoint defaults to Business API only
+    // (replyagent parity); automation steps can target Coexistence numbers too.
+    whatsapp: { url: "/api/whatsapp/accounts?onboard_platform=all", listKey: "wa" },
     telegram: { url: "/api/telegram/bots", listKey: "bots" },
     messenger: { url: "/api/messenger/pages", listKey: "pages" },
     instagram: { url: "/api/instagram/pages", listKey: "pages" },

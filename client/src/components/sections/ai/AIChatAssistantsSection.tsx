@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -55,6 +56,9 @@ export default function AIChatAssistantsSection() {
   const dark = mode === "dark";
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // AI Feeder modal — the agent whose feeder binding is being created (null = closed).
+  const [feederAgent, setFeederAgent] = useState<any | null>(null);
 
   // "Allow" permissions (replyagent $can on the knowledgebase / AI-assistant
   // screen). Owners hold `workspace.*` so they pass via the wildcard.
@@ -664,7 +668,7 @@ export default function AIChatAssistantsSection() {
                               <DropdownMenuContent align="end" className={cn("rounded-xl p-1.5 min-w-[160px]", dark ? "bg-[#0f1829] border-slate-800" : "")}>
                                 {canManageFeeder && (
                                   <DropdownMenuItem
-                                    onClick={() => toast({ title: "AI Feeder", description: `Opening AI Feeder for ${agent.name}` })}
+                                    onClick={() => setFeederAgent(agent)}
                                     className="rounded-lg py-2 cursor-pointer gap-2 font-bold text-[11px]"
                                   >
                                     <Plug size={12} /> AI Feeder
@@ -719,11 +723,149 @@ export default function AIChatAssistantsSection() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AiFeederModal agent={feederAgent} onClose={() => setFeederAgent(null)} />
     </>
   );
 }
 
 /* ── Helpers ── */
+
+/**
+ * AI Feeder modal — bind an agent to a WhatsApp number + automation via a
+ * ref-link trigger. POSTs to /ai-feeder (replyagent addFeeder). The chosen
+ * automation should contain an AI step with "reply on WhatsApp" enabled so the
+ * agent (grounded on the `feed` knowledge) answers inbound ref-link messages.
+ */
+function AiFeederModal({ agent, onClose }: { agent: any | null; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [channelableId, setChannelableId] = useState("");
+  const [automationId, setAutomationId] = useState("");
+  const [triggerText, setTriggerText] = useState("");
+  const [feed, setFeed] = useState("");
+
+  const { data: waData } = useQuery<any>({
+    queryKey: ["/api/whatsapp/accounts", "feeder"],
+    enabled: !!agent,
+    queryFn: async () => {
+      // `onboard_platform=all` — the endpoint defaults to Business API only
+      // (replyagent parity). allow_in_feeder is toggleable on Coexistence
+      // numbers too, so the feeder picker must see both platforms.
+      const res = await apiRequest("GET", "/api/whatsapp/accounts?with=phoneNumbers&onboard_platform=all");
+      return res.json();
+    },
+  });
+  const { data: autoData } = useQuery<any>({
+    queryKey: ["/api/automations", "feeder"],
+    enabled: !!agent,
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/automations");
+      return res.json();
+    },
+  });
+
+  const numbers: any[] = (waData?.wa ?? []).flatMap((acc: any) =>
+    (acc.phone_numbers ?? acc.phoneNumbers ?? []).map((n: any) => ({
+      id: String(n.id),
+      label: n.display_phone_number || n.verified_name || String(n.id),
+    })),
+  );
+  const automations: any[] = (autoData?.automations ?? autoData ?? []).map((a: any) => ({
+    id: String(a.id),
+    name: a.name,
+  }));
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/ai-feeder", {
+        name: name.trim(),
+        ai_agent_id: agent.id,
+        automation_id: automationId,
+        channel_type: "whatsapp",
+        channelable_id: channelableId,
+        trigger_text: triggerText.trim(),
+        feed: feed.trim(),
+      });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        toast({ title: "AI Feeder created", description: "Inbound ref-link messages will now start this automation." });
+        qc.invalidateQueries({ queryKey: ["/api/ai-feeder"] });
+        close();
+      } else {
+        toast({ title: "Could not create feeder", description: data?.message ?? "", variant: "destructive" });
+      }
+    },
+    onError: (e: any) => toast({ title: "Could not create feeder", description: e?.message ?? "", variant: "destructive" }),
+  });
+
+  const close = () => {
+    setName(""); setChannelableId(""); setAutomationId(""); setTriggerText(""); setFeed("");
+    onClose();
+  };
+
+  const valid = name.trim() && channelableId && automationId && triggerText.trim();
+
+  return (
+    <Dialog open={!!agent} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>AI Feeder{agent ? ` — ${agent.name}` : ""}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground">Feeder name *</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sales assistant" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground">WhatsApp number *</label>
+            <Select value={channelableId} onValueChange={setChannelableId}>
+              <SelectTrigger><SelectValue placeholder="Select a number" /></SelectTrigger>
+              <SelectContent>
+                {numbers.length === 0 ? (
+                  <SelectItem value="none" disabled>No WhatsApp numbers</SelectItem>
+                ) : numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground">Automation *</label>
+            <Select value={automationId} onValueChange={setAutomationId}>
+              <SelectTrigger><SelectValue placeholder="Select an automation" /></SelectTrigger>
+              <SelectContent>
+                {automations.length === 0 ? (
+                  <SelectItem value="none" disabled>No automations</SelectItem>
+                ) : automations.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground">Trigger keyword *</label>
+            <Input value={triggerText} onChange={(e) => setTriggerText(e.target.value)} placeholder="e.g. ref_sales — the wa.me link text that starts the flow" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-semibold text-muted-foreground">Knowledge feed</label>
+            <Textarea value={feed} onChange={(e) => setFeed(e.target.value)} placeholder="Paste the knowledge the agent should answer from…" className="min-h-24" />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={close} className="h-9 px-4 rounded-lg border text-[11px] font-semibold">Cancel</button>
+            <button
+              onClick={() => mutation.mutate()}
+              disabled={!valid || mutation.isPending}
+              className="h-9 px-4 rounded-lg text-[11px] font-semibold bg-primary text-white disabled:opacity-40"
+            >
+              {mutation.isPending ? "Creating…" : "Create feeder"}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function FieldLabel({ dark, children }: { dark: boolean; children: React.ReactNode }) {
   const sub = dark ? "text-slate-400" : "text-slate-500";
   return (

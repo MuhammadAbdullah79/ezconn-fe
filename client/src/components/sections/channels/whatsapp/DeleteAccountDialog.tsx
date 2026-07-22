@@ -61,6 +61,11 @@ export default function DeleteAccountDialog({ open, account, onClose }: Props) {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/accounts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations/channels"] });
+      // Deleting an account frees a channel slot — without this the cached
+      // /limits response (fetched once, never refetched on its own) keeps
+      // reporting the pre-delete used/can_add values, so "Add new" keeps
+      // showing "Channel limit reached" even though a slot just opened up.
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/limits"] });
       onClose();
     },
   });

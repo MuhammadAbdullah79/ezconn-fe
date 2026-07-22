@@ -35,7 +35,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2 } from "lucide-react";
 import { useMemo } from "react";
+import { useSocket } from "@/hooks/use-socket";
 import { cn } from "@/lib/utils";
+import { WA_TEMPLATE_LANGUAGES } from "@/lib/waTemplateLanguages";
+import { waTemplateKeysFor } from "@/lib/waTemplateKeys";
+import TemplateMediaPicker, { type TemplateMediaSelection } from "@/components/gallery/TemplateMediaPicker";
 
 
 type SortDirection = "asc" | "desc" | "default";
@@ -83,11 +87,47 @@ export default function TemplateManager() {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [templateCreationStep, setTemplateCreationStep] = useState<"category" | "form" | "content">("category");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("English");
+  const [selectedLanguage, setSelectedLanguage] = useState<string>("en_US");
   const [templateName, setTemplateName] = useState<string>("");
   const [templateType, setTemplateType] = useState<string>("");
+  // replyagent's builder is three mutually exclusive shapes, not one form with
+  // optional sections: a single-card Template, a Carousel (bubble body + 1-10
+  // cards), or an Agent Notification (text header + body + footer, no buttons).
+  // Meta validates against the shape, so the composer has to model it.
+  const [templateMode, setTemplateMode] = useState<"template" | "carousel" | "notification">("template");
+  const [carouselCards, setCarouselCards] = useState<any[]>([]);
+  const [cardPickerIndex, setCardPickerIndex] = useState<number | null>(null);
+  // Which carousel card the composer's live preview / the read-only Preview
+  // dialog is currently showing (independent of the card being edited).
+  const [previewActiveCard, setPreviewActiveCard] = useState(0);
+  const [composerActiveCard, setComposerActiveCard] = useState(0);
+
+  // "Map keys" — replyagent doesn't let you type a free sample for a template
+  // variable, it maps each {{n}} to a system/custom/agent merge tag via a
+  // dropdown (that tag is what's actually substituted at send time). Custom
+  // fields come from the same endpoint the contact profile's field picker uses.
+  const { data: customFieldsData } = useQuery<any>({
+    queryKey: ["/api/custom-fields"],
+    queryFn: async () => (await apiRequest("GET", "/api/custom-fields")).json(),
+    enabled: createTemplateOpen,
+  });
+  const customFieldOptions = useMemo(() => {
+    const list: any[] = Array.isArray(customFieldsData)
+      ? customFieldsData
+      : (customFieldsData?.fields ?? customFieldsData?.data ?? []);
+    return list
+      .filter((f: any) => f?.slug && f?.label)
+      .map((f: any) => ({ slug: String(f.slug), label: String(f.label) }));
+  }, [customFieldsData]);
+  const templateKeyOptions = useMemo(
+    () => waTemplateKeysFor(templateMode, customFieldOptions),
+    [templateMode, customFieldOptions],
+  );
   const [mediaSample, setMediaSample] = useState<string>("none");
-  const [selectedMediaFile, setSelectedMediaFile] = useState<File | null>(null);
+  // Gallery selection for the header (replaces the old, non-functional local
+  // File state — see the Media Sample block for why).
+  const [selectedMedia, setSelectedMedia] = useState<TemplateMediaSelection | null>(null);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [headerText, setHeaderText] = useState<string>("");
   const [bodyText, setBodyText] = useState<string>("");
   const [footerText, setFooterText] = useState<string>("");
@@ -186,8 +226,31 @@ export default function TemplateManager() {
 
   // Helper function to check if the template form is valid
   const isTemplateFormValid = () => {
-    // Body is required
+    // Body is required (for a carousel this is the bubble above the cards)
     if (!bodyText.trim()) return false;
+
+    // Carousel: Meta rejects the template unless every card is complete and all
+    // cards expose the same button types, so check that before enabling submit
+    // rather than letting the round-trip fail.
+    if (templateMode === "carousel") {
+      if (carouselCards.length === 0 || carouselCards.length > 10) return false;
+      let buttonSignature: string | null = null;
+      for (const card of carouselCards) {
+        if (!card?.media?.file_url) return false;
+        if (!String(card?.body ?? "").trim()) return false;
+        const buttons: any[] = card?.buttons ?? [];
+        if (buttons.length === 0 || buttons.length > 2) return false;
+        for (const b of buttons) {
+          if (!String(b?.buttonText ?? "").trim()) return false;
+          if (b.type === "visit-website" && !String(b?.websiteUrl ?? "").trim()) return false;
+          if (b.type === "call-phone" && !String(b?.phoneNumber ?? "").trim()) return false;
+        }
+        const signature = buttons.map((b) => b.type).join(",");
+        if (buttonSignature === null) buttonSignature = signature;
+        else if (signature !== buttonSignature) return false;
+      }
+      return true;
+    }
 
     // If variables exist, all must have samples
     const variables = getAllVariables();
@@ -244,7 +307,7 @@ export default function TemplateManager() {
       JSON.stringify(templateButtons) !== JSON.stringify(originalTemplate.buttons || []) ||
       JSON.stringify(variableSamples) !== JSON.stringify(originalTemplate.variableSamples || {}) ||
       mediaSample !== (originalTemplate.mediaSample || "none") ||
-      selectedMediaFile !== (originalTemplate.mediaFile || null)
+      (selectedMedia?.id ?? null) !== (originalTemplate.media?.id ?? null)
     );
   };
 
@@ -254,11 +317,16 @@ export default function TemplateManager() {
     setOriginalTemplate(null);
     setTemplateCreationStep("category");
     setSelectedCategory(null);
-    setSelectedLanguage("English");
+    setSelectedLanguage("en_US");
     setTemplateName("");
     setTemplateType("");
     setMediaSample("none");
-    setSelectedMediaFile(null);
+    setSelectedMedia(null);
+    setMediaPickerOpen(false);
+    setTemplateMode("template");
+    setCarouselCards([]);
+    setCardPickerIndex(null);
+    setComposerActiveCard(0);
     setHeaderText("");
     setBodyText("");
     setFooterText("");
@@ -312,6 +380,15 @@ export default function TemplateManager() {
       buttons: templateButtons,
       examples: variableSamples,
       mediaSample,
+      // Template shape. The backend builds a different component set per mode,
+      // so this has to travel with the payload.
+      template_type: templateMode,
+      cards: templateMode === "carousel" ? carouselCards : undefined,
+      // The backend uploads this gallery file to Meta and swaps in the returned
+      // header handle. Without it a media header cannot be built at all.
+      mediaHeader: selectedMedia
+        ? { format: mediaSample.toUpperCase(), media: selectedMedia }
+        : undefined,
     });
   };
 
@@ -327,13 +404,15 @@ export default function TemplateManager() {
     setEditingTemplateId(templateId);
     setSelectedCategory(templateToEdit.category);
     setTemplateType(templateToEdit.type || "");
+    setTemplateMode(templateToEdit.mode ?? "template");
+    setCarouselCards(templateToEdit.carouselCards?.length ? templateToEdit.carouselCards : []);
     setSelectedLanguage(templateToEdit.language);
     setTemplateName(templateToEdit.name);
     setHeaderText(templateToEdit.header || "");
     setBodyText(templateToEdit.body || "");
     setFooterText(templateToEdit.footer || "");
     setTemplateButtons(templateToEdit.buttons || []);
-    setSelectedMediaFile(templateToEdit.mediaFile || null);
+    setSelectedMedia(templateToEdit.media || null);
     setMediaSample(templateToEdit.mediaSample || "none");
     setVariableSamples(templateToEdit.variableSamples || {});
 
@@ -348,56 +427,28 @@ export default function TemplateManager() {
   const handleSaveEditedTemplate = () => {
     if (!isTemplateFormValid() || editingTemplateId === null) return;
 
-    // Extract variables from header and body
-    const allText = headerText + " " + bodyText;
-    const variableMatches = allText.match(/\{\{[^}]+\}\}/g) || [];
-    const uniqueVariables = Array.from(new Set(variableMatches)).map(v =>
-      v.match(/\{\{([^}]+)\}\}/)?.[1] || ""
-    );
-
-    const now = new Date();
-
-    // Update template object
-    const updatedTemplate: any = {
-      id: editingTemplateId, // Keep the same ID
-      name: templateName,
-      category: selectedCategory,
-      type: templateType,
-      language: selectedLanguage,
-      header: headerText || undefined,
-      body: bodyText,
-      footer: footerText || undefined,
-      variables: uniqueVariables,
-      buttons: templateButtons,
-      status: "Pending", // Reset to Pending
-      statusTypeColor: "warning" as const,
-      topBlockReason: "",
-      lastEdited: new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10), // Update to current date
-    };
-
-    // Add media if selected
-    if (mediaSample !== "none" && selectedMediaFile) {
-      updatedTemplate.mediaSample = mediaSample;
-      updatedTemplate.mediaFile = selectedMediaFile;
-    }
-
-    // Add variable samples if any
-    if (Object.keys(variableSamples).length > 0) {
-      updatedTemplate.variableSamples = variableSamples;
-    }
-
-    // Update the template in the list - In API mode, this should be a mutation
-    // setWhatappTemplates(whatsappTemplates.map(t =>
-    //   t.id === editingTemplateId ? updatedTemplate : t
-    // ));
-
-    toast({
-      title: "Template Updated",
-      description: `The template "${updatedTemplate.name}" has been updated successfully.`,
+    // Resubmit the edited structure to Meta for re-approval. The backend only
+    // allows this for REJECTED / PAUSED templates and keeps the original
+    // name/language (immutable at Meta). Mirrors replyagent's resubmit flow.
+    updateTemplateMutation.mutate({
+      id: editingTemplateId,
+      payload: {
+        name: templateName,
+        category: selectedCategory,
+        language: selectedLanguage,
+        header: headerText || undefined,
+        body: bodyText,
+        footer: footerText || undefined,
+        buttons: templateButtons,
+        examples: variableSamples,
+        mediaSample,
+        template_type: templateMode,
+        cards: templateMode === "carousel" ? carouselCards : undefined,
+        mediaHeader: selectedMedia
+          ? { format: mediaSample.toUpperCase(), media: selectedMedia }
+          : undefined,
+      },
     });
-
-    // Cancel edit dialog
-    handleCancelCreateTemplate();
   };
 
   const handleOpenDeleteModal = (template: any) => {
@@ -416,16 +467,31 @@ export default function TemplateManager() {
     }
   };
 
-  const handleConfirmBulkDelete = () => {
-    // setWhatappTemplates(
-    //   whatsappTemplates.filter((template) => !selectedTemplates.includes(template.id))
-    // );
-    setSelectedTemplates([]);
+  // Bulk delete used to only clear the checkboxes and toast "Deleted" — nothing
+  // was ever removed. Delete each selected template for real, then report how
+  // many actually succeeded rather than assuming all of them did.
+  const handleConfirmBulkDelete = async () => {
+    const ids = [...selectedTemplates];
     setShowBulkDeleteModal(false);
-    toast({
-      title: "Templates Deleted",
-      description: `${selectedTemplates.length} templates have been deleted successfully.`,
-    });
+    const results = await Promise.allSettled(
+      ids.map((id) => apiRequest("DELETE", `/api/waba/templates/${id}`)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setSelectedTemplates([]);
+    queryClient.invalidateQueries({ queryKey: ["/api/waba/templates"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/waba/templates/stats"] });
+    if (failed === 0) {
+      toast({
+        title: "Templates deleted",
+        description: `${ids.length} template${ids.length === 1 ? "" : "s"} deleted successfully.`,
+      });
+    } else {
+      toast({
+        title: "Some templates could not be deleted",
+        description: `${ids.length - failed} of ${ids.length} deleted; ${failed} failed.`,
+        variant: "destructive",
+      });
+    }
   };
 
   // Open clone dialog
@@ -452,25 +518,39 @@ export default function TemplateManager() {
     const templateToClone = whatsappTemplates.find(t => t.id === templateToCloneId);
     if (!templateToClone) return;
 
-    const now = new Date();
-    const clonedTemplate = {
-      ...templateToClone,
-      id: Date.now(),
-      name: cloneTemplateName,
-      status: "Pending",
-      statusTypeColor: "warning" as const,
-      topBlockReason: "No blocks!",
-      lastEdited: new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10),
-    };
-
-    // setWhatappTemplates([...whatsappTemplates, clonedTemplate]);
-
-    toast({
-      title: "Template Cloned",
-      description: `The template "${templateToClone.name}" has been cloned to "${cloneTemplateName}" successfully.`,
-    });
-
-    handleCancelCloneDialog();
+    // Clone used to build an object locally and drop it on the floor (the state
+    // write was commented out), so the toast lied. A clone is a genuinely new
+    // template at Meta — submit it under the new name and let it enter review.
+    createTemplateMutation.mutate(
+      {
+        wa_account_id:
+          new URLSearchParams(window.location.search).get("wa_account_id") || undefined,
+        name: cloneTemplateName,
+        category: templateToClone.category,
+        language: templateToClone.language,
+        header: templateToClone.header || undefined,
+        body: templateToClone.body,
+        footer: templateToClone.footer || undefined,
+        buttons: templateToClone.buttons ?? [],
+        examples: templateToClone.variableSamples ?? {},
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Template cloned",
+            description: `"${templateToClone.name}" was cloned to "${cloneTemplateName}" and submitted for review.`,
+          });
+          handleCancelCloneDialog();
+        },
+        onError: (err: any) => {
+          toast({
+            title: "Clone failed",
+            description: err?.message ?? "Meta rejected the cloned template.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   // Text formatting functions
@@ -574,6 +654,35 @@ export default function TemplateManager() {
 
   const queryClient = useQueryClient();
 
+  // ─── Realtime: Meta approval decisions ───────────────────────────────
+  // The backend already emits `whatsapp.template_updated` when Meta's
+  // message_template_status_update webhook lands, but nothing listened for it,
+  // so a template stayed "Pending" on screen until the page was reloaded.
+  // Approval can take minutes to hours; this is the whole point of the event.
+  const workspaceId = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("user_info");
+      if (!raw) return 1;
+      const parsed = JSON.parse(raw);
+      return Number(parsed?.workspace_id ?? parsed?.modelable_id ?? 1) || 1;
+    } catch {
+      return 1;
+    }
+  }, []);
+  const socket = useSocket(workspaceId);
+
+  useEffect(() => {
+    if (!socket) return;
+    const refetch = () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/waba/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waba/templates/stats"] });
+    };
+    socket.on("whatsapp.template_updated", refetch);
+    return () => {
+      socket.off("whatsapp.template_updated", refetch);
+    };
+  }, [socket, queryClient]);
+
   const { data: templatesData, isLoading: isLoadingTemplates } = useQuery({
     queryKey: ["/api/waba/templates"],
     queryFn: async () => {
@@ -606,6 +715,30 @@ export default function TemplateManager() {
     onError: (err: Error) => {
       toast({
         title: "Failed to create template",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit + resubmit a rejected/paused template (PATCH /waba/templates/:id).
+  const updateTemplateMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: any }) => {
+      const res = await apiRequest("PATCH", `/api/waba/templates/${id}`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Template resubmitted",
+        description: "Your edited template was submitted to WhatsApp for review.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/waba/templates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waba/templates/stats"] });
+      handleCancelCreateTemplate();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Failed to update template",
         description: err.message,
         variant: "destructive",
       });
@@ -672,6 +805,39 @@ export default function TemplateManager() {
       const headerComponent = components.find((c: any) => c.type === "HEADER");
       const footerComponent = components.find((c: any) => c.type === "FOOTER");
       const buttonsComponent = components.find((c: any) => c.type === "BUTTONS");
+      const carouselComponent = components.find((c: any) => c.type === "CAROUSEL");
+
+      // `structure` is the authoring blob the backend keeps alongside every
+      // template — it carries the gallery record behind a media header and the
+      // value each {{variable}} resolves to. Reading it is what makes "Edit"
+      // reopen a template intact; previously these were hardcoded to null/{},
+      // so editing silently stripped the media and every sample value.
+      let structure: any = null;
+      if (t.structure) {
+        try {
+          structure = typeof t.structure === "string" ? JSON.parse(t.structure) : t.structure;
+        } catch (e) {
+          console.error("Failed to parse structure for template", t.id, e);
+        }
+      }
+      const structuredHeader = structure?.header_component ?? null;
+      const headerMedia = structuredHeader?.example?.media ?? null;
+      const headerFormat = String(structuredHeader?.format ?? "").toUpperCase();
+
+      // Rebuild {{var}} → value from the stored parameters, in the same order
+      // the variables appear in the text.
+      const samplesFrom = (text: string, component: any): Record<string, string> => {
+        const params: any[] = component?.parameters ?? [];
+        if (!params.length) return {};
+        const names = (String(text ?? "").match(/\{\{([^}]+)\}\}/g) ?? []).map((m) =>
+          m.replace(/^\{\{|\}\}$/g, "").trim(),
+        );
+        const out: Record<string, string> = {};
+        names.forEach((name, i) => {
+          if (out[name] === undefined && params[i]?.text != null) out[name] = String(params[i].text);
+        });
+        return out;
+      };
 
       return {
         id: Number(t.id),
@@ -685,11 +851,40 @@ export default function TemplateManager() {
         buttons: buttonsComponent?.buttons || [],
         lastEdited: t.updated_at ? new Date(t.updated_at).toLocaleDateString() : (t.created_at ? new Date(t.created_at).toLocaleDateString() : ""),
         statusTypeColor: (t.status === "APPROVED" || t.status === "Active - HQ") ? "success" : (t.status === "PENDING" ? "warning" : "danger"),
-        topBlockReason: t.rejection_reason || "",
-        mediaFile: null,
-        mediaSample: "none",
-        variableSamples: {},
-        type: t.category === "MARKETING" ? "Marketing" : "Utility",
+        // The column is `reason` (written by the Meta status webhook on a
+        // rejection); `rejection_reason` never existed, so this always read
+        // undefined and every row claimed "No blocks recorded".
+        topBlockReason: t.reason || "",
+        media: headerMedia,
+        mediaSample: ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat)
+          ? headerFormat.toLowerCase()
+          : "none",
+        variableSamples: {
+          ...samplesFrom(headerComponent?.text ?? "", structure?.header_component),
+          ...samplesFrom(bodyComponent?.text ?? "", structure?.body_component),
+        },
+        type: t.type || (t.category === "MARKETING" ? "Marketing" : "Utility"),
+        // The backend's `type` column actually holds the composer MODE
+        // ('template' | 'carousel' | 'notification') — kept under a distinct key
+        // since `type` above is repurposed for the display Marketing/Utility tag.
+        mode: (["template", "carousel", "notification"].includes(String(t.type))
+          ? t.type
+          : "template") as "template" | "carousel" | "notification",
+        // Carousel cards, reshaped for the preview (PreviewV2 carouselCards prop)
+        // and for reopening in the composer's card editor.
+        carouselCards: (carouselComponent?.cards ?? []).map((card: any) => {
+          const cardHeader = (card.components ?? []).find((c: any) => c.type === "HEADER");
+          const cardBody = (card.components ?? []).find((c: any) => c.type === "BODY");
+          const cardButtons = (card.components ?? []).find((c: any) => c.type === "BUTTONS");
+          return {
+            mediaFormat: cardHeader?.format ?? "IMAGE",
+            media: cardHeader?.example?.media ?? (cardHeader?.example?.header_handle?.[0]
+              ? { file_url: cardHeader.example.header_handle[0], file_name: "media" }
+              : null),
+            body: cardBody?.text ?? "",
+            buttons: cardButtons?.buttons ?? [],
+          };
+        }),
       };
     });
   }, [templatesData]);
@@ -890,47 +1085,36 @@ export default function TemplateManager() {
       );
     }
 
+    // Rows carry Meta's raw values — category `MARKETING`, language `en_US`,
+    // status `APPROVED`. These filters used to compare against title-cased
+    // display strings ("Marketing", "English", "Approved"), so every one of them
+    // matched nothing and silently emptied the table. Compare case-insensitively
+    // against the dropdown ids instead.
+
     // Apply category filter
     if (selectedCategories.length > 0) {
-      data = data.filter(item => {
-        // Map category IDs to actual category names
-        const categoryMap: { [key: string]: string } = {
-          "marketing": "Marketing",
-          "utility": "Utility",
-          "authentication": "Authentication"
-        };
-        return selectedCategories.some(id => categoryMap[id] === item.category);
-      });
+      data = data.filter(item =>
+        selectedCategories.some(id => id.toLowerCase() === String(item.category ?? "").toLowerCase()),
+      );
     }
 
-    // Apply language filter
+    // Apply language filter — dropdown ids are Meta locale codes, and a bare
+    // `en` selection should still match the `en_US` / `en_GB` variants.
     if (selectedLanguages.length > 0) {
       data = data.filter(item => {
-        // Map language IDs to actual language codes
-        const languageMap: { [key: string]: string } = {
-          "english": "English",
-          "spanish": "Spanish",
-          "french": "French",
-          "german": "German",
-          "portuguese": "PT",
-          "italian": "IT"
-        };
-        return selectedLanguages.some(id => languageMap[id] === item.language);
+        const lang = String(item.language ?? "").toLowerCase();
+        return selectedLanguages.some(id => {
+          const wanted = id.toLowerCase();
+          return lang === wanted || lang.startsWith(`${wanted}_`);
+        });
       });
     }
 
     // Apply status filter
     if (selectedStatuses.length > 0) {
-      // Map status IDs to actual status names
-      const statusMap: { [key: string]: string } = {
-        "active-hq": "Active - HQ",
-        "quality-pending": "Quality Pending",
-        "approved": "Approved",
-        "pending": "Pending",
-        "rejected": "Rejected"
-      };
-      const mappedStatuses = selectedStatuses.map(id => statusMap[id]);
-      data = data.filter(item => mappedStatuses.includes(item.status));
+      data = data.filter(item =>
+        selectedStatuses.some(id => id.toLowerCase() === String(item.status ?? "").toLowerCase()),
+      );
     }
 
     // Apply advanced filters (from Sort/Filter buttons)
@@ -1120,11 +1304,13 @@ export default function TemplateManager() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {/* Option ids are Meta's own values so the filters can
+                            compare directly against the rows. */}
                         <CustomDropdown
                             options={[
-                                { id: "marketing", name: "Marketing" },
-                                { id: "utility", name: "Utility" },
-                                { id: "authentication", name: "Authentication" },
+                                { id: "MARKETING", name: "Marketing" },
+                                { id: "UTILITY", name: "Utility" },
+                                { id: "AUTHENTICATION", name: "Authentication" },
                             ]}
                             selected={selectedCategories}
                             onChange={setSelectedCategories}
@@ -1133,14 +1319,10 @@ export default function TemplateManager() {
                         />
 
                         <CustomDropdown
-                            options={[
-                                { id: "english", name: "English" },
-                                { id: "spanish", name: "Spanish" },
-                                { id: "french", name: "French" },
-                                { id: "german", name: "German" },
-                                { id: "portuguese", name: "Portuguese" },
-                                { id: "italian", name: "Italian" },
-                            ]}
+                            options={WA_TEMPLATE_LANGUAGES.map((l) => ({
+                                id: l.slug,
+                                name: `${l.name} (${l.slug})`,
+                            }))}
                             selected={selectedLanguages}
                             onChange={setSelectedLanguages}
                             placeholder="Languages"
@@ -1149,11 +1331,10 @@ export default function TemplateManager() {
 
                         <CustomDropdown
                             options={[
-                                { id: "active-hq", name: "Active - HQ" },
-                                { id: "quality-pending", name: "Quality Pending" },
-                                { id: "approved", name: "Approved" },
-                                { id: "pending", name: "Pending" },
-                                { id: "rejected", name: "Rejected" },
+                                { id: "APPROVED", name: "Approved" },
+                                { id: "PENDING", name: "Pending" },
+                                { id: "REJECTED", name: "Rejected" },
+                                { id: "PAUSED", name: "Paused" },
                             ]}
                             selected={selectedStatuses}
                             onChange={setSelectedStatuses}
@@ -1600,13 +1781,17 @@ export default function TemplateManager() {
                                                     </button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-                                                    <DropdownMenuItem 
+                                                    {/* Meta only allows editing + resubmitting a REJECTED/PAUSED template
+                                                        (replyagent parity); approved/pending ones are immutable. */}
+                                                    {["REJECTED", "PAUSED"].includes(String(template.status).toUpperCase()) && (
+                                                    <DropdownMenuItem
                                                         onClick={() => handleOpenEditTemplate(template.id)}
                                                         className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600"
                                                     >
                                                         <Edit2 size={14} className="text-blue-500" />
                                                         Edit Template
                                                     </DropdownMenuItem>
+                                                    )}
                                                     <DropdownMenuItem 
                                                         onClick={() => {
                                                             setPreviewTemplateId(template.id);
@@ -1750,9 +1935,12 @@ export default function TemplateManager() {
                     headerText={previewTemplate.header || ""}
                     bodyText={previewTemplate.body || ""}
                     footerText={previewTemplate.footer || ""}
-                    selectedMediaFile={previewTemplate.mediaFile || null}
+                    selectedMediaFile={previewTemplate.media?.file_url ?? ""}
                     templateButtons={previewTemplate.buttons || []}
                     variableSamples={previewTemplate.variableSamples || {}}
+                    carouselCards={previewTemplate.carouselCards || []}
+                    activeCardIndex={previewActiveCard}
+                    onCardChange={setPreviewActiveCard}
                   />
                   <p className="text-[10px] py-1">Preview may not reflect the exact WhatsApp interface</p>
                 </div>
@@ -1826,21 +2014,6 @@ export default function TemplateManager() {
                     </CardContent>
                   </Card>
 
-                  <Card
-                    className={`cursor-pointer hover-elevate active-elevate-2 shadow-[0_-3px_6px_rgba(0,0,0,0.04),-3px_0_6px_rgba(0,0,0,0.04),3px_0_6px_rgba(0,0,0,0.04),0_4px_6px_rgba(0,0,0,0.1)] border-0 ${selectedCategory === "Authentication" ? "ring-2 ring-primary" : ""}`}
-                    onClick={() => handleCategorySelect("Authentication")}
-                    data-testid="card-category-authentication"
-                  >
-                    <CardHeader className="text-center pb-2">
-                      <div className="mx-auto mb-2 h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                        <Shield size={24} className="text-green-600" />
-                      </div>
-                      <CardTitle className="text-base">Authentication</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-center">
-                      <p className="text-sm text-muted-foreground">Send OTP codes, login confirmations, and security alerts</p>
-                    </CardContent>
-                  </Card>
                 </div>
                 {/* Category Guidelines Banner */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300">
@@ -1848,7 +2021,6 @@ export default function TemplateManager() {
                   <ul className="text-sm text-blue-800 space-y-1 list-disc pl-5 dark:text-blue-300">
                     <li><strong>Marketing:</strong> Requires opt-in from customers and has a 24-hour messaging window</li>
                     <li><strong>Utility:</strong> For transactional messages like confirmations, alerts, and updates</li>
-                    <li><strong>Authentication:</strong> For security codes, login verifications, and account alerts</li>
                   </ul>
                 </div>
 
@@ -1939,12 +2111,13 @@ export default function TemplateManager() {
                             <SelectValue placeholder="Select language" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="English">English</SelectItem>
-                            <SelectItem value="Spanish">Spanish</SelectItem>
-                            <SelectItem value="French">French</SelectItem>
-                            <SelectItem value="German">German</SelectItem>
-                            <SelectItem value="Portuguese">Portuguese</SelectItem>
-                            <SelectItem value="Italian">Italian</SelectItem>
+                            {/* Values are Meta locale codes. The old list sent
+                                English words ("French"), which Meta rejects. */}
+                            {WA_TEMPLATE_LANGUAGES.map((lang) => (
+                              <SelectItem key={lang.slug} value={lang.slug}>
+                                {lang.name} ({lang.slug})
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -2215,6 +2388,40 @@ export default function TemplateManager() {
                       <h3 className="font-semibold text-lg mb-1">Template Content</h3>
                       <p className="text-sm text-muted-foreground">Create engaging content that connects with your customers and drives meaningful interactions.</p>
                     </div>
+
+                    {/* Template shape — Meta validates against this, so the
+                        sections below change with it rather than all rendering. */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Template structure</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          { id: "template", label: "Template", hint: "Single card with header, body and buttons" },
+                          { id: "carousel", label: "Carousel", hint: "Up to 10 cards with image, body and buttons" },
+                          { id: "notification", label: "Agent Notification", hint: "Text only, for agents" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setTemplateMode(opt.id);
+                              if (opt.id === "carousel" && carouselCards.length === 0) {
+                                setCarouselCards([{ mediaFormat: "IMAGE", media: null, body: "", buttons: [] }]);
+                              }
+                            }}
+                            className={cn(
+                              "rounded-lg border p-3 text-left transition-all",
+                              templateMode === opt.id
+                                ? "border-primary ring-1 ring-primary bg-primary/5"
+                                : "border-input hover:border-primary/40",
+                            )}
+                          >
+                            <p className="text-[12px] font-semibold text-foreground">{opt.label}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{opt.hint}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+{templateMode !== "carousel" && (<>
                     {/* Header */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -2245,21 +2452,33 @@ export default function TemplateManager() {
                       </div>
                     </div>
 
-                    {/* Media Sample */}
+                    </>)}
+
+                    {/* Media Sample — single-card templates only. A carousel's
+                        media lives on each card; an agent notification is text. */}
+                    {templateMode === "template" && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <label className="text-sm font-medium text-foreground">Media Sample</label>
                         <span className="px-2 py-1 bg-muted text-muted-foreground text-xs rounded">Optional</span>
                       </div>
-                      {selectedMediaFile ? (
+                      {/* The header media is chosen from the media gallery, not
+                          from a local file input. Meta needs the bytes uploaded
+                          to the app to issue a header handle, and the backend
+                          does that from the gallery file's URL at submit time —
+                          a browser File object never reached the server, which
+                          is why the old "Browse" button silently did nothing. */}
+                      {selectedMedia ? (
                         <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded border border-input [border-color:hsl(var(--input))]">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
                             <Paperclip size={14} className="text-muted-foreground flex-shrink-0" />
-                            <span className="truncate text-foreground text-sm">{selectedMediaFile.name}</span>
-                            <span className="text-xs text-muted-foreground flex-shrink-0">({(selectedMediaFile.size / 1024).toFixed(1)}KB)</span>
+                            <span className="truncate text-foreground text-sm">{selectedMedia.file_name}</span>
+                            <span className="text-xs text-muted-foreground flex-shrink-0">
+                              ({(selectedMedia.file_length / 1024).toFixed(1)}KB)
+                            </span>
                           </div>
                           <button
-                            onClick={() => setSelectedMediaFile(null)}
+                            onClick={() => setSelectedMedia(null)}
                             className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                           >
                             <X size={16} />
@@ -2267,7 +2486,13 @@ export default function TemplateManager() {
                         </div>
                       ) : (
                         <div className="flex gap-2">
-                          <Select value={mediaSample} onValueChange={setMediaSample}>
+                          <Select
+                            value={mediaSample}
+                            onValueChange={(v) => {
+                              setMediaSample(v);
+                              setSelectedMedia(null);
+                            }}
+                          >
                             <SelectTrigger className="w-[160px] border border-input [border-color:hsl(var(--input))] hover-elevate">
                               <SelectValue placeholder="Select media type" />
                             </SelectTrigger>
@@ -2278,33 +2503,18 @@ export default function TemplateManager() {
                               <SelectItem value="document">Document</SelectItem>
                             </SelectContent>
                           </Select>
-                          {/* Browse Button - Show for browsable media types */}
                           {(mediaSample === "image" || mediaSample === "video" || mediaSample === "document") && (
-                            <Button
-                              className="font-normal"
-                              onClick={() => {
-                                const input = document.createElement('input');
-                                input.type = 'file';
-                                input.accept = mediaSample === 'image' ? 'image/*' :
-                                  mediaSample === 'video' ? 'video/*' :
-                                    mediaSample === 'document' ? '.pdf,.doc,.docx,.txt' : '*/*';
-                                input.onchange = (e) => {
-                                  const file = (e.target as HTMLInputElement).files?.[0];
-                                  if (file) {
-                                    setSelectedMediaFile(file);
-                                  }
-                                };
-                                input.click();
-                              }}
-                            >
-                              Browse {mediaSample.charAt(0).toUpperCase() + mediaSample.slice(1)}
+                            <Button className="font-normal" onClick={() => setMediaPickerOpen(true)}>
+                              Choose from gallery
                             </Button>
                           )}
                         </div>
                       )}
                     </div>
+                    )}
 
-                    {/* Body */}
+                    {/* Body — for a carousel this is the message bubble that
+                        appears above the cards, which Meta also requires. */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <label className="text-sm font-medium text-foreground">
@@ -2417,19 +2627,45 @@ export default function TemplateManager() {
                           <p className="text-xs text-muted-foreground">
                             Include samples of all variables in your message to help Meta review your template.
                             Remember not to include any customer information to protect your customer's privacy.
+                            Map a variable to a field to have it auto-fill with the real value when the
+                            template is sent — or type a one-off sample instead.
                           </p>
                         </div>
-                        <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 items-center">
+                        <div className="grid grid-cols-[auto_auto_1fr] gap-x-3 gap-y-3 items-center">
                           {getAllVariables().map((variable) => {
                             // Extract the content inside the braces (could be number or text)
                             const variableKey = variable.match(/\{\{([^}]+)\}\}/)?.[1] || "";
+                            const currentValue = variableSamples[variableKey] || "";
+                            // A mapped key looks like "[SLUG]" — if the current value matches
+                            // one of the known merge tags, the select shows it as selected.
+                            const mappedKey = templateKeyOptions.find((k) => k.value === currentValue);
                             return (
                               <>
                                 <div key={`${variable}-label`} className="font-medium text-sm">{variable}</div>
+                                <Select
+                                  key={`${variable}-map`}
+                                  value={mappedKey?.value ?? "__custom__"}
+                                  onValueChange={(v) => {
+                                    if (v === "__custom__") return;
+                                    setVariableSamples({ ...variableSamples, [variableKey]: v });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-[150px] h-9 text-xs border border-input [border-color:hsl(var(--input))]">
+                                    <SelectValue placeholder="Map to a field" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__custom__">Custom sample…</SelectItem>
+                                    {templateKeyOptions.map((k) => (
+                                      <SelectItem key={k.value} value={k.value}>
+                                        {k.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                                 <Input
                                   key={`${variable}-input`}
                                   placeholder={`Sample text for ${variable}`}
-                                  value={variableSamples[variableKey] || ""}
+                                  value={currentValue}
                                   onChange={(e) => setVariableSamples({ ...variableSamples, [variableKey]: e.target.value })}
                                   className="border border-input [border-color:hsl(var(--input))] hover-elevate"
                                 />
@@ -2440,7 +2676,9 @@ export default function TemplateManager() {
                       </div>
                     )}
 
-                    {/* Buttons */}
+                    {/* Buttons - single-card only. Carousel buttons belong to
+                        each card, and agent notifications have none. */}
+                    {templateMode === "template" && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <label className="text-sm font-medium text-foreground">Buttons</label>
@@ -2853,7 +3091,10 @@ export default function TemplateManager() {
                       )}
                     </div>
 
-                    {/* Footer */}
+                    )}
+
+                    {/* Footer - a carousel bubble has no footer. */}
+                    {templateMode !== "carousel" && (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <label className="text-sm font-medium text-foreground">Footer</label>
@@ -2871,6 +3112,234 @@ export default function TemplateManager() {
                         </span>
                       </div>
                     </div>
+                    )}
+
+                    {/* Carousel cards */}
+                    {templateMode === "carousel" && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="text-sm font-medium text-foreground">Cards</label>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              1-10 cards. Every card needs a header image or video, body text, and
+                              1-2 buttons - and all cards must use the same button types.
+                            </p>
+                          </div>
+                          {carouselCards.length < 10 && (
+                            <Button
+                              variant="outline"
+                              className="font-normal"
+                              onClick={() =>
+                                setCarouselCards((prev) => [
+                                  ...prev,
+                                  { mediaFormat: "IMAGE", media: null, body: "", buttons: [] },
+                                ])
+                              }
+                            >
+                              <Plus size={14} className="mr-1" /> Add card
+                            </Button>
+                          )}
+                        </div>
+
+                        {carouselCards.map((card: any, index: number) => (
+                          <div
+                            key={index}
+                            className="rounded-lg border border-input [border-color:hsl(var(--input))] p-3 space-y-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[12px] font-semibold text-foreground">
+                                Card {index + 1}
+                              </span>
+                              {carouselCards.length > 1 && (
+                                <button
+                                  onClick={() =>
+                                    setCarouselCards((prev) => prev.filter((_, i) => i !== index))
+                                  }
+                                  className="text-muted-foreground hover:text-red-500 transition-colors"
+                                >
+                                  <X size={15} />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Select
+                                value={card.mediaFormat}
+                                onValueChange={(v) =>
+                                  setCarouselCards((prev) =>
+                                    prev.map((c, i) =>
+                                      i === index ? { ...c, mediaFormat: v, media: null } : c,
+                                    ),
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="w-[130px] border border-input [border-color:hsl(var(--input))]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="IMAGE">Image</SelectItem>
+                                  <SelectItem value="VIDEO">Video</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {card.media ? (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded border border-input [border-color:hsl(var(--input))] flex-1 min-w-0">
+                                  <Paperclip size={13} className="text-muted-foreground shrink-0" />
+                                  <span className="truncate text-foreground text-xs flex-1">
+                                    {card.media.file_name}
+                                  </span>
+                                  <button
+                                    onClick={() =>
+                                      setCarouselCards((prev) =>
+                                        prev.map((c, i) => (i === index ? { ...c, media: null } : c)),
+                                      )
+                                    }
+                                    className="text-muted-foreground hover:text-foreground shrink-0"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  className="font-normal"
+                                  onClick={() => setCardPickerIndex(index)}
+                                >
+                                  Choose from gallery
+                                </Button>
+                              )}
+                            </div>
+
+                            <div className="relative">
+                              <Textarea
+                                placeholder="Card body text..."
+                                value={card.body}
+                                onChange={(e) =>
+                                  setCarouselCards((prev) =>
+                                    prev.map((c, i) =>
+                                      i === index ? { ...c, body: e.target.value.slice(0, 160) } : c,
+                                    ),
+                                  )
+                                }
+                                className="min-h-[70px] pr-14 border border-input [border-color:hsl(var(--input))]"
+                              />
+                              <span className="absolute right-3 bottom-2 text-xs text-muted-foreground">
+                                {String(card.body ?? "").length}/160
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  Buttons ({(card.buttons ?? []).length}/2)
+                                </span>
+                                {(card.buttons ?? []).length < 2 && (
+                                  <Select
+                                    value=""
+                                    onValueChange={(v) =>
+                                      setCarouselCards((prev) =>
+                                        prev.map((c, i) =>
+                                          i === index
+                                            ? { ...c, buttons: [...(c.buttons ?? []), { type: v, buttonText: "" }] }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger className="w-[150px] h-8 text-xs border border-input [border-color:hsl(var(--input))]">
+                                      <SelectValue placeholder="Add a button" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="quick-reply">Quick reply</SelectItem>
+                                      <SelectItem value="visit-website">Visit website</SelectItem>
+                                      <SelectItem value="call-phone">Call phone number</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              </div>
+                              {(card.buttons ?? []).map((btn: any, bi: number) => (
+                                <div key={bi} className="flex gap-2 items-center">
+                                  <Input
+                                    placeholder="Button text"
+                                    value={btn.buttonText ?? ""}
+                                    onChange={(e) =>
+                                      setCarouselCards((prev) =>
+                                        prev.map((c, i) =>
+                                          i === index
+                                            ? {
+                                                ...c,
+                                                buttons: c.buttons.map((b: any, k: number) =>
+                                                  k === bi ? { ...b, buttonText: e.target.value.slice(0, 25) } : b,
+                                                ),
+                                              }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                    className="h-8 text-xs border border-input [border-color:hsl(var(--input))]"
+                                  />
+                                  {btn.type === "visit-website" && (
+                                    <Input
+                                      placeholder="https://example.com"
+                                      value={btn.websiteUrl ?? ""}
+                                      onChange={(e) =>
+                                        setCarouselCards((prev) =>
+                                          prev.map((c, i) =>
+                                            i === index
+                                              ? {
+                                                  ...c,
+                                                  buttons: c.buttons.map((b: any, k: number) =>
+                                                    k === bi ? { ...b, websiteUrl: e.target.value } : b,
+                                                  ),
+                                                }
+                                              : c,
+                                          ),
+                                        )
+                                      }
+                                      className="h-8 text-xs border border-input [border-color:hsl(var(--input))]"
+                                    />
+                                  )}
+                                  {btn.type === "call-phone" && (
+                                    <Input
+                                      placeholder="+15551112222"
+                                      value={btn.phoneNumber ?? ""}
+                                      onChange={(e) =>
+                                        setCarouselCards((prev) =>
+                                          prev.map((c, i) =>
+                                            i === index
+                                              ? {
+                                                  ...c,
+                                                  buttons: c.buttons.map((b: any, k: number) =>
+                                                    k === bi ? { ...b, phoneNumber: e.target.value } : b,
+                                                  ),
+                                                }
+                                              : c,
+                                          ),
+                                        )
+                                      }
+                                      className="h-8 text-xs border border-input [border-color:hsl(var(--input))]"
+                                    />
+                                  )}
+                                  <button
+                                    onClick={() =>
+                                      setCarouselCards((prev) =>
+                                        prev.map((c, i) =>
+                                          i === index
+                                            ? { ...c, buttons: c.buttons.filter((_: any, k: number) => k !== bi) }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                    className="text-muted-foreground hover:text-red-500 shrink-0"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2883,9 +3352,12 @@ export default function TemplateManager() {
                       headerText={headerText}
                       bodyText={bodyText}
                       footerText={footerText}
-                      selectedMediaFile={selectedMediaFile}
+                      selectedMediaFile={selectedMedia?.file_url ?? ""}
                       templateButtons={templateButtons}
                       variableSamples={variableSamples}
+                      carouselCards={templateMode === "carousel" ? carouselCards : []}
+                      activeCardIndex={composerActiveCard}
+                      onCardChange={setComposerActiveCard}
                     />
                     <p className="text-[10px] py-1">Preview may not reflect the exact WhatsApp interface</p>
                   </div>
@@ -2991,6 +3463,30 @@ export default function TemplateManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Per-card media picker for carousel cards. */}
+      <TemplateMediaPicker
+        open={cardPickerIndex !== null}
+        format={
+          (String(
+            carouselCards[cardPickerIndex ?? 0]?.mediaFormat ?? "IMAGE",
+          ).toUpperCase() as "IMAGE" | "VIDEO" | "DOCUMENT")
+        }
+        onClose={() => setCardPickerIndex(null)}
+        onSelect={(media) =>
+          setCarouselCards((prev) =>
+            prev.map((c, i) => (i === cardPickerIndex ? { ...c, media } : c)),
+          )
+        }
+      />
+
+      {/* Header media picker — gallery-backed, see the Media Sample block. */}
+      <TemplateMediaPicker
+        open={mediaPickerOpen}
+        format={(mediaSample.toUpperCase() as "IMAGE" | "VIDEO" | "DOCUMENT") || "IMAGE"}
+        onClose={() => setMediaPickerOpen(false)}
+        onSelect={setSelectedMedia}
+      />
 
       {/* Bulk Delete Modal */}
       <Dialog open={showBulkDeleteModal} onOpenChange={setShowBulkDeleteModal}>

@@ -343,7 +343,10 @@ export default function CampaignManager() {
   const { data: waAccountsResponse } = useQuery<any>({
     queryKey: ["/api/whatsapp/accounts"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/whatsapp/accounts");
+      // `onboard_platform=all` — the endpoint defaults to Business API only
+      // (replyagent parity); broadcasts can be sent from Coexistence numbers
+      // too, so opt out of that default here.
+      const res = await apiRequest("GET", "/api/whatsapp/accounts?onboard_platform=all");
       return res.json();
     },
   });

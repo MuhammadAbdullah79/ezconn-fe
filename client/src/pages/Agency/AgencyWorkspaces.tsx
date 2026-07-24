@@ -14,6 +14,7 @@ import {
   Ban,
   Trash2,
   Filter,
+  LogIn,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -142,6 +143,25 @@ const AgencyWorkspaces = () => {
       setLocalWorkspaces(prev => prev.map(ws => ws.id === workspace.id ? { ...ws, status: newStatus } : ws));
       toast({ title: `Workspace ${newStatus}` });
       queryClient.invalidateQueries({ queryKey: [`/api/agencies/${agencyId}/workspaces`] });
+    },
+  });
+
+  const loginToWorkspaceMutation = useMutation({
+    mutationFn: async (workspace: any) => {
+      const res = await apiRequest("POST", `/auth/workspaces/${workspace.id}/login`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      localStorage.setItem("auth_token", data.token);
+      localStorage.setItem("user_info", JSON.stringify(data.user));
+      window.location.href = data.redirect_to || '/workspace';
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Login failed",
+        description: error?.message || "Could not log into this workspace",
+        variant: "destructive",
+      });
     },
   });
 
@@ -333,6 +353,19 @@ const AgencyWorkspaces = () => {
                       )}
                     >
                       <Monitor size={13} /> Manage
+                    </button>
+
+                    <button
+                      onClick={() => loginToWorkspaceMutation.mutate(ws)}
+                      disabled={loginToWorkspaceMutation.isPending}
+                      className={cn(
+                        "flex-1 flex items-center justify-center gap-2 h-9 rounded-xl text-[11px] font-bold transition-all disabled:opacity-50",
+                        dark
+                          ? "bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white"
+                          : "bg-slate-100 hover:bg-emerald-600 text-slate-600 hover:text-white"
+                      )}
+                    >
+                      <LogIn size={13} /> {loginToWorkspaceMutation.isPending ? 'Logging in…' : 'Login'}
                     </button>
 
                     <DropdownMenu>

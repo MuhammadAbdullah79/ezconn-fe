@@ -62,7 +62,7 @@ export default defineConfig(async ({ mode }) => {
     },
     server: {
       host: true,
-      allowedHosts: ["localhost", "agency.localhost", ".laglobal.local"],
+      allowedHosts: ["localhost", "agency.localhost", ".laglobal.local", ".ezconn.com", ".agentawk.com"],
       fs: {
         strict: true,
         deny: ["**/.*"],

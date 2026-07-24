@@ -30,6 +30,7 @@ import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import AgencyDashboard from "@/pages/Agency/AgencyDashboard";
 import AgencyWorkspaces from "@/pages/Agency/AgencyWorkspaces";
 import AgencyTeam from "@/pages/Agency/AgencyTeam";
@@ -43,6 +44,7 @@ import AgencyBillingManage from "@/pages/Agency/AgencyBillingManage";
 import AgencyLegal from "@/pages/Agency/AgencyLegal";
 import AgencyHelp from "@/pages/Agency/AgencyHelp";
 import AgencyGeneralSettings from "@/pages/Agency/AgencyGeneralSettings";
+import AgencyChangePassword from "@/pages/Agency/AgencyChangePassword";
 import AgencyNotificationsSettings from "@/pages/Agency/AgencyNotificationsSettings";
 import AgencyNotificationsPage from "@/pages/Agency/AgencyNotificationsPage";
 import AgencyWhiteLabelSettings from "@/pages/Agency/AgencyWhiteLabelSettings";
@@ -70,6 +72,7 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={SignupPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/accept-invitation" component={AcceptInvitationPage} />
 
       <Route path="/">
         <ProtectedRoute>
@@ -163,6 +166,10 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
         <ProtectedRoute permissions={["agency.settings.*"]}><AgencyGeneralSettings /></ProtectedRoute>
       </Route>
 
+      <Route path="/agency/settings/change-password">
+        <ProtectedRoute permissions={["agency.*"]}><AgencyChangePassword /></ProtectedRoute>
+      </Route>
+
       <Route path="/agency/help">
         <ProtectedRoute permissions={["agency.*"]}><AgencyHelp /></ProtectedRoute>
       </Route>
@@ -230,7 +237,7 @@ function AppContent() {
   const { siteData, loading } = useSite();
 
   const isBuilderRoute = location.startsWith("/automations/") && location.split("/").length === 3;
-  const isAuthRoute = location === "/login" || location === "/forgot-password";
+  const isAuthRoute = location === "/login" || location === "/forgot-password" || location === "/signup";
   const siteType = siteData?.app?.site_type || "WORKSPACE";
 
   if (loading) {

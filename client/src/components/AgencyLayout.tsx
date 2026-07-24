@@ -13,6 +13,7 @@ import {
   Send,
   Check,
   MessageSquare,
+  Lock,
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -244,6 +245,16 @@ const AgencyLayout = ({ children }: { children: React.ReactNode }) => {
                     <span className={cn("font-semibold text-[14px]", mode === "dark" ? "text-white" : "text-slate-900")}>{t("Profile")}</span>
                   </div>
                   <ChevronRight size={16} className="text-gray-500 group-hover:text-white transition-colors" />
+                </DropdownMenuItem>
+
+                {/* Change Password */}
+                <DropdownMenuItem
+                  onClick={() => setLocation("/agency/settings/change-password")}
+                  className={cn("flex items-center gap-3 p-3 rounded-md cursor-pointer group outline-none",
+                    mode === "dark" ? "hover:bg-[#334155] focus:bg-[#334155] focus:text-white" : "hover:bg-slate-100 focus:bg-slate-100 focus:text-slate-900")}
+                >
+                  <Lock size={16} className="text-gray-500 group-hover:text-primary transition-colors" />
+                  <span className={cn("font-semibold text-[14px]", mode === "dark" ? "text-white" : "text-slate-900")}>{t("Change Password")}</span>
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator className={mode === "dark" ? "bg-slate-700 my-2" : "bg-slate-100 my-2"} />

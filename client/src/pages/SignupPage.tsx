@@ -138,7 +138,7 @@ const SignupPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [step, resendCooldown]);
 
-  // Signup is only reachable on the root agentawk.com domain — a brand-new
+  // Signup is only reachable on the central agentawk.com hosts — a brand-new
   // agency has no subdomain yet, so a per-tenant host (e.g. an agency's own
   // subdomain) should never show this page. Localhost/dev hosts stay open
   // so local testing keeps working.
@@ -147,6 +147,7 @@ const SignupPage: React.FC = () => {
     const isAllowed =
       host === 'agentawk.com' ||
       host === 'www.agentawk.com' ||
+      host === 'app.agentawk.com' ||
       host === 'localhost' ||
       host.endsWith('.laglobal.local');
     if (!isAllowed) {

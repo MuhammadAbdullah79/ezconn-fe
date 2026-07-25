@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Input } from '../components/ui/input';
 import { Eye, EyeOff, ArrowRight, Search, Send, Lock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSite } from '../contexts/SiteContext';
 import { apiRequest } from '../lib/queryClient';
+import { isTenantHost, isDevHost } from '../lib/host';
 
 const INBOX_PREVIEW = [
   { name: 'Sara Khan', msg: 'AI replying…', time: 'now', initial: 'S', avatar: 'from-[#34d67e] to-[#1eb955]', channel: 'whatsapp', typing: true, unread: false, active: true },
@@ -55,6 +56,17 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [, navigate] = useLocation();
   const { siteData } = useSite();
+
+  // Login only makes sense on a tenant subdomain (an agency/workspace) — that's
+  // how the backend resolves WHICH account to authenticate against. On the
+  // central app host (app.agentawk.com) or the marketing apex there is no
+  // tenant, so send the user to "find my account" to get their login links.
+  // Dev hosts (localhost) stay open so local testing keeps working.
+  useEffect(() => {
+    if (!isTenantHost() && !isDevHost()) {
+      navigate('/find-account');
+    }
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

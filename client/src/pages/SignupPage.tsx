@@ -4,6 +4,7 @@ import { Input } from '../components/ui/input';
 import { ArrowLeft, ArrowRight, User, Link2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { apiRequest } from '../lib/queryClient';
+import { isAppHost, isDevHost, appHostUrl } from '../lib/host';
 
 const OTP_LENGTH = 4;
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -138,22 +139,14 @@ const SignupPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [step, resendCooldown]);
 
-  // Signup is only reachable on the central agentawk.com hosts — a brand-new
-  // agency has no subdomain yet, so a per-tenant host (e.g. an agency's own
-  // subdomain) should never show this page. Localhost/dev hosts stay open
-  // so local testing keeps working.
+  // Register lives ONLY on the central app host (app.agentawk.com) — a brand-new
+  // agency has no subdomain yet. The marketing apex (agentawk.com) is a separate
+  // site, and per-tenant subdomains show login, not signup. From any of those,
+  // bounce the user to app.agentawk.com/signup. Dev hosts (localhost) stay open.
   useEffect(() => {
-    const host = window.location.hostname;
-    const isAllowed =
-      host === 'agentawk.com' ||
-      host === 'www.agentawk.com' ||
-      host === 'app.agentawk.com' ||
-      host === 'localhost' ||
-      host.endsWith('.laglobal.local');
-    if (!isAllowed) {
-      navigate('/login');
-    }
-  }, [navigate]);
+    if (isAppHost() || isDevHost()) return;
+    window.location.href = appHostUrl('/signup');
+  }, []);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();

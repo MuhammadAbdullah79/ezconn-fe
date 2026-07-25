@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
+import { isAppHost } from "@/lib/host";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,6 +30,7 @@ import InstagramPagesCallbackPage from "@/pages/InstagramPagesCallbackPage";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
+import FindAccountPage from "@/pages/FindAccountPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import AcceptInvitationPage from "@/pages/AcceptInvitationPage";
 import AgencyDashboard from "@/pages/Agency/AgencyDashboard";
@@ -71,6 +73,7 @@ function Router({ siteType, isAgencyRoute }: { siteType: string; isAgencyRoute?:
     <Switch>
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={SignupPage} />
+      <Route path="/find-account" component={FindAccountPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/accept-invitation" component={AcceptInvitationPage} />
 
@@ -237,11 +240,18 @@ function AppContent() {
   const { siteData, loading } = useSite();
 
   const isBuilderRoute = location.startsWith("/automations/") && location.split("/").length === 3;
-  const isAuthRoute = location === "/login" || location === "/forgot-password" || location === "/signup";
+  const isAuthRoute = location === "/login" || location === "/forgot-password" || location === "/signup" || location === "/find-account";
   const siteType = siteData?.app?.site_type || "WORKSPACE";
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading application...</div>;
+  }
+
+  // On the central app host (app.agentawk.com) the entry point is registration —
+  // send the bare root straight to /signup instead of the protected dashboard,
+  // which would otherwise bounce through /login → /find-account.
+  if (isAppHost() && location === "/") {
+    return <Redirect to="/signup" />;
   }
 
   const isAgencyRoute = location.startsWith("/agency");
